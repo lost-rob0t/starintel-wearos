@@ -1,0 +1,4 @@
+{
+  "!comment": "This is a nixpkgs Gradle dependency lockfile. Regenerate it with the documented Nix dependency refresh command.",
+  "!version": 1
+}
