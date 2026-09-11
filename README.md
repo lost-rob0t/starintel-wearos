@@ -12,6 +12,54 @@ This repository produces three installable packages:
 
 The phone and Wear app deliberately share the application ID `actor.starintel.wear`. Google Play services therefore permits Wearable Data Layer communication only when both packages also have the same signing certificate. The watch-face package remains separate because executable Wear OS logic and a WFF watch face cannot live in the same bundle.
 
+## Nix build workflow
+
+Nix is the preferred local build path. The committed `flake.lock` pins the complete nixpkgs toolchain; the currently proven lock resolves JDK 17, Gradle 9.7.1, Android API 36, build-tools 36.0.0, platform-tools/adb, and the NixOS-safe `aapt2` override. Android Studio and a host Android SDK are not required.
+
+Enter the development shell:
+
+```sh
+nix develop
+```
+
+Build individual packages:
+
+```sh
+nix run .#build-phone
+nix run .#build-wear
+nix run .#build-watchface
+```
+
+Build and test everything in one pass:
+
+```sh
+nix run .#build-all
+```
+
+The Nix entrypoints stage stable filenames here:
+
+```text
+build/nix/phone-app-debug.apk
+build/nix/wear-app-debug.apk
+build/nix/watchface-debug.apk
+```
+
+Run the existing unit/build checks through the Nix toolchain without staging APKs:
+
+```sh
+nix run .#check
+```
+
+The Android toolchain itself is also exposed as Nix packages:
+
+```sh
+nix build .#toolchain
+nix build .#android-sdk
+nix build .#gradle
+```
+
+The current app build commands intentionally run Gradle from the working tree so Maven/Google dependencies can use the normal Gradle cache. The SDK/JDK/Gradle/tooling and their versions are pinned by Nix. A subsequent reproducibility slice can use nixpkgs `gradle.fetchDeps` to lock every Gradle artifact and expose the APKs themselves as fully sandboxed `nix build` derivations.
+
 ## Galaxy Watch5 Pro slice
 
 The initial UI is designed for a round Galaxy Watch5 Pro-class display:
@@ -47,29 +95,32 @@ A least-privilege StarIntel API-client principal should be issued specifically f
 
 ## Install on Galaxy Watch5 Pro
 
-### 1. Get matching APKs
+### 1. Build matching APKs
 
-Every successful GitHub Actions build publishes:
+Preferred Nix path:
+
+```sh
+nix run .#build-all
+```
+
+Every successful GitHub Actions build publishes the original per-package artifacts and a matching Nix-built bundle:
 
 - `starintel-phone-app-debug` containing `phone-app-debug.apk`
 - `starintel-wear-app-debug` containing `wear-app-debug.apk`
 - `starintel-watchface-debug` containing `watchface-debug.apk`
+- `starintel-nix-apks-debug` containing all three APKs built together through the pinned Nix toolchain
 
-For companion configuration, download the phone and Wear APKs from the **same workflow run** so their signing certificates match.
-
-Or build all packages locally in one checkout:
-
-```sh
-gradle :phone-app:assembleDebug :wear-app:assembleDebug :watchface:assembleDebug
-```
+For companion configuration, use the phone and Wear APKs from the same build/run so their signing certificates match. The Nix bundle is the easiest way to keep all three together.
 
 ### 2. Install the Android companion
 
-On the paired Android phone, either open `phone-app-debug.apk` and allow installation from that source, or use adb:
+With adb available from `nix develop`:
 
 ```sh
-adb install -r phone-app/build/outputs/apk/debug/phone-app-debug.apk
+adb install -r build/nix/phone-app-debug.apk
 ```
+
+Or open `phone-app-debug.apk` on the paired Android phone and allow installation from that source.
 
 ### 3. Enable wireless debugging on the watch
 
@@ -83,9 +134,10 @@ On the Galaxy Watch5 Pro:
 6. Enable **Wireless debugging** and allow the current Wi-Fi network.
 7. Open **Wireless debugging → Pair new device** and note the pairing IP/port and six-digit pairing code.
 
-### 4. Pair and connect with adb
+### 4. Pair and connect with Nix-provided adb
 
 ```sh
+nix develop
 adb pair WATCH_IP:PAIR_PORT
 # enter the six-digit code shown on the watch
 
@@ -97,18 +149,13 @@ The pairing port and normal wireless-debugging port can be different; use exactl
 
 ### 5. Install both watch packages
 
-From the repo root:
+After `nix run .#build-all`:
 
 ```sh
-bash scripts/install-watch.sh WATCH_IP:ADB_PORT
+nix run .#install-watch -- WATCH_IP:ADB_PORT
 ```
 
-Or manually:
-
-```sh
-adb -s WATCH_IP:ADB_PORT install -r wear-app/build/outputs/apk/debug/wear-app-debug.apk
-adb -s WATCH_IP:ADB_PORT install -r watchface/build/outputs/apk/debug/watchface-debug.apk
-```
+The installer verifies both installed package IDs before reporting success. It prefers `build/nix/` APKs but still supports the Gradle and downloaded CI-artifact layouts.
 
 ### 6. Configure from the phone
 
@@ -123,9 +170,9 @@ adb -s WATCH_IP:ADB_PORT install -r watchface/build/outputs/apk/debug/watchface-
 
 Release companion/Wear builds accept HTTPS server origins only. Debug builds allow cleartext HTTP for LAN development; bearer authentication is still required.
 
-## Build
+## Non-Nix build
 
-The CI configuration uses JDK 17, Gradle 9.6, Android API 36, Wearable Data Layer 20.0.1, Wear Tiles 1.6.2, and ProtoLayout 1.4.2.
+The legacy CI path remains available and currently uses JDK 17, Gradle 9.6, Android API 36, Wearable Data Layer 20.0.1, Wear Tiles 1.6.2, and ProtoLayout 1.4.2.
 
 ```sh
 gradle :phone-app:testDebugUnitTest :phone-app:assembleDebug :wear-app:testDebugUnitTest :wear-app:assembleDebug :watchface:assembleDebug

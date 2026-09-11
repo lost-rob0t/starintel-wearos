@@ -25,6 +25,7 @@ pick_apk() {
 wear_apk="${STARINTEL_WEAR_APK:-}"
 if [[ -z "$wear_apk" ]]; then
   wear_apk="$(pick_apk "Wear app" \
+    "build/nix/wear-app-debug.apk" \
     "wear-app/build/outputs/apk/debug/wear-app-debug.apk" \
     "wear-app-debug.apk" \
     "starintel-wear-app-debug/wear-app-debug.apk")"
@@ -33,6 +34,7 @@ fi
 face_apk="${STARINTEL_FACE_APK:-}"
 if [[ -z "$face_apk" ]]; then
   face_apk="$(pick_apk "watch face" \
+    "build/nix/watchface-debug.apk" \
     "watchface/build/outputs/apk/debug/watchface-debug.apk" \
     "watchface-debug.apk" \
     "starintel-watchface-debug/watchface-debug.apk")"
