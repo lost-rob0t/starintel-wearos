@@ -58,6 +58,8 @@ jobs:
           nix run --no-update-lock-file .#pair-android -- --help
           nix run --no-update-lock-file .#pair-watch -- --help
           nix run --no-update-lock-file .#install-phone -- --help
+          nix run --no-update-lock-file .#pair-android -- --reset-adb
+          nix run --no-update-lock-file .#pair-android -- --diagnose
       - name: Build all APKs through Nix
         run: nix run --no-update-lock-file .#build-all
       - name: Verify lock did not drift

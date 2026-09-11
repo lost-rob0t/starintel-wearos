@@ -1,22 +1,50 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+connect_timeout="${STARINTEL_ADB_CONNECT_TIMEOUT:-10}"
+
 usage() {
   cat <<'EOF'
 Usage:
   pair-android HOST:PAIR_PORT [HOST:ADB_PORT]
   pair-android --connect HOST:ADB_PORT
+  pair-android --diagnose
+  pair-android --reset-adb
   pair-android --help
 
 Examples:
   pair-android 192.168.1.50:37123
   pair-android 192.168.1.50:37123 192.168.1.50:42177
   pair-android --connect 192.168.1.50:42177
+  pair-android --diagnose
+  pair-android --reset-adb
 
 On Android/Wear OS:
   Developer options -> Wireless debugging -> Pair device with pairing code
 
 The pairing endpoint and normal ADB endpoint are usually different ports.
+If the device has forgotten this workstation, --connect cannot restore trust;
+pair it again with a fresh pairing code.
+EOF
+}
+
+require_adb() {
+  if ! command -v adb >/dev/null 2>&1; then
+    echo "error: adb is required (use the Nix app or nix develop)" >&2
+    exit 1
+  fi
+}
+
+recovery_hint() {
+  cat >&2 <<'EOF'
+Recovery:
+  1. On the device, turn Wireless debugging off and back on.
+  2. If this workstation is missing under Paired devices, open Pair device with pairing code.
+  3. Reset the local daemon with: nix run .#pair-android -- --reset-adb
+  4. Pair again with: nix run .#pair-android -- HOST:PAIR_PORT HOST:ADB_PORT
+
+You can inspect ADB/mDNS state with:
+  nix run .#pair-android -- --diagnose
 EOF
 }
 
@@ -25,9 +53,64 @@ verify_online() {
   if ! adb devices | awk -v target="$endpoint" '$1 == target && $2 == "device" { found = 1 } END { exit found ? 0 : 1 }'; then
     echo "error: adb did not report $endpoint as an online device" >&2
     echo "Current adb devices:" >&2
-    adb devices >&2
+    adb devices -l >&2 || true
+    recovery_hint
     exit 1
   fi
+}
+
+connect_device() {
+  local endpoint="$1"
+  local output status
+
+  echo "Connecting to $endpoint (timeout ${connect_timeout}s)"
+  set +e
+  output="$(timeout "${connect_timeout}s" adb connect "$endpoint" 2>&1)"
+  status=$?
+  set -e
+
+  if [[ -n "$output" ]]; then
+    printf '%s\n' "$output"
+  fi
+
+  if [[ $status -eq 124 ]]; then
+    echo "error: adb connect timed out; the TCP port may be open while the pairing trust is stale or forgotten" >&2
+    recovery_hint
+    exit 1
+  fi
+
+  if [[ $status -ne 0 ]]; then
+    echo "error: adb connect failed for $endpoint" >&2
+    recovery_hint
+    exit "$status"
+  fi
+
+  verify_online "$endpoint"
+}
+
+diagnose() {
+  echo "== adb version =="
+  adb version || true
+  echo
+  echo "== adb devices =="
+  adb devices -l || true
+  echo
+  echo "== adb server status =="
+  adb server-status 2>&1 || true
+  echo
+  echo "== adb mDNS services =="
+  timeout 5s adb mdns services 2>&1 || true
+}
+
+reset_adb() {
+  echo "Restarting local ADB daemon"
+  adb kill-server >/dev/null 2>&1 || true
+  adb start-server
+  echo
+  adb devices -l || true
+  echo
+  echo "Local ADB daemon restarted."
+  echo "If the device forgot this workstation, open Pair device with pairing code and pair again."
 }
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
@@ -35,9 +118,24 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   exit 0
 fi
 
-if ! command -v adb >/dev/null 2>&1; then
-  echo "error: adb is required (use the Nix app or nix develop)" >&2
-  exit 1
+require_adb
+
+if [[ "${1:-}" == "--diagnose" ]]; then
+  if [[ $# -ne 1 ]]; then
+    usage >&2
+    exit 2
+  fi
+  diagnose
+  exit 0
+fi
+
+if [[ "${1:-}" == "--reset-adb" ]]; then
+  if [[ $# -ne 1 ]]; then
+    usage >&2
+    exit 2
+  fi
+  reset_adb
+  exit 0
 fi
 
 if [[ "${1:-}" == "--connect" ]]; then
@@ -46,9 +144,7 @@ if [[ "${1:-}" == "--connect" ]]; then
     exit 2
   fi
   endpoint="$2"
-  echo "Connecting to $endpoint"
-  adb connect "$endpoint"
-  verify_online "$endpoint"
+  connect_device "$endpoint"
   echo
   echo "Android device connected: $endpoint"
   exit 0
@@ -85,9 +181,7 @@ if [[ -z "$connect_endpoint" ]]; then
   exit 0
 fi
 
-echo "Connecting to $connect_endpoint"
-adb connect "$connect_endpoint"
-verify_online "$connect_endpoint"
+connect_device "$connect_endpoint"
 
 echo
 echo "Android device paired and connected: $connect_endpoint"
