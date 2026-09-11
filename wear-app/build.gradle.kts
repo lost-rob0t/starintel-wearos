@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "actor.starintel.wear"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "actor.starintel.wear"
         minSdk = 30
-        targetSdk = 37
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
     }
