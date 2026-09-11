@@ -5,11 +5,13 @@ usage() {
   cat <<'EOF'
 Usage:
   pair-watch WATCH_IP:PAIR_PORT [WATCH_IP:ADB_PORT]
+  pair-watch --connect WATCH_IP:ADB_PORT
   pair-watch --help
 
 Examples:
   pair-watch 192.168.1.50:37123
   pair-watch 192.168.1.50:37123 192.168.1.50:42177
+  pair-watch --connect 192.168.1.50:42177
 
 On the watch:
   Settings -> Developer options -> Wireless debugging -> Pair new device
@@ -18,19 +20,46 @@ The pairing endpoint and normal ADB endpoint are usually different ports.
 EOF
 }
 
+verify_connected() {
+  local endpoint="$1"
+  if ! adb devices | awk -v target="$endpoint" '$1 == target && $2 == "device" { found = 1 } END { exit found ? 0 : 1 }'; then
+    echo "error: adb did not report $endpoint as an online device" >&2
+    echo "Current adb devices:" >&2
+    adb devices >&2
+    exit 1
+  fi
+}
+
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   usage
+  exit 0
+fi
+
+if ! command -v adb >/dev/null 2>&1; then
+  echo "error: adb is required (use the Nix app or nix develop)" >&2
+  exit 1
+fi
+
+if [[ "${1:-}" == "--connect" ]]; then
+  if [[ $# -ne 2 || "$2" != *:* ]]; then
+    usage >&2
+    exit 2
+  fi
+
+  connect_endpoint="$2"
+  echo "Connecting to already paired watch at $connect_endpoint"
+  adb connect "$connect_endpoint"
+  verify_connected "$connect_endpoint"
+  echo
+  echo "Watch connected: $connect_endpoint"
+  echo "Next:"
+  echo "  nix run .#install-watch -- $connect_endpoint"
   exit 0
 fi
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then
   usage >&2
   exit 2
-fi
-
-if ! command -v adb >/dev/null 2>&1; then
-  echo "error: adb is required (use the Nix app or nix develop)" >&2
-  exit 1
 fi
 
 pair_endpoint="$1"
@@ -54,24 +83,15 @@ echo
 echo "Pairing succeeded."
 
 if [[ -z "$connect_endpoint" ]]; then
-  echo "Next, return to Wireless debugging and note the normal IP address & port."
+  echo "Return to Wireless debugging and note the normal IP address & port."
   echo "Then run:"
-  echo "  nix run .#pair-watch -- $pair_endpoint WATCH_IP:ADB_PORT"
-  echo
-  echo "If the watch is already paired, you can also connect directly with:"
-  echo "  nix develop -c adb connect WATCH_IP:ADB_PORT"
+  echo "  nix run .#pair-watch -- --connect WATCH_IP:ADB_PORT"
   exit 0
 fi
 
 echo "Connecting to $connect_endpoint"
 adb connect "$connect_endpoint"
-
-if ! adb devices | awk -v target="$connect_endpoint" '$1 == target && $2 == "device" { found = 1 } END { exit found ? 0 : 1 }'; then
-  echo "error: adb did not report $connect_endpoint as an online device" >&2
-  echo "Current adb devices:" >&2
-  adb devices >&2
-  exit 1
-fi
+verify_connected "$connect_endpoint"
 
 echo
 echo "Watch paired and connected: $connect_endpoint"
