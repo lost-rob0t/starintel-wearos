@@ -38,30 +38,15 @@ class CompanionConfigService : WearableListenerService() {
         val requestId = data?.getString("request_id").orEmpty()
 
         if (data == null) {
-            sendAck(
-                messageEvent.sourceNodeId,
-                requestId,
-                false,
-                CompanionConfigProtocol.CODE_INVALID_PAYLOAD,
-            )
+            sendAck(messageEvent.sourceNodeId, requestId, false, CompanionConfigProtocol.CODE_INVALID_PAYLOAD)
             return
         }
         if (data.getInt("version", 0) != CompanionConfigProtocol.VERSION) {
-            sendAck(
-                messageEvent.sourceNodeId,
-                requestId,
-                false,
-                CompanionConfigProtocol.CODE_UNSUPPORTED,
-            )
+            sendAck(messageEvent.sourceNodeId, requestId, false, CompanionConfigProtocol.CODE_UNSUPPORTED)
             return
         }
         if (!CompanionConfigProtocol.validRequestId(requestId)) {
-            sendAck(
-                messageEvent.sourceNodeId,
-                requestId,
-                false,
-                CompanionConfigProtocol.CODE_INVALID_PAYLOAD,
-            )
+            sendAck(messageEvent.sourceNodeId, requestId, false, CompanionConfigProtocol.CODE_INVALID_PAYLOAD)
             return
         }
 
@@ -72,21 +57,11 @@ class CompanionConfigService : WearableListenerService() {
         val apiKey = data.getString("api_key").orEmpty()
 
         if (serverUrl == null) {
-            sendAck(
-                messageEvent.sourceNodeId,
-                requestId,
-                false,
-                CompanionConfigProtocol.CODE_INVALID_URL,
-            )
+            sendAck(messageEvent.sourceNodeId, requestId, false, CompanionConfigProtocol.CODE_INVALID_URL)
             return
         }
         if (!CompanionConfigProtocol.validApiKey(apiKey)) {
-            sendAck(
-                messageEvent.sourceNodeId,
-                requestId,
-                false,
-                CompanionConfigProtocol.CODE_INVALID_KEY,
-            )
+            sendAck(messageEvent.sourceNodeId, requestId, false, CompanionConfigProtocol.CODE_INVALID_KEY)
             return
         }
 
@@ -100,10 +75,17 @@ class CompanionConfigService : WearableListenerService() {
                     return@withLock
                 }
 
-                // Commit only after the candidate URL/key successfully authenticate.
-                // The previous working configuration remains untouched on every failure path.
-                repository.setApiKey(apiKey)
-                repository.setBaseUrl(serverUrl)
+                if (!repository.commitConfiguration(serverUrl, apiKey)) {
+                    sendAck(
+                        messageEvent.sourceNodeId,
+                        requestId,
+                        false,
+                        CompanionConfigProtocol.CODE_UNREACHABLE,
+                        detail = "Could not save configuration securely",
+                    )
+                    return@withLock
+                }
+
                 requestTileUpdates()
                 sendAck(
                     nodeId = messageEvent.sourceNodeId,
