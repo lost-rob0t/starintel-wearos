@@ -112,6 +112,19 @@
             '';
           };
 
+          pairAndroid = pkgs.writeShellApplication {
+            name = "starintel-pair-android";
+            runtimeInputs = [ androidSdk pkgs.bash pkgs.gawk ];
+            text = ''
+              if [[ ! -f scripts/pair-android.sh ]]; then
+                echo "error: run this from the starintel-wearos repository root" >&2
+                exit 2
+              fi
+
+              exec bash scripts/pair-android.sh "$@"
+            '';
+          };
+
           pairWatch = pkgs.writeShellApplication {
             name = "starintel-pair-watch";
             runtimeInputs = [ androidSdk pkgs.bash pkgs.gawk ];
@@ -122,6 +135,20 @@
               fi
 
               exec bash scripts/pair-watch.sh "$@"
+            '';
+          };
+
+          installPhone = pkgs.writeShellApplication {
+            name = "starintel-install-phone";
+            runtimeInputs = [ androidSdk pkgs.bash pkgs.gnugrep ];
+            text = ''
+              if [[ ! -f scripts/install-phone.sh ]]; then
+                echo "error: run this from the starintel-wearos repository root" >&2
+                exit 2
+              fi
+
+              export STARINTEL_PHONE_APK="''${STARINTEL_PHONE_APK:-build/nix/phone-app-debug.apk}"
+              exec bash scripts/install-phone.sh "$@"
             '';
           };
 
@@ -146,7 +173,7 @@
           };
         in
         {
-          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildWear buildWatchface buildAll checkAll pairWatch installWatch;
+          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildWear buildWatchface buildAll checkAll pairAndroid pairWatch installPhone installWatch;
         };
     in
     {
@@ -182,9 +209,17 @@
             type = "app";
             program = "${e.checkAll}/bin/starintel-check";
           };
+          pair-android = {
+            type = "app";
+            program = "${e.pairAndroid}/bin/starintel-pair-android";
+          };
           pair-watch = {
             type = "app";
             program = "${e.pairWatch}/bin/starintel-pair-watch";
+          };
+          install-phone = {
+            type = "app";
+            program = "${e.installPhone}/bin/starintel-install-phone";
           };
           install-watch = {
             type = "app";
