@@ -150,6 +150,10 @@
               pkg = finalAttrs.finalPackage;
               data = ./nix/deps.json;
               silent = false;
+              # GitHub-hosted runners do not permit the user-namespace mapping
+              # required by bubblewrap. This only affects the dependency recorder;
+              # the final APK derivation is still built by Nix in its sandbox.
+              useBwrap = false;
             };
 
             gradleBuildTask = ":phone-app:assembleDebug :wear-app:assembleDebug :watchface:assembleDebug";
