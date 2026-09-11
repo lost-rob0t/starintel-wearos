@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
@@ -103,7 +104,7 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
             setHintTextColor(HINT)
             setPadding(dp(14), dp(14), dp(14), dp(14))
             background = rounded(FIELD, dp(12), STROKE)
-            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
         }
 
         val privacy = TextView(this).apply {
@@ -307,7 +308,7 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
                 showStatus("The watch did not respond. Your previous watch configuration was left unchanged.", success = false)
                 refreshWatchState()
             }
-        }, TIMEOUT_TOKEN, System.currentTimeMillis() + CompanionProtocol.ACK_TIMEOUT_MS)
+        }, TIMEOUT_TOKEN, SystemClock.uptimeMillis() + CompanionProtocol.ACK_TIMEOUT_MS)
     }
 
     private fun setBusy(busy: Boolean) {
