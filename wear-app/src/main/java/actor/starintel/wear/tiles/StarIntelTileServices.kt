@@ -67,7 +67,7 @@ abstract class StarIntelTileService(
 
     private fun copyFor(kind: TileKind, data: StarIntelSnapshot): TileCopy {
         if (!data.configured) {
-            return TileCopy("StarIntel", "SETUP", "Open the app", "server URL")
+            return TileCopy("StarIntel", "SETUP", "Open the app", "server + private key")
         }
 
         return when (kind) {
