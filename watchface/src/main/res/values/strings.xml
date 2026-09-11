@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="watch_face_name">StarIntel</string>
+    <string name="slot_status">StarIntel status</string>
+    <string name="slot_targets">StarIntel targets</string>
+    <string name="slot_documents">StarIntel documents</string>
+</resources>

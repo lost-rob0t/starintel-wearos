@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WatchFace width="450" height="450">
+    <Scene backgroundColor="#050509">
+        <Group x="0" y="0" width="450" height="450" name="accents" alpha="255">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <PartDraw x="0" y="0" width="450" height="450">
+                <Ellipse x="12" y="12" width="426" height="426">
+                    <Stroke color="#00E5FF" thickness="3" />
+                </Ellipse>
+                <Ellipse x="22" y="22" width="406" height="406">
+                    <Stroke color="#B388FF" thickness="1" />
+                </Ellipse>
+                <Line startX="105" startY="225" endX="345" endY="225">
+                    <Stroke color="#273142" thickness="1" />
+                </Line>
+            </PartDraw>
+            <PartText x="0" y="75" width="450" height="28">
+                <Text align="CENTER">
+                    <Font family="SYNC_TO_DEVICE" size="18" color="#B388FF">STARINTEL</Font>
+                </Text>
+            </PartText>
+        </Group>
+
+        <DigitalClock x="65" y="112" width="320" height="94">
+            <TimeText x="0" y="0" width="320" height="94" format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER">
+                <Font family="SYNC_TO_DEVICE" size="72" color="#F7FBFF" />
+            </TimeText>
+        </DigitalClock>
+
+        <ComplicationSlot
+            slotId="1"
+            displayName="@string/slot_status"
+            supportedTypes="SHORT_TEXT EMPTY"
+            x="55" y="250" width="100" height="86">
+            <BoundingOval x="0" y="0" width="100" height="86" />
+            <DefaultProviderPolicy
+                primaryProvider="actor.starintel.wear/actor.starintel.wear.complications.StatusComplicationService"
+                primaryProviderType="SHORT_TEXT"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="0" width="100" height="86">
+                    <Text align="CENTER">
+                        <Font family="SYNC_TO_DEVICE" size="24" color="#00E5FF">
+                            <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            slotId="2"
+            displayName="@string/slot_targets"
+            supportedTypes="SHORT_TEXT EMPTY"
+            x="175" y="250" width="100" height="86">
+            <BoundingOval x="0" y="0" width="100" height="86" />
+            <DefaultProviderPolicy
+                primaryProvider="actor.starintel.wear/actor.starintel.wear.complications.TargetsComplicationService"
+                primaryProviderType="SHORT_TEXT"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="0" width="100" height="86">
+                    <Text align="CENTER">
+                        <Font family="SYNC_TO_DEVICE" size="24" color="#F7FBFF">
+                            <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            slotId="3"
+            displayName="@string/slot_documents"
+            supportedTypes="SHORT_TEXT EMPTY"
+            x="295" y="250" width="100" height="86">
+            <BoundingOval x="0" y="0" width="100" height="86" />
+            <DefaultProviderPolicy
+                primaryProvider="actor.starintel.wear/actor.starintel.wear.complications.DocumentsComplicationService"
+                primaryProviderType="SHORT_TEXT"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="0" width="100" height="86">
+                    <Text align="CENTER">
+                        <Font family="SYNC_TO_DEVICE" size="24" color="#B388FF">
+                            <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <PartText x="0" y="346" width="450" height="30" alpha="170">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <Text align="CENTER">
+                <Font family="SYNC_TO_DEVICE" size="14" color="#7E8A9A">STATUS  TARGETS  CORPUS</Font>
+            </Text>
+        </PartText>
+    </Scene>
+</WatchFace>
