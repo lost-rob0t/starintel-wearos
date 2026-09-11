@@ -114,7 +114,7 @@
 
           pairAndroid = pkgs.writeShellApplication {
             name = "starintel-pair-android";
-            runtimeInputs = [ androidSdk pkgs.bash pkgs.gawk ];
+            runtimeInputs = [ androidSdk pkgs.bash pkgs.gawk pkgs.coreutils ];
             text = ''
               if [[ ! -f scripts/pair-android.sh ]]; then
                 echo "error: run this from the starintel-wearos repository root" >&2
@@ -127,7 +127,7 @@
 
           pairWatch = pkgs.writeShellApplication {
             name = "starintel-pair-watch";
-            runtimeInputs = [ androidSdk pkgs.bash pkgs.gawk ];
+            runtimeInputs = [ androidSdk pkgs.bash pkgs.gawk pkgs.coreutils ];
             text = ''
               if [[ ! -f scripts/pair-watch.sh ]]; then
                 echo "error: run this from the starintel-wearos repository root" >&2
