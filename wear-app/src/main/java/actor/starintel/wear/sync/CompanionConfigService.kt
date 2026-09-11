@@ -80,8 +80,7 @@ class CompanionConfigService : WearableListenerService() {
                         messageEvent.sourceNodeId,
                         requestId,
                         false,
-                        CompanionConfigProtocol.CODE_UNREACHABLE,
-                        detail = "Could not save configuration securely",
+                        CompanionConfigProtocol.CODE_SAVE_FAILED,
                     )
                     return@withLock
                 }
