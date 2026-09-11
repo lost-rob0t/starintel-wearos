@@ -49,10 +49,27 @@ class StarIntelRepository private constructor(context: Context) {
     }
 
     suspend fun testConnection(baseUrl: String, apiKey: String): StarIntelSnapshot = withContext(Dispatchers.IO) {
+        testConnectionInternal(baseUrl, apiKey)
+    }
+
+    suspend fun testStoredConnection(baseUrl: String): StarIntelSnapshot = withContext(Dispatchers.IO) {
+        val apiKey = apiKeyStore.read()
+        if (apiKey.isNullOrBlank()) {
+            StarIntelSnapshot(
+                configured = false,
+                reachable = false,
+                error = "API key required",
+            )
+        } else {
+            testConnectionInternal(baseUrl, apiKey)
+        }
+    }
+
+    private fun testConnectionInternal(baseUrl: String, apiKey: String): StarIntelSnapshot {
         val normalizedBase = baseUrl.trim().trimEnd('/')
         val normalizedKey = apiKey.trim()
         val now = System.currentTimeMillis()
-        runCatching {
+        return runCatching {
             val raw = get("$normalizedBase/api/v1/stats", normalizedKey)
             parse(raw, now, now)
         }.getOrElse { failure ->
