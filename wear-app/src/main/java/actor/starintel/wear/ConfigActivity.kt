@@ -145,10 +145,16 @@ class ConfigActivity : Activity() {
                 forgetKey.isEnabled = repository.hasApiKey()
 
                 if (snapshot.reachable) {
-                    if (candidateKey.isNotBlank()) {
-                        repository.setApiKey(candidateKey)
+                    val committed = repository.commitConfiguration(
+                        baseUrl = candidateUrl,
+                        apiKey = candidateKey.takeIf { it.isNotBlank() },
+                    )
+                    if (!committed) {
+                        status.text = "Could not save configuration securely"
+                        status.setTextColor(WARNING)
+                        return@launch
                     }
-                    repository.setBaseUrl(candidateUrl)
+
                     apiKey.text.clear()
                     apiKey.hint = "Saved securely · leave blank to keep"
                     forgetKey.isEnabled = true
@@ -171,7 +177,16 @@ class ConfigActivity : Activity() {
                 .setMessage("StarIntel Tiles will stop refreshing until a new key is configured.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Remove") { _, _ ->
-                    repository.clearApiKey()
+                    val removed = runCatching {
+                        repository.clearApiKey()
+                        true
+                    }.getOrDefault(false)
+                    if (!removed) {
+                        status.text = "Could not remove saved key"
+                        status.setTextColor(WARNING)
+                        return@setPositiveButton
+                    }
+
                     apiKey.text.clear()
                     apiKey.hint = "star_sk_v1_…"
                     forgetKey.isEnabled = false
