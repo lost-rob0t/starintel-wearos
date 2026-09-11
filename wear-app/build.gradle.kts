@@ -32,5 +32,5 @@ dependencies {
     implementation("androidx.wear.watchface:watchface-complications-data-source-ktx:1.2.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
-    testImplementation(kotlin("test"))
+    testImplementation("junit:junit:4.13.2")
 }
