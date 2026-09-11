@@ -151,20 +151,19 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
             isFillViewport = true
             addView(root)
         })
+
+        // Keep this listener for the activity lifetime so a short app switch does not
+        // discard the acknowledgement for an already-sent credential transfer.
+        messageClient.addListener(this)
     }
 
     override fun onStart() {
         super.onStart()
-        messageClient.addListener(this)
         refreshWatchState()
     }
 
-    override fun onStop() {
-        messageClient.removeListener(this)
-        super.onStop()
-    }
-
     override fun onDestroy() {
+        messageClient.removeListener(this)
         handler.removeCallbacksAndMessages(null)
         if (::apiKey.isInitialized) apiKey.text?.clear()
         super.onDestroy()
@@ -305,8 +304,10 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
             if (pending?.requestId == requestId) {
                 pending = null
                 setBusy(false)
-                showStatus("The watch did not respond. Your previous watch configuration was left unchanged.", success = false)
-                refreshWatchState()
+                showStatus(
+                    "No confirmation arrived. The watch may have applied the configuration; check the watch before retrying.",
+                    success = false,
+                )
             }
         }, TIMEOUT_TOKEN, SystemClock.uptimeMillis() + CompanionProtocol.ACK_TIMEOUT_MS)
     }

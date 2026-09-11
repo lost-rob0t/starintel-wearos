@@ -63,5 +63,9 @@ class CompanionProtocolTest {
             "Watch could not reach the StarIntel server",
             CompanionProtocol.userMessage(CompanionProtocol.CODE_UNREACHABLE, "ignored"),
         )
+        assertEquals(
+            "Watch could not save the configuration securely",
+            CompanionProtocol.userMessage(CompanionProtocol.CODE_SAVE_FAILED, "ignored"),
+        )
     }
 }

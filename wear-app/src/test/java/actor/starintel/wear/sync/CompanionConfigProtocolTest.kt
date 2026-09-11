@@ -63,6 +63,10 @@ class CompanionConfigProtocolTest {
             "Could not reach StarIntel",
             CompanionConfigProtocol.safeDetail(CompanionConfigProtocol.CODE_UNREACHABLE),
         )
+        assertEquals(
+            "Could not save configuration securely",
+            CompanionConfigProtocol.safeDetail(CompanionConfigProtocol.CODE_SAVE_FAILED),
+        )
     }
 
     @Test

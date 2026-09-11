@@ -18,6 +18,7 @@ object CompanionProtocol {
     const val CODE_AUTH_REJECTED = "auth_rejected"
     const val CODE_FORBIDDEN = "forbidden"
     const val CODE_UNREACHABLE = "unreachable"
+    const val CODE_SAVE_FAILED = "save_failed"
     const val CODE_UNSUPPORTED = "unsupported"
 
     fun normalizeServerUrl(raw: String, allowCleartext: Boolean): String? {
@@ -65,6 +66,7 @@ object CompanionProtocol {
         CODE_AUTH_REJECTED -> "StarIntel rejected the API key"
         CODE_FORBIDDEN -> "API key does not have permission to read stats"
         CODE_UNREACHABLE -> "Watch could not reach the StarIntel server"
+        CODE_SAVE_FAILED -> "Watch could not save the configuration securely"
         CODE_INVALID_URL -> "Watch rejected the server URL"
         CODE_INVALID_KEY -> "Watch rejected the API key format"
         CODE_UNSUPPORTED -> "Phone and watch app versions do not match"
