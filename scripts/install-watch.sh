@@ -38,20 +38,46 @@ if [[ -z "$face_apk" ]]; then
     "starintel-watchface-debug/watchface-debug.apk")"
 fi
 
+for apk in "$wear_apk" "$face_apk"; do
+  if [[ ! -r "$apk" ]]; then
+    echo "error: APK is not readable: $apk" >&2
+    exit 1
+  fi
+done
+
 adb_cmd=(adb)
 if [[ -n "$serial" ]]; then
   adb_cmd+=( -s "$serial" )
 fi
 
-"${adb_cmd[@]}" get-state >/dev/null
+if ! "${adb_cmd[@]}" get-state >/dev/null 2>&1; then
+  echo "error: watch is not reachable through adb${serial:+ at $serial}" >&2
+  echo "hint: run 'adb devices' and reconnect Wireless debugging if needed" >&2
+  exit 1
+fi
 
-echo "Installing StarIntel Wear app: $wear_apk"
-"${adb_cmd[@]}" install -r "$wear_apk"
+echo "[1/4] Installing StarIntel Wear app"
+"${adb_cmd[@]}" install -r "$wear_apk" >/dev/null
 
-echo "Installing StarIntel watch face: $face_apk"
-"${adb_cmd[@]}" install -r "$face_apk"
+echo "[2/4] Installing StarIntel watch face"
+"${adb_cmd[@]}" install -r "$face_apk" >/dev/null
 
-echo "Opening StarIntel setup on the watch..."
-"${adb_cmd[@]}" shell am start -n actor.starintel.wear/.ConfigActivity >/dev/null
+echo "[3/4] Verifying installed packages"
+"${adb_cmd[@]}" shell pm path actor.starintel.wear | grep -q '^package:' || {
+  echo "error: actor.starintel.wear was not found after install" >&2
+  exit 1
+}
+"${adb_cmd[@]}" shell pm path actor.starintel.watchface | grep -q '^package:' || {
+  echo "error: actor.starintel.watchface was not found after install" >&2
+  exit 1
+}
 
-echo "Done. Configure the server URL + private API key, then select the StarIntel watch face and add its Tiles."
+echo "[4/4] Install verified"
+
+if [[ "${STARINTEL_OPEN_WATCH_SETUP:-0}" == "1" ]]; then
+  echo "Opening on-watch fallback setup..."
+  "${adb_cmd[@]}" shell am start -n actor.starintel.wear/.ConfigActivity >/dev/null
+else
+  echo "Next: open StarIntel Companion on the paired Android phone and send configuration to the watch."
+  echo "Fallback: set STARINTEL_OPEN_WATCH_SETUP=1 to open the watch setup screen after installation."
+fi
