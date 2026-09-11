@@ -39,7 +39,7 @@ Release builds require HTTPS. Debug builds allow cleartext HTTP so a local/LAN S
 
 ## Build
 
-The CI configuration uses JDK 17, Gradle 9.6, Android API 37, Wear Tiles 1.6.2, and ProtoLayout 1.4.2.
+The CI configuration uses JDK 17, Gradle 9.6, Android API 36, Wear Tiles 1.6.2, and ProtoLayout 1.4.2.
 
 ```sh
 gradle :wear-app:assembleDebug :watchface:assembleDebug
