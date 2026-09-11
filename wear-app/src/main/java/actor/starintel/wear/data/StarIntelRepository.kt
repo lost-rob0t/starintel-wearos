@@ -48,6 +48,36 @@ class StarIntelRepository private constructor(context: Context) {
         prefs.edit().remove(KEY_STATS_JSON).remove(KEY_RECEIVED_AT).apply()
     }
 
+    fun commitConfiguration(baseUrl: String, apiKey: String?): Boolean {
+        val normalizedBase = baseUrl.trim().trimEnd('/')
+        val candidateKey = apiKey?.trim()?.takeIf { it.isNotBlank() }
+        val previousBase = this.baseUrl()
+        val previousKey = apiKeyStore.read()
+
+        return runCatching {
+            if (candidateKey != null) {
+                apiKeyStore.save(candidateKey)
+            }
+            check(prefs.edit().putString(KEY_BASE_URL, normalizedBase).commit()) {
+                "Could not persist server URL"
+            }
+            prefs.edit().remove(KEY_STATS_JSON).remove(KEY_RECEIVED_AT).apply()
+            true
+        }.getOrElse {
+            runCatching {
+                if (previousKey.isNullOrBlank()) {
+                    if (apiKeyStore.hasValue()) apiKeyStore.clear()
+                } else {
+                    apiKeyStore.save(previousKey)
+                }
+                val editor = prefs.edit()
+                if (previousBase.isBlank()) editor.remove(KEY_BASE_URL) else editor.putString(KEY_BASE_URL, previousBase)
+                editor.commit()
+            }
+            false
+        }
+    }
+
     suspend fun testConnection(baseUrl: String, apiKey: String): StarIntelSnapshot = withContext(Dispatchers.IO) {
         testConnectionInternal(baseUrl, apiKey)
     }
