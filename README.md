@@ -79,7 +79,37 @@ nix run .#pair-watch -- WATCH_IP:PAIR_PORT WATCH_IP:ADB_PORT
 nix run .#pair-watch -- --connect WATCH_IP:ADB_PORT
 ```
 
-Both commands verify that the requested endpoint appears online in `adb devices`.
+Both commands verify that the requested endpoint appears online in `adb devices`. Connection attempts are bounded so a stale or forgotten pairing cannot leave the command hanging indefinitely.
+
+### Recover a forgotten or stale pairing
+
+If `adb devices` is empty, the TCP port is still reachable, or `adb connect` cannot authenticate, the device may have forgotten the workstation pairing. An open TCP port by itself does not mean the ADB trust relationship is still valid.
+
+Inspect the local ADB and mDNS state:
+
+```sh
+nix run .#pair-android -- --diagnose
+```
+
+Restart only the local ADB daemon:
+
+```sh
+nix run .#pair-android -- --reset-adb
+```
+
+Then on the phone/watch:
+
+1. Turn **Wireless debugging** off and back on.
+2. Check **Paired devices**. If this workstation is missing, it must be paired again.
+3. Open **Pair device with pairing code** and note the fresh pairing endpoint/code.
+4. Note the current normal Wireless debugging IP/port.
+5. Pair and connect again:
+
+```sh
+nix run .#pair-android -- HOST:PAIR_PORT HOST:ADB_PORT
+```
+
+`--connect` cannot restore a trust relationship after the device has forgotten the workstation; a fresh `adb pair` is required.
 
 ## Install the Android companion
 
