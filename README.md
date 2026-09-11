@@ -50,6 +50,14 @@ Run the existing unit/build checks through the Nix toolchain without staging APK
 nix run .#check
 ```
 
+Pair, reconnect, and install a watch using only Nix-provided `adb`:
+
+```sh
+nix run .#pair-watch -- WATCH_IP:PAIR_PORT WATCH_IP:ADB_PORT
+nix run .#pair-watch -- --connect WATCH_IP:ADB_PORT
+nix run .#install-watch -- WATCH_IP:ADB_PORT
+```
+
 The Android toolchain itself is also exposed as Nix packages:
 
 ```sh
@@ -132,20 +140,32 @@ On the Galaxy Watch5 Pro:
 4. Open **Settings → Developer options**.
 5. Enable **ADB debugging**.
 6. Enable **Wireless debugging** and allow the current Wi-Fi network.
-7. Open **Wireless debugging → Pair new device** and note the pairing IP/port and six-digit pairing code.
+7. On the main Wireless debugging screen, note the normal **IP address & Port**.
+8. Open **Pair new device** and note its separate pairing IP/port and six-digit pairing code.
 
-### 4. Pair and connect with Nix-provided adb
+### 4. Pair and connect with Nix
+
+If you have both endpoints, do the whole thing in one command:
 
 ```sh
-nix develop
-adb pair WATCH_IP:PAIR_PORT
-# enter the six-digit code shown on the watch
-
-adb connect WATCH_IP:ADB_PORT
-adb devices
+nix run .#pair-watch -- WATCH_IP:PAIR_PORT WATCH_IP:ADB_PORT
 ```
 
-The pairing port and normal wireless-debugging port can be different; use exactly what the watch displays.
+`adb` will ask for the six-digit code shown under **Pair new device**. The helper then connects to the normal wireless-debugging endpoint, verifies that `adb devices` reports the watch online, and prints the install command.
+
+If you only have the pairing endpoint first:
+
+```sh
+nix run .#pair-watch -- WATCH_IP:PAIR_PORT
+```
+
+Then return to the main Wireless debugging screen, note its normal IP/port, and connect without pairing again:
+
+```sh
+nix run .#pair-watch -- --connect WATCH_IP:ADB_PORT
+```
+
+The pairing port and normal wireless-debugging port are normally different; use exactly what the watch displays.
 
 ### 5. Install both watch packages
 
