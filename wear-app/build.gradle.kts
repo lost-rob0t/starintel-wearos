@@ -14,6 +14,17 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // Must match the phone companion certificate for Wear Data Layer.
+            // This repository key is public and debug-only; never use it for release signing.
+            storeFile = rootProject.file("nix/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
