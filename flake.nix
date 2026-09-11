@@ -112,6 +112,19 @@
             '';
           };
 
+          pairWatch = pkgs.writeShellApplication {
+            name = "starintel-pair-watch";
+            runtimeInputs = [ androidSdk pkgs.bash pkgs.gawk ];
+            text = ''
+              if [[ ! -f scripts/pair-watch.sh ]]; then
+                echo "error: run this from the starintel-wearos repository root" >&2
+                exit 2
+              fi
+
+              exec bash scripts/pair-watch.sh "$@"
+            '';
+          };
+
           installWatch = pkgs.writeShellApplication {
             name = "starintel-install-watch";
             runtimeInputs = [ androidSdk pkgs.bash ];
@@ -133,7 +146,7 @@
           };
         in
         {
-          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildWear buildWatchface buildAll checkAll installWatch;
+          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildWear buildWatchface buildAll checkAll pairWatch installWatch;
         };
     in
     {
@@ -168,6 +181,10 @@
           check = {
             type = "app";
             program = "${e.checkAll}/bin/starintel-check";
+          };
+          pair-watch = {
+            type = "app";
+            program = "${e.pairWatch}/bin/starintel-pair-watch";
           };
           install-watch = {
             type = "app";
