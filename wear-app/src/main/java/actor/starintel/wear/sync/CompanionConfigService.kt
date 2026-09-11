@@ -15,17 +15,53 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class CompanionConfigService : WearableListenerService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val configMutex = Mutex()
 
     override fun onMessageReceived(messageEvent: MessageEvent) {
         if (messageEvent.path != CompanionConfigProtocol.CONFIG_PATH) return
+        if (messageEvent.data.size > CompanionConfigProtocol.MAX_PAYLOAD_BYTES) {
+            sendAck(
+                nodeId = messageEvent.sourceNodeId,
+                requestId = "",
+                ok = false,
+                code = CompanionConfigProtocol.CODE_INVALID_PAYLOAD,
+            )
+            return
+        }
 
         val data = runCatching { DataMap.fromByteArray(messageEvent.data) }.getOrNull()
-        val nonce = data?.getString("nonce").orEmpty()
-        if (data == null || data.getInt("version", 0) != CompanionConfigProtocol.VERSION) {
-            sendAck(messageEvent.sourceNodeId, nonce, false, "Unsupported configuration payload")
+        val requestId = data?.getString("request_id").orEmpty()
+
+        if (data == null) {
+            sendAck(
+                messageEvent.sourceNodeId,
+                requestId,
+                false,
+                CompanionConfigProtocol.CODE_INVALID_PAYLOAD,
+            )
+            return
+        }
+        if (data.getInt("version", 0) != CompanionConfigProtocol.VERSION) {
+            sendAck(
+                messageEvent.sourceNodeId,
+                requestId,
+                false,
+                CompanionConfigProtocol.CODE_UNSUPPORTED,
+            )
+            return
+        }
+        if (!CompanionConfigProtocol.validRequestId(requestId)) {
+            sendAck(
+                messageEvent.sourceNodeId,
+                requestId,
+                false,
+                CompanionConfigProtocol.CODE_INVALID_PAYLOAD,
+            )
             return
         }
 
@@ -36,36 +72,47 @@ class CompanionConfigService : WearableListenerService() {
         val apiKey = data.getString("api_key").orEmpty()
 
         if (serverUrl == null) {
-            sendAck(messageEvent.sourceNodeId, nonce, false, "Invalid StarIntel server URL")
+            sendAck(
+                messageEvent.sourceNodeId,
+                requestId,
+                false,
+                CompanionConfigProtocol.CODE_INVALID_URL,
+            )
             return
         }
         if (!CompanionConfigProtocol.validApiKey(apiKey)) {
-            sendAck(messageEvent.sourceNodeId, nonce, false, "Invalid StarIntel API key")
+            sendAck(
+                messageEvent.sourceNodeId,
+                requestId,
+                false,
+                CompanionConfigProtocol.CODE_INVALID_KEY,
+            )
             return
         }
 
         scope.launch {
-            val repository = StarIntelRepository.get(applicationContext)
-            val test = repository.testConnection(serverUrl, apiKey)
-            if (!test.reachable) {
-                sendAck(
-                    messageEvent.sourceNodeId,
-                    nonce,
-                    false,
-                    CompanionConfigProtocol.safeDetail(test.error),
-                )
-                return@launch
-            }
+            configMutex.withLock {
+                val repository = StarIntelRepository.get(applicationContext)
+                val test = repository.testConnection(serverUrl, apiKey)
+                if (!test.reachable) {
+                    val code = CompanionConfigProtocol.errorCode(test.error)
+                    sendAck(messageEvent.sourceNodeId, requestId, false, code)
+                    return@withLock
+                }
 
-            repository.setBaseUrl(serverUrl)
-            repository.setApiKey(apiKey)
-            requestTileUpdates()
-            sendAck(
-                messageEvent.sourceNodeId,
-                nonce,
-                true,
-                "Authenticated · ${test.documentsTotal} docs",
-            )
+                // Commit only after the candidate URL/key successfully authenticate.
+                // The previous working configuration remains untouched on every failure path.
+                repository.setApiKey(apiKey)
+                repository.setBaseUrl(serverUrl)
+                requestTileUpdates()
+                sendAck(
+                    nodeId = messageEvent.sourceNodeId,
+                    requestId = requestId,
+                    ok = true,
+                    code = CompanionConfigProtocol.CODE_OK,
+                    detail = "Configured · ${test.documentsTotal} docs",
+                )
+            }
         }
     }
 
@@ -74,13 +121,21 @@ class CompanionConfigService : WearableListenerService() {
         super.onDestroy()
     }
 
-    private fun sendAck(nodeId: String, nonce: String, ok: Boolean, detail: String) {
+    private fun sendAck(
+        nodeId: String,
+        requestId: String,
+        ok: Boolean,
+        code: String,
+        detail: String = CompanionConfigProtocol.safeDetail(code),
+    ) {
         val payload = DataMap().apply {
             putInt("version", CompanionConfigProtocol.VERSION)
-            putString("nonce", nonce)
+            putString("request_id", requestId)
             putBoolean("ok", ok)
-            putString("detail", detail)
+            putString("code", code)
+            putString("detail", CompanionConfigProtocol.boundedDetail(detail))
         }.toByteArray()
+
         Wearable.getMessageClient(this)
             .sendMessage(nodeId, CompanionConfigProtocol.ACK_PATH, payload)
     }
