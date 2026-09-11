@@ -14,7 +14,7 @@ The phone and Wear app deliberately share the application ID `actor.starintel.we
 
 ## Nix build workflow
 
-Nix is the preferred local build path. The flake supplies the JDK, Gradle, Android SDK/API 36, build-tools 36.0.0, platform-tools/adb, and the NixOS-safe `aapt2` override. Android Studio and a host Android SDK are not required.
+Nix is the preferred local build path. The committed `flake.lock` pins the complete nixpkgs toolchain; the currently proven lock resolves JDK 17, Gradle 9.7.1, Android API 36, build-tools 36.0.0, platform-tools/adb, and the NixOS-safe `aapt2` override. Android Studio and a host Android SDK are not required.
 
 Enter the development shell:
 
@@ -58,7 +58,7 @@ nix build .#android-sdk
 nix build .#gradle
 ```
 
-The current build commands intentionally run Gradle from the working tree so Maven/Google dependencies can use the normal Gradle cache. The SDK/JDK/Gradle/tooling are supplied by Nix. A later hardening slice can use nixpkgs `gradle.fetchDeps` to lock every Gradle artifact and turn the APKs themselves into fully sandboxed `nix build` derivations.
+The current app build commands intentionally run Gradle from the working tree so Maven/Google dependencies can use the normal Gradle cache. The SDK/JDK/Gradle/tooling and their versions are pinned by Nix. A subsequent reproducibility slice can use nixpkgs `gradle.fetchDeps` to lock every Gradle artifact and expose the APKs themselves as fully sandboxed `nix build` derivations.
 
 ## Galaxy Watch5 Pro slice
 
@@ -103,13 +103,14 @@ Preferred Nix path:
 nix run .#build-all
 ```
 
-Every successful GitHub Actions build also publishes:
+Every successful GitHub Actions build publishes the original per-package artifacts and a matching Nix-built bundle:
 
 - `starintel-phone-app-debug` containing `phone-app-debug.apk`
 - `starintel-wear-app-debug` containing `wear-app-debug.apk`
 - `starintel-watchface-debug` containing `watchface-debug.apk`
+- `starintel-nix-apks-debug` containing all three APKs built together through the pinned Nix toolchain
 
-For companion configuration, use the phone and Wear APKs from the same build/run so their signing certificates match.
+For companion configuration, use the phone and Wear APKs from the same build/run so their signing certificates match. The Nix bundle is the easiest way to keep all three together.
 
 ### 2. Install the Android companion
 
