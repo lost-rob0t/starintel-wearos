@@ -5,6 +5,7 @@ plugins {
 android {
     namespace = "actor.starintel.watchface"
     compileSdk = 36
+    enableKotlin = false
 
     defaultConfig {
         applicationId = "actor.starintel.watchface"
