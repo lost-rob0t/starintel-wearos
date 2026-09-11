@@ -25,6 +25,7 @@ android {
 }
 
 dependencies {
+    implementation("com.google.android.gms:play-services-wearable:20.0.1")
     implementation("androidx.wear.tiles:tiles:1.6.2")
     implementation("androidx.wear.protolayout:protolayout:1.4.2")
     implementation("androidx.wear.protolayout:protolayout-material3:1.4.2")

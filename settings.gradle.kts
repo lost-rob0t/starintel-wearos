@@ -15,5 +15,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "starintel-wearos"
+include(":phone-app")
 include(":wear-app")
 include(":watchface")

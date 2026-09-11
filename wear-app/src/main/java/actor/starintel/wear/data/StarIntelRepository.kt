@@ -48,6 +48,23 @@ class StarIntelRepository private constructor(context: Context) {
         prefs.edit().remove(KEY_STATS_JSON).remove(KEY_RECEIVED_AT).apply()
     }
 
+    suspend fun testConnection(baseUrl: String, apiKey: String): StarIntelSnapshot = withContext(Dispatchers.IO) {
+        val normalizedBase = baseUrl.trim().trimEnd('/')
+        val normalizedKey = apiKey.trim()
+        val now = System.currentTimeMillis()
+        runCatching {
+            val raw = get("$normalizedBase/api/v1/stats", normalizedKey)
+            parse(raw, now, now)
+        }.getOrElse { failure ->
+            StarIntelSnapshot(
+                configured = true,
+                reachable = false,
+                stale = true,
+                error = failure.message ?: failure.javaClass.simpleName,
+            )
+        }
+    }
+
     suspend fun snapshot(forceRefresh: Boolean = false): StarIntelSnapshot = withContext(Dispatchers.IO) {
         val base = baseUrl()
         val apiKey = apiKeyStore.read()
@@ -98,7 +115,7 @@ class StarIntelRepository private constructor(context: Context) {
             connection.readTimeout = READ_TIMEOUT_MS
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("Authorization", "Bearer $apiKey")
-            connection.setRequestProperty("User-Agent", "starintel-wearos/0.2")
+            connection.setRequestProperty("User-Agent", "starintel-wearos/0.3")
 
             val code = connection.responseCode
             if (code !in 200..299) {

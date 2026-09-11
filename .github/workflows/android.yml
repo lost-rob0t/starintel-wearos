@@ -21,7 +21,13 @@ jobs:
         with:
           gradle-version: '9.6.0'
       - name: Build and test
-        run: gradle --stacktrace :wear-app:testDebugUnitTest :wear-app:assembleDebug :watchface:assembleDebug
+        run: gradle --stacktrace :phone-app:testDebugUnitTest :phone-app:assembleDebug :wear-app:testDebugUnitTest :wear-app:assembleDebug :watchface:assembleDebug
+      - name: Publish Android companion APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: starintel-phone-app-debug
+          path: phone-app/build/outputs/apk/debug/phone-app-debug.apk
+          if-no-files-found: error
       - name: Publish Wear app APK
         uses: actions/upload-artifact@v4
         with:
