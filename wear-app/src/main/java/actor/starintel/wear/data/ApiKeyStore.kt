@@ -22,10 +22,12 @@ internal class ApiKeyStore(context: Context) {
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
 
-        prefs.edit()
-            .putString(KEY_CIPHERTEXT, Base64.encodeToString(encrypted, Base64.NO_WRAP))
-            .putString(KEY_IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-            .apply()
+        check(
+            prefs.edit()
+                .putString(KEY_CIPHERTEXT, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                .putString(KEY_IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+                .commit()
+        ) { "Could not persist encrypted API key" }
     }
 
     fun read(): String? {
@@ -45,7 +47,9 @@ internal class ApiKeyStore(context: Context) {
     }
 
     fun clear() {
-        prefs.edit().remove(KEY_CIPHERTEXT).remove(KEY_IV).apply()
+        check(prefs.edit().remove(KEY_CIPHERTEXT).remove(KEY_IV).commit()) {
+            "Could not clear encrypted API key"
+        }
         runCatching {
             val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
             if (keyStore.containsAlias(KEY_ALIAS)) {
