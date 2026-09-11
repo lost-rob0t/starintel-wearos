@@ -22,7 +22,7 @@
         </Group>
 
         <DigitalClock x="65" y="112" width="320" height="94">
-            <TimeText x="0" y="0" width="320" height="94" format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER" verticalAlign="CENTER">
+            <TimeText x="0" y="0" width="320" height="94" format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER">
                 <Font family="SYNC_TO_DEVICE" size="72" color="#F7FBFF" />
             </TimeText>
         </DigitalClock>
