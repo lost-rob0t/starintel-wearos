@@ -67,6 +67,40 @@ jobs:
           path: build/nix/*.apk
           if-no-files-found: error
 
+  capture-gradle-deps:
+    if: github.event_name == 'pull_request' && github.head_ref == 'feat/nix-pure-apks'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate nixpkgs Gradle dependency lock
+        run: |
+          if grep -q '"https://' nix/deps.json; then
+            echo "Gradle dependency lock already populated"
+            exit 0
+          fi
+          updater="$(nix build --no-link --print-out-paths .#gradle-deps-update)"
+          "$updater"
+          test -s nix/deps.json
+          grep -q '"https://' nix/deps.json
+      - name: Commit generated dependency lock
+        run: |
+          if git diff --quiet -- nix/deps.json; then
+            echo "No dependency lock changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add nix/deps.json
+          git commit -m "Pin Gradle dependency graph"
+          git push origin HEAD:${GITHUB_HEAD_REF}
+
   validate-watchface:
     runs-on: ubuntu-latest
     steps:
