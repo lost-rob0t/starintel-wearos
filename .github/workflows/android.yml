@@ -50,7 +50,7 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Evaluate pinned Nix flake
         run: nix flake check --no-update-lock-file --show-trace
-      - name: Build all APKs through Nix
+      - name: Build all APKs through Nix developer workflow
         run: nix run --no-update-lock-file .#build-all
       - name: Verify lock did not drift
         run: git diff --exit-code -- flake.lock
@@ -67,39 +67,35 @@ jobs:
           path: build/nix/*.apk
           if-no-files-found: error
 
-  capture-gradle-deps:
-    if: github.event_name == 'pull_request' && github.head_ref == 'feat/nix-pure-apks'
+  nix-pure:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Generate nixpkgs Gradle dependency lock
+      - name: Build sandboxed APK derivation
+        run: nix build --no-update-lock-file --show-trace .#all-apks
+      - name: Verify Nix store APK outputs
         run: |
-          if grep -q '"https://' nix/deps.json; then
-            echo "Gradle dependency lock already populated"
-            exit 0
-          fi
-          updater="$(nix build --no-link --print-out-paths .#gradle-deps-update)"
-          "$updater"
-          test -s nix/deps.json
-          grep -q '"https://' nix/deps.json
-      - name: Commit generated dependency lock
-        run: |
-          if git diff --quiet -- nix/deps.json; then
-            echo "No dependency lock changes"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add nix/deps.json
-          git commit -m "Pin Gradle dependency graph"
-          git push origin HEAD:${GITHUB_HEAD_REF}
+          test -s result/phone-app-debug.apk
+          test -s result/wear-app-debug.apk
+          test -s result/watchface-debug.apk
+          test -s result/BUILD-INFO
+          mkdir -p build/pure-nix
+          cp -L result/phone-app-debug.apk build/pure-nix/
+          cp -L result/wear-app-debug.apk build/pure-nix/
+          cp -L result/watchface-debug.apk build/pure-nix/
+          cp -L result/BUILD-INFO build/pure-nix/
+          ls -lh build/pure-nix
+      - name: Verify dependency and flake locks are unchanged
+        run: git diff --exit-code -- flake.lock nix/deps.json
+      - name: Publish pure Nix APK bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: starintel-pure-nix-apks-debug
+          path: build/pure-nix/*
+          if-no-files-found: error
 
   validate-watchface:
     runs-on: ubuntu-latest
