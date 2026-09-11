@@ -1,14 +1,18 @@
 package actor.starintel.wear.tiles
 
+import android.app.PendingIntent
+import android.content.Intent
 import androidx.wear.protolayout.TimelineBuilders.Timeline
 import androidx.wear.protolayout.material3.MaterialScope
 import androidx.wear.protolayout.material3.Typography
 import androidx.wear.protolayout.material3.primaryLayout
 import androidx.wear.protolayout.material3.text
+import androidx.wear.protolayout.modifiers.clickable
 import androidx.wear.protolayout.types.layoutString
 import androidx.wear.tiles.Material3TileService
 import androidx.wear.tiles.RequestBuilders.TileRequest
 import androidx.wear.tiles.TileBuilders.Tile
+import actor.starintel.wear.ConfigActivity
 import actor.starintel.wear.data.StarIntelRepository
 import actor.starintel.wear.data.StarIntelSnapshot
 import actor.starintel.wear.data.ageLabel
@@ -29,6 +33,16 @@ abstract class StarIntelTileService(
     override suspend fun MaterialScope.tileResponse(requestParams: TileRequest): Tile {
         val snapshot = StarIntelRepository.get(applicationContext).snapshot()
         val copy = copyFor(kind, snapshot)
+        val pendingIntent = PendingIntent.getActivity(
+            this@StarIntelTileService,
+            kind.ordinal,
+            Intent(this@StarIntelTileService, ConfigActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val openApp = requestParams.scope.clickable(
+            pendingIntent = pendingIntent,
+            id = "open-starintel-${kind.name.lowercase()}",
+        )
         val layout = primaryLayout(
             titleSlot = {
                 text(copy.title.layoutString, typography = Typography.TITLE_SMALL)
@@ -42,6 +56,7 @@ abstract class StarIntelTileService(
             labelForBottomSlot = {
                 text(copy.secondary.layoutString, typography = Typography.LABEL_SMALL)
             },
+            onClick = openApp,
         )
 
         return Tile.Builder()
