@@ -1,0 +1,42 @@
+name: Android
+
+on:
+  push:
+    branches: [main, feat/watchface-starintel-tiles]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android 37 platform
+        run: yes | sdkmanager "platforms;android-37" "build-tools;37.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Build and test
+        run: gradle --stacktrace :wear-app:testDebugUnitTest :wear-app:assembleDebug :watchface:assembleDebug
+
+  validate-watchface:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build WFF validator
+        run: |
+          git clone --depth 1 https://github.com/google/watchface.git /tmp/google-watchface
+          cd /tmp/google-watchface/third_party/wff
+          ./gradlew :specification:validator:executable-jar
+      - name: Validate WFF v1
+        run: |
+          java -jar /tmp/google-watchface/third_party/wff/specification/validator/build/libs/wff-validator.jar \
+            1 watchface/src/main/res/raw/watchface.xml
