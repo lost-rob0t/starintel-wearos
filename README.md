@@ -36,15 +36,80 @@ The raw API key is never stored in ordinary preferences. It is encrypted with an
 
 A least-privilege StarIntel API-client principal should be issued specifically for the watch and limited to the read capability required by `/api/v1/stats`. Do not reuse an administrator credential.
 
-## Configure
+## Install on Galaxy Watch5 Pro
 
-1. Install the `wear-app` APK on the watch.
-2. Open **StarIntel** from the app launcher.
-3. Enter the StarIntel server origin, for example `https://starintel.example`.
-4. Enter the private StarIntel API key (`star_sk_v1_…`).
-5. Tap **SAVE + TEST**. A successful request shows **Authenticated**.
-6. Install the `watchface` APK and select **StarIntel** as the active watch face.
-7. Add the **StarIntel Ops**, **StarIntel Targets**, and **StarIntel Corpus** Tiles from the Wear OS Tile picker.
+### 1. Get the APKs
+
+Every successful GitHub Actions build publishes two artifacts:
+
+- `starintel-wear-app-debug` containing `wear-app-debug.apk`
+- `starintel-watchface-debug` containing `watchface-debug.apk`
+
+Download and unzip both artifacts into the repo root, or build locally with:
+
+```sh
+gradle :wear-app:assembleDebug :watchface:assembleDebug
+```
+
+### 2. Enable wireless debugging on the watch
+
+On the Galaxy Watch5 Pro:
+
+1. Connect the watch and development computer to the same Wi-Fi network.
+2. Open **Settings → About watch → Software**.
+3. Tap **Software version** five times to enable Developer options.
+4. Open **Settings → Developer options**.
+5. Enable **ADB debugging**.
+6. Enable **Wireless debugging** and allow the current Wi-Fi network.
+7. Open **Wireless debugging → Pair new device** and note the pairing IP/port and six-digit pairing code.
+
+### 3. Pair and connect with adb
+
+On the development computer:
+
+```sh
+adb pair WATCH_IP:PAIR_PORT
+# enter the six-digit code shown on the watch
+
+adb connect WATCH_IP:ADB_PORT
+adb devices
+```
+
+The pairing port and normal wireless-debugging port can be different; use exactly what the watch displays.
+
+### 4. Install both StarIntel packages
+
+From the repo root, either run the helper:
+
+```sh
+bash scripts/install-watch.sh WATCH_IP:ADB_PORT
+```
+
+Or install manually:
+
+```sh
+adb -s WATCH_IP:ADB_PORT install -r wear-app/build/outputs/apk/debug/wear-app-debug.apk
+adb -s WATCH_IP:ADB_PORT install -r watchface/build/outputs/apk/debug/watchface-debug.apk
+```
+
+If you downloaded CI artifacts instead of building locally, the helper also recognizes:
+
+```text
+wear-app-debug.apk
+watchface-debug.apk
+starintel-wear-app-debug/wear-app-debug.apk
+starintel-watchface-debug/watchface-debug.apk
+```
+
+The helper opens the StarIntel setup screen after installation.
+
+### 5. Configure StarIntel
+
+1. Enter the StarIntel server origin, for example `https://starintel.example`.
+2. Enter the private StarIntel API key (`star_sk_v1_…`).
+3. Tap **SAVE + TEST**. A successful request shows **Authenticated**.
+4. Select **StarIntel** from the normal watch-face picker.
+5. Add **StarIntel Ops**, **StarIntel Targets**, and **StarIntel Corpus** from the Tile picker.
 
 The watch face defaults its three complication slots to the data sources from `wear-app` when that package is installed. The slots remain editable in the normal watch-face editor.
 

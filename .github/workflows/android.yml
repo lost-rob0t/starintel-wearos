@@ -2,7 +2,7 @@ name: Android
 
 on:
   push:
-    branches: [main, feat/watchface-starintel-tiles]
+    branches: [main]
   pull_request:
 
 jobs:
@@ -22,6 +22,18 @@ jobs:
           gradle-version: '9.6.0'
       - name: Build and test
         run: gradle --stacktrace :wear-app:testDebugUnitTest :wear-app:assembleDebug :watchface:assembleDebug
+      - name: Publish Wear app APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: starintel-wear-app-debug
+          path: wear-app/build/outputs/apk/debug/wear-app-debug.apk
+          if-no-files-found: error
+      - name: Publish watch face APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: starintel-watchface-debug
+          path: watchface/build/outputs/apk/debug/watchface-debug.apk
+          if-no-files-found: error
 
   validate-watchface:
     runs-on: ubuntu-latest
