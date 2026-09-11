@@ -50,6 +50,10 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Evaluate pinned Nix flake
         run: nix flake check --no-update-lock-file --show-trace
+      - name: Smoke test pairing helper
+        run: |
+          bash -n scripts/pair-watch.sh
+          nix run --no-update-lock-file .#pair-watch -- --help
       - name: Build all APKs through Nix
         run: nix run --no-update-lock-file .#build-all
       - name: Verify lock did not drift
