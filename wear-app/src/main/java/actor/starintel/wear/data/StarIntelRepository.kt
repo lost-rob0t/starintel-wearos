@@ -28,6 +28,7 @@ data class StarIntelSnapshot(
 class StarIntelRepository private constructor(context: Context) {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private val apiKeyStore = ApiKeyStore(appContext)
 
     fun baseUrl(): String = prefs.getString(KEY_BASE_URL, "")?.trim().orEmpty()
 
@@ -36,10 +37,26 @@ class StarIntelRepository private constructor(context: Context) {
         prefs.edit().putString(KEY_BASE_URL, normalized).apply()
     }
 
+    fun hasApiKey(): Boolean = apiKeyStore.hasValue()
+
+    fun setApiKey(value: String) {
+        apiKeyStore.save(value.trim())
+    }
+
+    fun clearApiKey() {
+        apiKeyStore.clear()
+        prefs.edit().remove(KEY_STATS_JSON).remove(KEY_RECEIVED_AT).apply()
+    }
+
     suspend fun snapshot(forceRefresh: Boolean = false): StarIntelSnapshot = withContext(Dispatchers.IO) {
         val base = baseUrl()
-        if (base.isBlank()) {
-            return@withContext StarIntelSnapshot(configured = false, reachable = false)
+        val apiKey = apiKeyStore.read()
+        if (base.isBlank() || apiKey.isNullOrBlank()) {
+            return@withContext StarIntelSnapshot(
+                configured = false,
+                reachable = false,
+                error = if (base.isBlank()) "Server URL required" else "API key required",
+            )
         }
 
         val now = System.currentTimeMillis()
@@ -52,7 +69,7 @@ class StarIntelRepository private constructor(context: Context) {
         }
 
         runCatching {
-            val raw = get("$base/api/v1/stats")
+            val raw = get("$base/api/v1/stats", apiKey)
             val parsed = parse(raw, now, now)
             prefs.edit()
                 .putString(KEY_STATS_JSON, raw)
@@ -73,18 +90,24 @@ class StarIntelRepository private constructor(context: Context) {
         }
     }
 
-    private fun get(url: String): String {
+    private fun get(url: String, apiKey: String): String {
         val connection = URL(url).openConnection() as HttpURLConnection
         return try {
             connection.requestMethod = "GET"
             connection.connectTimeout = CONNECT_TIMEOUT_MS
             connection.readTimeout = READ_TIMEOUT_MS
             connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("User-Agent", "starintel-wearos/0.1")
+            connection.setRequestProperty("Authorization", "Bearer $apiKey")
+            connection.setRequestProperty("User-Agent", "starintel-wearos/0.2")
 
             val code = connection.responseCode
             if (code !in 200..299) {
-                throw IllegalStateException("HTTP $code")
+                val message = when (code) {
+                    401 -> "HTTP 401 unauthorized"
+                    403 -> "HTTP 403 forbidden"
+                    else -> "HTTP $code"
+                }
+                throw IllegalStateException(message)
             }
             connection.inputStream.bufferedReader().use { it.readText() }
         } finally {
