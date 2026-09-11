@@ -131,9 +131,97 @@
             name = "starintel-wearos-android-toolchain";
             paths = [ jdk gradle androidSdk ];
           };
+
+          # Fully sandboxed APK package. Maven/Google/Gradle artifacts are supplied
+          # by the nixpkgs Gradle MITM cache generated from nix/deps.json.
+          allApks = pkgs.stdenv.mkDerivation (finalAttrs: {
+            pname = "starintel-wearos-apks";
+            version = "0.1.0";
+            src = self;
+
+            nativeBuildInputs = [
+              gradle
+              jdk
+              androidSdk
+              pkgs.coreutils
+            ];
+
+            mitmCache = gradle.fetchDeps {
+              pkg = finalAttrs.finalPackage;
+              data = ./nix/deps.json;
+              silent = false;
+            };
+
+            gradleBuildTask = ":phone-app:assembleDebug :wear-app:assembleDebug :watchface:assembleDebug";
+            gradleCheckTask = ":phone-app:testDebugUnitTest :wear-app:testDebugUnitTest";
+            gradleUpdateTask = "${finalAttrs.gradleBuildTask} ${finalAttrs.gradleCheckTask}";
+            doCheck = true;
+
+            env = {
+              ANDROID_HOME = androidHome;
+              ANDROID_SDK_ROOT = androidHome;
+              JAVA_HOME = jdk;
+            };
+
+            gradleFlags = [
+              "--no-daemon"
+              "-Dorg.gradle.project.android.aapt2FromMavenOverride=${aapt2}"
+              "-Dorg.gradle.java.home=${jdk}"
+            ];
+
+            preConfigure = ''
+              export HOME="$TMPDIR/home"
+              export ANDROID_USER_HOME="$TMPDIR/android-user"
+              mkdir -p "$HOME" "$ANDROID_USER_HOME"
+            '';
+
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out"
+              install -Dm644 phone-app/build/outputs/apk/debug/phone-app-debug.apk "$out/phone-app-debug.apk"
+              install -Dm644 wear-app/build/outputs/apk/debug/wear-app-debug.apk "$out/wear-app-debug.apk"
+              install -Dm644 watchface/build/outputs/apk/debug/watchface-debug.apk "$out/watchface-debug.apk"
+              cat > "$out/BUILD-INFO" <<EOF
+              StarIntel Wear OS reproducible debug APK bundle
+              JDK: 17
+              Android platform: 36
+              Android build-tools: 36.0.0
+              Signing: repository debug-only certificate (nix/debug.keystore)
+              EOF
+              runHook postInstall
+            '';
+          });
+
+          mkApkPackage = name: file:
+            pkgs.runCommand "starintel-${name}-0.1.0" { } ''
+              mkdir -p "$out"
+              cp "${allApks}/${file}" "$out/${file}"
+            '';
+
+          phoneAppPackage = mkApkPackage "phone-app" "phone-app-debug.apk";
+          wearAppPackage = mkApkPackage "wear-app" "wear-app-debug.apk";
+          watchfacePackage = mkApkPackage "watchface" "watchface-debug.apk";
+          gradleDepsUpdate = allApks.mitmCache.updateScript;
         in
         {
-          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildWear buildWatchface buildAll checkAll installWatch;
+          inherit
+            pkgs
+            androidSdk
+            jdk
+            gradle
+            toolchain
+            buildPhone
+            buildWear
+            buildWatchface
+            buildAll
+            checkAll
+            installWatch
+            allApks
+            phoneAppPackage
+            wearAppPackage
+            watchfacePackage
+            gradleDepsUpdate
+            ;
         };
     in
     {
@@ -143,7 +231,12 @@
           android-sdk = e.androidSdk;
           gradle = e.gradle;
           toolchain = e.toolchain;
-          default = e.toolchain;
+          phone-app = e.phoneAppPackage;
+          wear-app = e.wearAppPackage;
+          watchface = e.watchfacePackage;
+          all-apks = e.allApks;
+          gradle-deps-update = e.gradleDepsUpdate;
+          default = e.allApks;
         });
 
       apps = forAllSystems (system:
