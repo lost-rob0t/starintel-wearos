@@ -14,6 +14,17 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // Public, debug-only key committed for reproducible local/Nix builds.
+            // Never use this signing identity for a production release.
+            storeFile = rootProject.file("nix/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
