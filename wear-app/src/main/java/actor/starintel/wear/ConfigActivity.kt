@@ -41,7 +41,7 @@ class ConfigActivity : Activity() {
             setTextColor(Color.rgb(0, 229, 255))
             gravity = Gravity.CENTER
         }
-        val hint = TextView(this).apply {
+        val serverUrlLabel = TextView(this).apply {
             text = "Server URL"
             textSize = 12f
             setTextColor(Color.LTGRAY)
@@ -50,7 +50,7 @@ class ConfigActivity : Activity() {
         val url = EditText(this).apply {
             setSingleLine(true)
             setText(repository.baseUrl())
-            hint = "https://server.example"
+            this.hint = "https://server.example"
             textSize = 13f
             setTextColor(Color.WHITE)
             setHintTextColor(Color.GRAY)
@@ -92,7 +92,7 @@ class ConfigActivity : Activity() {
         }
 
         root.addView(title, matchWrap())
-        root.addView(hint, matchWrap(top = 10))
+        root.addView(serverUrlLabel, matchWrap(top = 10))
         root.addView(url, matchWrap(top = 4))
         root.addView(save, matchWrap(top = 8))
         root.addView(status, matchWrap(top = 8))
