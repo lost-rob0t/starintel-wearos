@@ -41,6 +41,26 @@ jobs:
           path: watchface/build/outputs/apk/debug/watchface-debug.apk
           if-no-files-found: error
 
+  nix-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Evaluate Nix flake
+        run: nix flake check --show-trace
+      - name: Build all APKs through Nix
+        run: nix run .#build-all
+      - name: Show pinned flake lock
+        run: cat flake.lock
+      - name: Verify Nix-staged APKs
+        run: |
+          test -s build/nix/phone-app-debug.apk
+          test -s build/nix/wear-app-debug.apk
+          test -s build/nix/watchface-debug.apk
+          ls -lh build/nix/*.apk
+
   validate-watchface:
     runs-on: ubuntu-latest
     steps:
