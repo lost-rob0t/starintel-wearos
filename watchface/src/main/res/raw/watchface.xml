@@ -27,21 +27,101 @@
             </TimeText>
         </DigitalClock>
 
+        <!--
+          Stable shared complication contract.
+          Slots 1-3 preserve the IDs shipped before #26. Slots 4-6 are new.
+          Every slot supports EMPTY and has an explicit EMPTY renderer: if no
+          provider is assigned, WFF draws nothing in that region.
+        -->
+
+        <ComplicationSlot
+            slotId="4"
+            displayName="@string/slot_left_edge"
+            supportedTypes="RANGED_VALUE EMPTY"
+            x="0" y="0" width="450" height="450">
+            <BoundingArc
+                centerX="225" centerY="225" width="410" height="410"
+                thickness="34" isRoundEdge="TRUE"
+                startAngle="200" endAngle="340" direction="CLOCKWISE"
+                outlinePadding="6" />
+            <DefaultProviderPolicy
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="450" height="450">
+                    <Arc
+                        centerX="225" centerY="225" width="410" height="410"
+                        startAngle="200" endAngle="200" direction="CLOCKWISE">
+                        <Transform
+                            target="endAngle"
+                            value="[COMPLICATION.RANGED_VALUE_MAX] == [COMPLICATION.RANGED_VALUE_MIN] ? 200 : 200 + clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1) * 140" />
+                        <Stroke color="#00E5FF" thickness="10" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            slotId="5"
+            displayName="@string/slot_right_edge"
+            supportedTypes="RANGED_VALUE EMPTY"
+            x="0" y="0" width="450" height="450">
+            <BoundingArc
+                centerX="225" centerY="225" width="410" height="410"
+                thickness="34" isRoundEdge="TRUE"
+                startAngle="20" endAngle="160" direction="CLOCKWISE"
+                outlinePadding="6" />
+            <DefaultProviderPolicy
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="450" height="450">
+                    <Arc
+                        centerX="225" centerY="225" width="410" height="410"
+                        startAngle="20" endAngle="20" direction="CLOCKWISE">
+                        <Transform
+                            target="endAngle"
+                            value="[COMPLICATION.RANGED_VALUE_MAX] == [COMPLICATION.RANGED_VALUE_MIN] ? 20 : 20 + clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1) * 140" />
+                        <Stroke color="#B388FF" thickness="10" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
         <ComplicationSlot
             slotId="1"
-            displayName="@string/slot_status"
-            supportedTypes="SHORT_TEXT EMPTY"
-            x="55" y="250" width="100" height="86">
-            <BoundingOval x="0" y="0" width="100" height="86" />
+            displayName="@string/slot_lower_left"
+            supportedTypes="SHORT_TEXT RANGED_VALUE EMPTY"
+            x="52" y="270" width="96" height="96">
+            <BoundingOval x="0" y="0" width="96" height="96" outlinePadding="4" />
             <DefaultProviderPolicy
                 primaryProvider="actor.starintel.wear/actor.starintel.wear.complications.StatusComplicationService"
                 primaryProviderType="SHORT_TEXT"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
             <Complication type="SHORT_TEXT">
-                <PartText x="0" y="0" width="100" height="86">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="24" color="#00E5FF">
+                <PartText x="0" y="0" width="96" height="96">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="SYNC_TO_DEVICE" size="22" color="#00E5FF">
+                            <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="96" height="96">
+                    <Arc centerX="48" centerY="48" width="82" height="82" startAngle="0" endAngle="0" direction="CLOCKWISE">
+                        <Transform
+                            target="endAngle"
+                            value="[COMPLICATION.RANGED_VALUE_MAX] == [COMPLICATION.RANGED_VALUE_MIN] ? 0 : clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1) * 360" />
+                        <Stroke color="#00E5FF" thickness="6" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <PartText x="10" y="20" width="76" height="56">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#F7FBFF">
                             <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
                         </Font>
                     </Text>
@@ -52,19 +132,36 @@
 
         <ComplicationSlot
             slotId="2"
-            displayName="@string/slot_targets"
-            supportedTypes="SHORT_TEXT EMPTY"
-            x="175" y="250" width="100" height="86">
-            <BoundingOval x="0" y="0" width="100" height="86" />
+            displayName="@string/slot_lower_center"
+            supportedTypes="SHORT_TEXT RANGED_VALUE EMPTY"
+            x="177" y="282" width="96" height="96">
+            <BoundingOval x="0" y="0" width="96" height="96" outlinePadding="4" />
             <DefaultProviderPolicy
                 primaryProvider="actor.starintel.wear/actor.starintel.wear.complications.TargetsComplicationService"
                 primaryProviderType="SHORT_TEXT"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
             <Complication type="SHORT_TEXT">
-                <PartText x="0" y="0" width="100" height="86">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="24" color="#F7FBFF">
+                <PartText x="0" y="0" width="96" height="96">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="SYNC_TO_DEVICE" size="22" color="#F7FBFF">
+                            <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="96" height="96">
+                    <Arc centerX="48" centerY="48" width="82" height="82" startAngle="0" endAngle="0" direction="CLOCKWISE">
+                        <Transform
+                            target="endAngle"
+                            value="[COMPLICATION.RANGED_VALUE_MAX] == [COMPLICATION.RANGED_VALUE_MIN] ? 0 : clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1) * 360" />
+                        <Stroke color="#F7FBFF" thickness="6" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <PartText x="10" y="20" width="76" height="56">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#F7FBFF">
                             <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
                         </Font>
                     </Text>
@@ -75,19 +172,36 @@
 
         <ComplicationSlot
             slotId="3"
-            displayName="@string/slot_documents"
-            supportedTypes="SHORT_TEXT EMPTY"
-            x="295" y="250" width="100" height="86">
-            <BoundingOval x="0" y="0" width="100" height="86" />
+            displayName="@string/slot_lower_right"
+            supportedTypes="SHORT_TEXT RANGED_VALUE EMPTY"
+            x="302" y="270" width="96" height="96">
+            <BoundingOval x="0" y="0" width="96" height="96" outlinePadding="4" />
             <DefaultProviderPolicy
                 primaryProvider="actor.starintel.wear/actor.starintel.wear.complications.DocumentsComplicationService"
                 primaryProviderType="SHORT_TEXT"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
             <Complication type="SHORT_TEXT">
-                <PartText x="0" y="0" width="100" height="86">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="24" color="#B388FF">
+                <PartText x="0" y="0" width="96" height="96">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="SYNC_TO_DEVICE" size="22" color="#B388FF">
+                            <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="96" height="96">
+                    <Arc centerX="48" centerY="48" width="82" height="82" startAngle="0" endAngle="0" direction="CLOCKWISE">
+                        <Transform
+                            target="endAngle"
+                            value="[COMPLICATION.RANGED_VALUE_MAX] == [COMPLICATION.RANGED_VALUE_MIN] ? 0 : clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1) * 360" />
+                        <Stroke color="#B388FF" thickness="6" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <PartText x="10" y="20" width="76" height="56">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#F7FBFF">
                             <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
                         </Font>
                     </Text>
@@ -96,11 +210,34 @@
             <Complication type="EMPTY" />
         </ComplicationSlot>
 
-        <PartText x="0" y="346" width="450" height="30" alpha="170">
-            <Variant mode="AMBIENT" target="alpha" value="0" />
-            <Text align="CENTER">
-                <Font family="SYNC_TO_DEVICE" size="14" color="#7E8A9A">STATUS  TARGETS  CORPUS</Font>
-            </Text>
-        </PartText>
+        <ComplicationSlot
+            slotId="6"
+            displayName="@string/slot_text_region"
+            supportedTypes="SHORT_TEXT LONG_TEXT EMPTY"
+            x="120" y="382" width="210" height="42">
+            <BoundingRoundBox x="0" y="0" width="210" height="42" cornerRadius="14" outlinePadding="4" />
+            <DefaultProviderPolicy
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="0" width="210" height="42">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="SYNC_TO_DEVICE" size="16" color="#F7FBFF">
+                            <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="LONG_TEXT">
+                <PartText x="4" y="0" width="202" height="42">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="SYNC_TO_DEVICE" size="14" color="#F7FBFF">
+                            <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
     </Scene>
 </WatchFace>
