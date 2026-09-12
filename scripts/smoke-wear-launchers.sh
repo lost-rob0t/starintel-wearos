@@ -39,6 +39,7 @@ launchers=(
   actor.starintel.wear/.ExplorerActivity
   actor.starintel.wear/.TargetsActivity
   actor.starintel.wear/.GraphActivity
+  actor.starintel.wear/.GoalGaugesActivity
 )
 
 "${adb_cmd[@]}" shell am force-stop actor.starintel.wear >/dev/null 2>&1 || true
