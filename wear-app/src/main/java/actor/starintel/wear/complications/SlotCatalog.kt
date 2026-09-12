@@ -10,7 +10,7 @@ enum class SlotDataType {
 
 enum class SlotFamily {
     CIRCULAR,
-    CURVED_RANGED,
+    CURVED,
     TEXT,
 }
 
@@ -52,14 +52,14 @@ object SlotCatalog {
     val leftEdge = SlotContract(
         id = 4,
         key = "left_edge",
-        family = SlotFamily.CURVED_RANGED,
-        supportedTypes = setOf(SlotDataType.RANGED_VALUE, SlotDataType.EMPTY),
+        family = SlotFamily.CURVED,
+        supportedTypes = setOf(SlotDataType.SHORT_TEXT, SlotDataType.RANGED_VALUE, SlotDataType.EMPTY),
     )
     val rightEdge = SlotContract(
         id = 5,
         key = "right_edge",
-        family = SlotFamily.CURVED_RANGED,
-        supportedTypes = setOf(SlotDataType.RANGED_VALUE, SlotDataType.EMPTY),
+        family = SlotFamily.CURVED,
+        supportedTypes = setOf(SlotDataType.SHORT_TEXT, SlotDataType.RANGED_VALUE, SlotDataType.EMPTY),
     )
     val textRegion = SlotContract(
         id = 6,
