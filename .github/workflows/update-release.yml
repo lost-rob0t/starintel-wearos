@@ -63,11 +63,17 @@ jobs:
             release_tag="$GITHUB_REF_NAME"
             source_ref="$GITHUB_REF_NAME"
             version_name="${GITHUB_REF_NAME#v}"
+            if [[ "$GITHUB_REF_NAME" =~ ^[vV]?[0-9]+(\.[0-9]+){1,3}$ ]]; then
+              release_prerelease="false"
+            else
+              release_prerelease="true"
+            fi
           else
             channel="master"
             release_tag="master-channel"
             source_ref="main"
             version_name="0.1.0-master.${GITHUB_SHA:0:10}"
+            release_prerelease="true"
           fi
           {
             echo "STARINTEL_UPDATE_CHANNEL=$channel"
@@ -76,6 +82,7 @@ jobs:
             echo "STARINTEL_VERSION_CODE=$version_code"
             echo "STARINTEL_VERSION_NAME=$version_name"
             echo "STARINTEL_SOURCE_COMMIT=$GITHUB_SHA"
+            echo "STARINTEL_RELEASE_PRERELEASE=$release_prerelease"
           } >> "$GITHUB_ENV"
 
       - name: Restore persistent Android signing key
@@ -152,6 +159,12 @@ jobs:
               --target "$GITHUB_SHA" \
               --title "StarIntel master channel" \
               --notes "Rolling signed StarIntel Wear OS development channel." \
+              --prerelease
+          elif [[ "$STARINTEL_RELEASE_PRERELEASE" == "true" ]]; then
+            gh release create "$STARINTEL_RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$STARINTEL_RELEASE_TAG" \
+              --generate-notes \
               --prerelease
           else
             gh release create "$STARINTEL_RELEASE_TAG" \
