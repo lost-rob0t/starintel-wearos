@@ -36,6 +36,7 @@ fi
 launchers=(
   actor.starintel.wear/.MainActivity
   actor.starintel.wear/.SearchActivity
+  actor.starintel.wear/.SearchAlertsActivity
   actor.starintel.wear/.ExplorerActivity
   actor.starintel.wear/.TargetsActivity
   actor.starintel.wear/.GraphActivity
