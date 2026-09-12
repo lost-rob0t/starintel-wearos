@@ -23,6 +23,8 @@ printf 'two\n' >>"$work/file"
 git -C "$work" commit -qam "two"
 second="$(git -C "$work" rev-parse HEAD)"
 git -C "$work" tag v0.2.0
+git -C "$work" tag master-channel
+git -C "$work" tag v0.3.0-rc1
 
 git clone -q --bare "$work" "$remote"
 git -C "$remote" symbolic-ref HEAD refs/heads/main
@@ -39,9 +41,15 @@ exact_tag_output="$(STARINTEL_UPDATE_REMOTE="$remote" bash "$updater" --resolve-
 grep -q '^resolved_ref=refs/tags/v0.1.0$' <<<"$exact_tag_output"
 grep -q "^commit=$first$" <<<"$exact_tag_output"
 
+# Automatic tagged mode ignores the rolling master channel and prereleases.
 latest_tag_output="$(STARINTEL_UPDATE_REMOTE="$remote" bash "$updater" --resolve-only --latest-tag)"
 grep -q '^resolved_ref=refs/tags/v0.2.0$' <<<"$latest_tag_output"
 grep -q "^commit=$second$" <<<"$latest_tag_output"
+
+# Exact-tag mode still permits an intentional prerelease selection.
+prerelease_output="$(STARINTEL_UPDATE_REMOTE="$remote" bash "$updater" --resolve-only --tag v0.3.0-rc1)"
+grep -q '^resolved_ref=refs/tags/v0.3.0-rc1$' <<<"$prerelease_output"
+grep -q "^commit=$second$" <<<"$prerelease_output"
 
 # If a real master branch appears later, --source master must prefer it over HEAD/main.
 git -C "$work" branch master "$first"
