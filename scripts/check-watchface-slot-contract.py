@@ -70,8 +70,17 @@ def check_face(name: str, path: Path, expected_ids: set[int]) -> None:
         accent = f"[CONFIGURATION.themeColor.{TOKEN[slot_id]}]"
         if accent not in text:
             fail(f"{name} slot {slot_id}: missing dedicated accent {accent}")
-        if "presentationMode" not in text or 'thickness="1"' not in text:
-            fail(f"{name} slot {slot_id}: Ultra Black needs a one-pixel wireframe")
+
+        # Every configured renderer, not just the slot as a whole, must have an
+        # Ultra Black branch with a one-pixel outline. This prevents e.g. a
+        # RANGED_VALUE provider from accidentally retaining a thick progress bar.
+        for renderer in slot.findall("Complication"):
+            kind = renderer.get("type", "")
+            if kind == "EMPTY":
+                continue
+            renderer_text = serialized(renderer)
+            if "presentationMode" not in renderer_text or 'thickness="1"' not in renderer_text:
+                fail(f"{name} slot {slot_id} {kind}: missing one-pixel Ultra Black wireframe")
 
         ranged = slot.find("Complication[@type='RANGED_VALUE']")
         if ranged is not None:
