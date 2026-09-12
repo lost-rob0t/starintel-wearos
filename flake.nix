@@ -114,7 +114,7 @@
 
           pairAndroid = pkgs.writeShellApplication {
             name = "starintel-pair-android";
-            runtimeInputs = [ androidSdk pkgs.bash pkgs.gawk pkgs.coreutils ];
+            runtimeInputs = [ androidSdk pkgs.bash pkgs.gawk pkgs.coreutils pkgs.qrencode ];
             text = ''
               if [[ ! -f scripts/pair-android.sh ]]; then
                 echo "error: run this from the starintel-wearos repository root" >&2
@@ -127,7 +127,7 @@
 
           pairWatch = pkgs.writeShellApplication {
             name = "starintel-pair-watch";
-            runtimeInputs = [ androidSdk pkgs.bash pkgs.gawk pkgs.coreutils ];
+            runtimeInputs = [ androidSdk pkgs.bash pkgs.gawk pkgs.coreutils pkgs.qrencode ];
             text = ''
               if [[ ! -f scripts/pair-watch.sh ]]; then
                 echo "error: run this from the starintel-wearos repository root" >&2
@@ -235,7 +235,7 @@
         let e = mkEnv system;
         in {
           default = e.pkgs.mkShell {
-            packages = [ e.jdk e.gradle e.androidSdk ];
+            packages = [ e.jdk e.gradle e.androidSdk e.pkgs.qrencode ];
 
             ANDROID_HOME = "${e.androidSdk}/libexec/android-sdk";
             ANDROID_SDK_ROOT = "${e.androidSdk}/libexec/android-sdk";
