@@ -1,0 +1,173 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing release tag (for example v0.1.1-alpha)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release tag
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            version='${{ inputs.version }}'
+          else
+            version="$GITHUB_REF_NAME"
+          fi
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "error: invalid release tag: $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.version }}
+          fetch-depth: 0
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify release tag matches app versions
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${VERSION#v}"
+          codes=()
+          for module in phone-app wear-app watchface; do
+            file="$module/build.gradle.kts"
+            actual="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' "$file")"
+            code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' "$file")"
+            if [[ "$actual" != "$expected" ]]; then
+              echo "error: $module versionName=$actual, tag expects $expected" >&2
+              exit 1
+            fi
+            if [[ -z "$code" ]]; then
+              echo "error: could not read $module versionCode" >&2
+              exit 1
+            fi
+            codes+=("$code")
+          done
+          if [[ "${codes[0]}" != "${codes[1]}" || "${codes[0]}" != "${codes[2]}" ]]; then
+            echo "error: versionCode mismatch: ${codes[*]}" >&2
+            exit 1
+          fi
+
+      - name: Evaluate pinned Nix flake
+        run: nix flake check --no-update-lock-file --show-trace
+
+      - name: Run Android unit tests
+        run: >-
+          nix develop --no-update-lock-file --command
+          gradle --stacktrace
+          :phone-app:testDebugUnitTest
+          :wear-app:testDebugUnitTest
+
+      - name: Validate watch-face contracts
+        run: |
+          python3 scripts/check-watchface-slot-contract.py
+          python3 scripts/check-watchface-themes.py
+          python3 scripts/check-watchface-round-bounds.py watchface/src/main/res/raw/watchface.xml
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build WFF validator
+        run: |
+          git clone --depth 1 https://github.com/google/watchface.git /tmp/google-watchface
+          cd /tmp/google-watchface/third_party/wff
+          ./gradlew :specification:validator:executable-jar
+
+      - name: Validate WFF v1
+        run: |
+          java -jar /tmp/google-watchface/third_party/wff/specification/validator/build/libs/wff-validator.jar \
+            1 watchface/src/main/res/raw/watchface.xml
+
+      - name: Build all installable APKs through Nix
+        run: nix run --no-update-lock-file .#build-all
+
+      - name: Verify companion signer parity
+        run: >-
+          nix develop --no-update-lock-file --command bash
+          scripts/verify-companion-signing.sh
+          build/nix/phone-app-debug.apk
+          build/nix/wear-app-debug.apk
+
+      - name: Stage release assets
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit="$(git rev-parse HEAD)"
+          mkdir -p dist
+          cp build/nix/phone-app-debug.apk "dist/starintel-phone-${VERSION}.apk"
+          cp build/nix/wear-app-debug.apk "dist/starintel-wear-${VERSION}.apk"
+          cp build/nix/watchface-debug.apk "dist/starintel-watchface-${VERSION}.apk"
+          (
+            cd dist
+            sha256sum ./*.apk > SHA256SUMS
+            printf 'version=%s\ncommit=%s\nbuild=nix run --no-update-lock-file .#build-all\n' \
+              "$VERSION" "$commit" > RELEASE-MANIFEST.txt
+            zip -9 "starintel-wearos-${VERSION}-apks.zip" ./*.apk SHA256SUMS RELEASE-MANIFEST.txt
+          )
+
+      - name: Preserve release bundle as CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ steps.meta.outputs.version }}
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            gh release upload "$VERSION" dist/* --clobber
+            exit 0
+          fi
+
+          args=(
+            release create "$VERSION"
+            dist/*
+            --verify-tag
+            --generate-notes
+            --title "StarIntel Wear OS $VERSION"
+          )
+          if [[ "$PRERELEASE" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+          gh "${args[@]}"
