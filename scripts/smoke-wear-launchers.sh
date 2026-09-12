@@ -7,8 +7,11 @@ Usage:
   smoke-wear-launchers [WATCH_IP:ADB_PORT]
 
 Starts every exported StarIntel Wear launcher Activity on the connected watch and
-fails if Android cannot start it, the app process dies, or logcat records a fatal
-exception for actor.starintel.wear.
+fails if Android cannot start it, the wrong launcher Activity is resumed, the app
+process dies, or logcat records a fatal exception for actor.starintel.wear.
+
+The Activities are launched back-to-back without force-stopping between them so
+shared-task routing regressions are caught.
 
 ANDROID_SERIAL may be used instead of the positional serial.
 EOF
@@ -38,11 +41,12 @@ launchers=(
   actor.starintel.wear/.GraphActivity
 )
 
+"${adb_cmd[@]}" shell am force-stop actor.starintel.wear >/dev/null 2>&1 || true
+
 for component in "${launchers[@]}"; do
   label="${component##*/.}"
   echo "smoke: $label"
 
-  "${adb_cmd[@]}" shell am force-stop actor.starintel.wear >/dev/null 2>&1 || true
   "${adb_cmd[@]}" logcat -c >/dev/null 2>&1 || true
 
   start_output="$("${adb_cmd[@]}" shell am start -W -n "$component" 2>&1 || true)"
@@ -57,6 +61,13 @@ for component in "${launchers[@]}"; do
   if [[ -z "$pid" ]]; then
     echo "error: $label crashed or exited immediately" >&2
     "${adb_cmd[@]}" logcat -d -v brief -t 250 2>/dev/null | tail -n 250 >&2 || true
+    exit 1
+  fi
+
+  resumed="$("${adb_cmd[@]}" shell dumpsys activity activities 2>/dev/null | tr -d '\r' | grep -m1 'mResumedActivity' || true)"
+  if [[ -n "$resumed" ]] && ! grep -Fq "$component" <<<"$resumed"; then
+    echo "error: $label launch resumed the wrong Activity" >&2
+    printf 'expected: %s\nactual:   %s\n' "$component" "$resumed" >&2
     exit 1
   fi
 
