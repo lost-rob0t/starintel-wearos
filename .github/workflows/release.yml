@@ -2,6 +2,8 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -22,37 +24,70 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: Resolve release tag
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
+          fetch-depth: 0
+
+      - name: Resolve release version
         id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+
+          publish=true
+          create_tag=false
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             version='${{ inputs.version }}'
-          else
+          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             version="$GITHUB_REF_NAME"
+          else
+            app_version="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' phone-app/build.gradle.kts)"
+            if [[ -z "$app_version" ]]; then
+              echo "error: could not read phone-app versionName" >&2
+              exit 1
+            fi
+            version="v$app_version"
+            if git show-ref --verify --quiet "refs/tags/$version" || \
+               git ls-remote --exit-code --tags origin "refs/tags/$version" >/dev/null 2>&1; then
+              if gh release view "$version" >/dev/null 2>&1; then
+                publish=false
+              else
+                echo "error: $version already exists without a release; rerun this workflow manually for that tag" >&2
+                exit 1
+              fi
+            else
+              create_tag=true
+            fi
           fi
+
           if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
             echo "error: invalid release tag: $version" >&2
             exit 1
           fi
+
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "create_tag=$create_tag" >> "$GITHUB_OUTPUT"
           if [[ "$version" == *-* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.meta.outputs.version }}
-          fetch-depth: 0
+          if [[ "$publish" == "false" ]]; then
+            echo "$version is already published; nothing to do"
+          fi
 
       - uses: cachix/install-nix-action@v31
+        if: steps.meta.outputs.publish == 'true'
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify release tag matches app versions
+        if: steps.meta.outputs.publish == 'true'
         env:
           VERSION: ${{ steps.meta.outputs.version }}
         shell: bash
@@ -80,9 +115,11 @@ jobs:
           fi
 
       - name: Evaluate pinned Nix flake
+        if: steps.meta.outputs.publish == 'true'
         run: nix flake check --no-update-lock-file --show-trace
 
       - name: Run Android unit tests
+        if: steps.meta.outputs.publish == 'true'
         run: >-
           nix develop --no-update-lock-file --command
           gradle --stacktrace
@@ -90,31 +127,37 @@ jobs:
           :wear-app:testDebugUnitTest
 
       - name: Validate watch-face contracts
+        if: steps.meta.outputs.publish == 'true'
         run: |
           python3 scripts/check-watchface-slot-contract.py
           python3 scripts/check-watchface-themes.py
           python3 scripts/check-watchface-round-bounds.py watchface/src/main/res/raw/watchface.xml
 
       - uses: actions/setup-java@v4
+        if: steps.meta.outputs.publish == 'true'
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Build WFF validator
+        if: steps.meta.outputs.publish == 'true'
         run: |
           git clone --depth 1 https://github.com/google/watchface.git /tmp/google-watchface
           cd /tmp/google-watchface/third_party/wff
           ./gradlew :specification:validator:executable-jar
 
       - name: Validate WFF v1
+        if: steps.meta.outputs.publish == 'true'
         run: |
           java -jar /tmp/google-watchface/third_party/wff/specification/validator/build/libs/wff-validator.jar \
             1 watchface/src/main/res/raw/watchface.xml
 
       - name: Build all installable APKs through Nix
+        if: steps.meta.outputs.publish == 'true'
         run: nix run --no-update-lock-file .#build-all
 
       - name: Verify companion signer parity
+        if: steps.meta.outputs.publish == 'true'
         run: >-
           nix develop --no-update-lock-file --command bash
           scripts/verify-companion-signing.sh
@@ -122,6 +165,7 @@ jobs:
           build/nix/wear-app-debug.apk
 
       - name: Stage release assets
+        if: steps.meta.outputs.publish == 'true'
         env:
           VERSION: ${{ steps.meta.outputs.version }}
         shell: bash
@@ -141,13 +185,27 @@ jobs:
           )
 
       - name: Preserve release bundle as CI artifact
+        if: steps.meta.outputs.publish == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ steps.meta.outputs.version }}
           path: dist/*
           if-no-files-found: error
 
+      - name: Create release tag after all gates pass
+        if: steps.meta.outputs.publish == 'true' && steps.meta.outputs.create_tag == 'true'
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "$VERSION" -m "StarIntel Wear OS $VERSION" "$(git rev-parse HEAD)"
+          git push origin "refs/tags/$VERSION"
+
       - name: Publish GitHub release
+        if: steps.meta.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.meta.outputs.version }}
