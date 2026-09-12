@@ -123,7 +123,7 @@ jobs:
         run: |
           validator=/tmp/google-watchface/third_party/wff/specification/validator/build/libs/wff-validator.jar
           for face in \
-            watchface/src/main/res/raw/watchface.xml \
+            watchface/src/neon/res/raw/watchface.xml \
             watchface/src/command/res/raw/watchface.xml \
             watchface/src/terminal/res/raw/watchface.xml; do
             echo "validating $face"
