@@ -54,7 +54,7 @@ class StarIntelSearchClient private constructor(context: Context) {
             connection.readTimeout = READ_TIMEOUT_MS
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("Authorization", "Bearer $apiKey")
-            connection.setRequestProperty("User-Agent", "starintel-wearos/0.3")
+            connection.setRequestProperty("User-Agent", "starintel-wearos/0.4")
 
             val code = connection.responseCode
             if (code !in 200..299) {
@@ -120,21 +120,39 @@ internal fun parseSearchPayload(raw: String, resultLimit: Int = 20): SearchResul
         for (index in 0 until minOf(rows.length(), limit)) {
             val row = rows.optJSONObject(index) ?: continue
             val doc = row.optJSONObject("doc") ?: row
+            val data = doc.optJSONObject("data")
             val id = stringValue(row, "id")
                 ?: stringValue(doc, "_id")
                 ?: "result-${index + 1}"
-            val title = firstString(doc, "name", "title", "username", "handle", "url", "_id")
+            val title = firstString(doc, "name", "title", "username", "handle", "url")
+                ?: data?.let {
+                    firstString(
+                        it,
+                        "name",
+                        "title",
+                        "username",
+                        "handle",
+                        "url",
+                        "target",
+                        "address",
+                        "domain",
+                        "hostname",
+                    )
+                }
+                ?: stringValue(doc, "_id")
                 ?: id
             val secondary = listOfNotNull(
                 stringValue(doc, "dtype"),
                 stringValue(doc, "dataset"),
-                stringValue(doc, "source"),
+                stringValue(doc, "source") ?: data?.let { stringValue(it, "source") },
+                data?.let { stringValue(it, "platform") },
+                data?.let { stringValue(it, "actor") },
             ).distinct().joinToString(" · ")
             add(
                 SearchHit(
-                    id = id.take(128),
-                    title = title.take(96),
-                    secondary = secondary.take(120),
+                    id = id.take(256),
+                    title = title.take(120),
+                    secondary = secondary.take(160),
                 ),
             )
         }
