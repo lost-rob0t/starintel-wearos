@@ -48,6 +48,11 @@
             mkdir -p "$GRADLE_USER_HOME" build/nix
           '';
 
+          wffContractChecks = ''
+            python3 scripts/check-watchface-slot-contract.py
+            python3 scripts/check-watchface-themes.py
+          '';
+
           mkBuildApp = { name, task, sourceApk, outputName }:
             pkgs.writeShellApplication {
               name = "starintel-${name}";
@@ -82,8 +87,8 @@
 
           buildAll = pkgs.writeShellApplication {
             name = "starintel-build-all";
-            runtimeInputs = [ gradle pkgs.coreutils ];
-            text = common + ''
+            runtimeInputs = [ gradle pkgs.coreutils pkgs.python3 ];
+            text = common + wffContractChecks + ''
               gradle --no-daemon --stacktrace \
                 :phone-app:testDebugUnitTest :phone-app:assembleDebug \
                 :wear-app:testDebugUnitTest :wear-app:assembleDebug \
@@ -103,8 +108,8 @@
 
           checkAll = pkgs.writeShellApplication {
             name = "starintel-check";
-            runtimeInputs = [ gradle ];
-            text = common + ''
+            runtimeInputs = [ gradle pkgs.python3 ];
+            text = common + wffContractChecks + ''
               gradle --no-daemon --stacktrace \
                 :phone-app:testDebugUnitTest \
                 :wear-app:testDebugUnitTest \
@@ -169,7 +174,7 @@
 
           toolchain = pkgs.buildEnv {
             name = "starintel-wearos-android-toolchain";
-            paths = [ jdk gradle androidSdk ];
+            paths = [ jdk gradle androidSdk pkgs.python3 ];
           };
         in
         {
@@ -235,7 +240,7 @@
         let e = mkEnv system;
         in {
           default = e.pkgs.mkShell {
-            packages = [ e.jdk e.gradle e.androidSdk e.pkgs.qrencode ];
+            packages = [ e.jdk e.gradle e.androidSdk e.pkgs.qrencode e.pkgs.python3 ];
 
             ANDROID_HOME = "${e.androidSdk}/libexec/android-sdk";
             ANDROID_SDK_ROOT = "${e.androidSdk}/libexec/android-sdk";
