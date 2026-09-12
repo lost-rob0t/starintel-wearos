@@ -1,11 +1,7 @@
 package actor.starintel.wear.sync
 
-import androidx.wear.tiles.TileService
 import actor.starintel.wear.BuildConfig
 import actor.starintel.wear.data.StarIntelRepository
-import actor.starintel.wear.tiles.CorpusTileService
-import actor.starintel.wear.tiles.OpsTileService
-import actor.starintel.wear.tiles.TargetsTileService
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
@@ -25,18 +21,12 @@ class CompanionConfigService : WearableListenerService() {
     override fun onMessageReceived(messageEvent: MessageEvent) {
         if (messageEvent.path != CompanionConfigProtocol.CONFIG_PATH) return
         if (messageEvent.data.size > CompanionConfigProtocol.MAX_PAYLOAD_BYTES) {
-            sendAck(
-                nodeId = messageEvent.sourceNodeId,
-                requestId = "",
-                ok = false,
-                code = CompanionConfigProtocol.CODE_INVALID_PAYLOAD,
-            )
+            sendAck(messageEvent.sourceNodeId, "", false, CompanionConfigProtocol.CODE_INVALID_PAYLOAD)
             return
         }
 
         val data = runCatching { DataMap.fromByteArray(messageEvent.data) }.getOrNull()
         val requestId = data?.getString("request_id").orEmpty()
-
         if (data == null) {
             sendAck(messageEvent.sourceNodeId, requestId, false, CompanionConfigProtocol.CODE_INVALID_PAYLOAD)
             return
@@ -55,7 +45,6 @@ class CompanionConfigService : WearableListenerService() {
             allowCleartext = BuildConfig.DEBUG,
         )
         val apiKey = data.getString("api_key").orEmpty()
-
         if (serverUrl == null) {
             sendAck(messageEvent.sourceNodeId, requestId, false, CompanionConfigProtocol.CODE_INVALID_URL)
             return
@@ -70,8 +59,12 @@ class CompanionConfigService : WearableListenerService() {
                 val repository = StarIntelRepository.get(applicationContext)
                 val test = repository.testConnection(serverUrl, apiKey)
                 if (!test.reachable) {
-                    val code = CompanionConfigProtocol.errorCode(test.error)
-                    sendAck(messageEvent.sourceNodeId, requestId, false, code)
+                    sendAck(
+                        messageEvent.sourceNodeId,
+                        requestId,
+                        false,
+                        CompanionConfigProtocol.errorCode(test.error),
+                    )
                     return@withLock
                 }
 
@@ -85,13 +78,14 @@ class CompanionConfigService : WearableListenerService() {
                     return@withLock
                 }
 
-                requestTileUpdates()
+                StarIntelBackgroundSync.ensureScheduled(applicationContext)
+                requestStarIntelTileUpdates(applicationContext)
                 sendAck(
                     nodeId = messageEvent.sourceNodeId,
                     requestId = requestId,
                     ok = true,
                     code = CompanionConfigProtocol.CODE_OK,
-                    detail = "Configured · ${test.documentsTotal} docs",
+                    detail = "Configured · ${test.documentsTotal} docs · auto-sync on",
                 )
             }
         }
@@ -116,15 +110,6 @@ class CompanionConfigService : WearableListenerService() {
             putString("code", code)
             putString("detail", CompanionConfigProtocol.boundedDetail(detail))
         }.toByteArray()
-
-        Wearable.getMessageClient(this)
-            .sendMessage(nodeId, CompanionConfigProtocol.ACK_PATH, payload)
-    }
-
-    private fun requestTileUpdates() {
-        val updater = TileService.getUpdater(applicationContext)
-        updater.requestUpdate(OpsTileService::class.java)
-        updater.requestUpdate(TargetsTileService::class.java)
-        updater.requestUpdate(CorpusTileService::class.java)
+        Wearable.getMessageClient(this).sendMessage(nodeId, CompanionConfigProtocol.ACK_PATH, payload)
     }
 }
