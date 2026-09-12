@@ -3,7 +3,9 @@ name: Update Releases
 on:
   push:
     branches: [main]
-    tags: ['**']
+    tags:
+      - '**'
+      - '!master-channel'
   workflow_dispatch:
 
 permissions:
