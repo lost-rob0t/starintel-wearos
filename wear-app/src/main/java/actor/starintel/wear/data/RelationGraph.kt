@@ -110,7 +110,7 @@ class RelationGraphLoader private constructor(context: Context) {
     }
 }
 
-private data class ParsedRelation(
+internal data class ParsedRelation(
     val id: String,
     val subjects: List<String>,
     val objects: List<String>,
@@ -133,7 +133,7 @@ internal fun parseRelation(document: JSONObject): ParsedRelation? {
             .ifBlank { document.optString("title") }
             .ifBlank { "related-to" }
             .take(48),
-        directed = when (val value = data.opt("directed")) {
+        directed = when (data.opt("directed")) {
             false, "false" -> false
             else -> true
         },
