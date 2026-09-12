@@ -9,7 +9,9 @@
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
         <activity android:name=".ConfigActivity" android:exported="false" />
-        <activity android:name=".GraphActivity" android:exported="false" />
+        <activity android:name=".GraphActivity" android:exported="true" android:label="@string/graph_app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
         <activity android:name=".SearchActivity" android:exported="false" />
 
         <service android:name=".sync.CompanionConfigService" android:exported="true">
