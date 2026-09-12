@@ -6,6 +6,7 @@ connect_timeout="${STARINTEL_ADB_CONNECT_TIMEOUT:-10}"
 usage() {
   cat <<'EOF'
 Usage:
+  pair-android --qr
   pair-android HOST:PAIR_PORT [HOST:ADB_PORT]
   pair-android --connect HOST:ADB_PORT
   pair-android --diagnose
@@ -13,18 +14,22 @@ Usage:
   pair-android --help
 
 Examples:
+  pair-android --qr
   pair-android 192.168.1.50:37123
   pair-android 192.168.1.50:37123 192.168.1.50:42177
   pair-android --connect 192.168.1.50:42177
   pair-android --diagnose
   pair-android --reset-adb
 
-On Android/Wear OS:
+QR pairing on Android devices that expose a scanner:
+  Developer options -> Wireless debugging -> Pair device with QR code
+
+Pairing-code fallback (including watches without a QR scanner):
   Developer options -> Wireless debugging -> Pair device with pairing code
 
 The pairing endpoint and normal ADB endpoint are usually different ports.
 If the device has forgotten this workstation, --connect cannot restore trust;
-pair it again with a fresh pairing code.
+pair it again with --qr or a fresh pairing code.
 EOF
 }
 
@@ -39,9 +44,10 @@ recovery_hint() {
   cat >&2 <<'EOF'
 Recovery:
   1. On the device, turn Wireless debugging off and back on.
-  2. If this workstation is missing under Paired devices, open Pair device with pairing code.
+  2. If this workstation is missing under Paired devices, pair it again.
   3. Reset the local daemon with: nix run .#pair-android -- --reset-adb
-  4. Pair again with: nix run .#pair-android -- HOST:PAIR_PORT HOST:ADB_PORT
+  4. QR-capable device: nix run .#pair-android -- --qr
+  5. Pairing-code fallback: nix run .#pair-android -- HOST:PAIR_PORT HOST:ADB_PORT
 
 You can inspect ADB/mDNS state with:
   nix run .#pair-android -- --diagnose
@@ -110,7 +116,7 @@ reset_adb() {
   adb devices -l || true
   echo
   echo "Local ADB daemon restarted."
-  echo "If the device forgot this workstation, open Pair device with pairing code and pair again."
+  echo "If the device forgot this workstation, pair it again with --qr or a fresh pairing code."
 }
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
@@ -119,6 +125,15 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 fi
 
 require_adb
+
+if [[ "${1:-}" == "--qr" ]]; then
+  if [[ $# -ne 1 ]]; then
+    usage >&2
+    exit 2
+  fi
+  script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+  exec bash "$script_dir/pair-android-qr.sh"
+fi
 
 if [[ "${1:-}" == "--diagnose" ]]; then
   if [[ $# -ne 1 ]]; then
