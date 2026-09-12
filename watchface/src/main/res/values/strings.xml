@@ -4,6 +4,12 @@
 
     <string name="face_style_picker">Face style</string>
     <string name="face_style_neon">Neon Geometric HUD</string>
+    <string name="face_style_command">Command Data / Geo</string>
+    <string name="face_style_terminal">Terminal Ops</string>
+
+    <string name="presentation_mode_picker">Presentation mode</string>
+    <string name="presentation_mode_normal">Normal</string>
+    <string name="presentation_mode_ultra_black">Ultra Black</string>
 
     <string name="theme_picker">Theme</string>
     <string name="theme_starintel_cyan">StarIntel Cyan</string>
@@ -22,7 +28,9 @@
     <string name="slot_right_edge">Right curved complication</string>
     <string name="slot_text_region">Text complication</string>
     <string name="slot_activity_graph">StarIntel activity graph</string>
+    <string name="slot_weather_geo">Weather / StarIntel geo complication</string>
     <string name="slot_weather">Weather complication</string>
+    <string name="slot_geo">StarIntel geo activity</string>
 
     <string name="slot_status">StarIntel status</string>
     <string name="slot_targets">StarIntel targets</string>
