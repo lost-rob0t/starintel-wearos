@@ -63,6 +63,7 @@ jobs:
           bash -n scripts/install-phone.sh
           bash -n scripts/install-watch.sh
           bash -n scripts/verify-companion-signing.sh
+          bash -n scripts/release.sh
           bash scripts/test-pair-android-qr.sh
           nix run --no-update-lock-file .#pair-android -- --help
           nix run --no-update-lock-file .#pair-watch -- --help
