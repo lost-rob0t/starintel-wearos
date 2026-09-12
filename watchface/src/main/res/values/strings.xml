@@ -2,6 +2,9 @@
 <resources>
     <string name="watch_face_name">StarIntel</string>
 
+    <string name="face_style_picker">Face style</string>
+    <string name="face_style_neon">Neon Geometric HUD</string>
+
     <string name="theme_picker">Theme</string>
     <string name="theme_starintel_cyan">StarIntel Cyan</string>
     <string name="theme_neon_magenta_cyan">Neon Magenta/Cyan</string>
@@ -10,15 +13,17 @@
     <string name="theme_monochrome">Monochrome</string>
     <string name="theme_neutral">Wear Neutral</string>
 
-    <!-- Stable complication-slot names. IDs live in the WFF resource and SlotCatalog. -->
     <string name="slot_lower_left">Lower left complication</string>
+    <string name="slot_lower_center_left">Lower center-left complication</string>
+    <string name="slot_lower_center_right">Lower center-right complication</string>
     <string name="slot_lower_center">Lower center complication</string>
     <string name="slot_lower_right">Lower right complication</string>
     <string name="slot_left_edge">Left curved complication</string>
     <string name="slot_right_edge">Right curved complication</string>
     <string name="slot_text_region">Text complication</string>
+    <string name="slot_activity_graph">StarIntel activity graph</string>
+    <string name="slot_weather">Weather complication</string>
 
-    <!-- Kept for source/API compatibility with pre-#26 builds. -->
     <string name="slot_status">StarIntel status</string>
     <string name="slot_targets">StarIntel targets</string>
     <string name="slot_documents">StarIntel documents</string>

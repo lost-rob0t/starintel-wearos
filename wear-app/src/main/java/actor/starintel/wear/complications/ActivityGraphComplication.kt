@@ -56,9 +56,10 @@ class ActivityGraphComplicationService : SuspendingComplicationDataSourceService
 data class ActivityGraphImages(val active: Bitmap, val ambient: Bitmap)
 
 object ActivityGraphRenderer {
-    private const val WIDTH = 180
-    private const val HEIGHT = 68
-    private const val PAD_X = 5f
+    // Matches the approved Neon HUD ingest-panel envelope in the 450-space WFF scene.
+    private const val WIDTH = 274
+    private const val HEIGHT = 66
+    private const val PAD_X = 7f
     private const val PAD_TOP = 12f
     private const val PAD_BOTTOM = 7f
 
@@ -90,8 +91,8 @@ object ActivityGraphRenderer {
             textSize = 9f
             typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
         }
-        canvas.drawText(range.label, PAD_X, 9f, textPaint)
-        if (preview) canvas.drawText("PREVIEW", WIDTH - 46f, 9f, textPaint)
+        canvas.drawText("INGEST · ${range.label}", PAD_X, 9f, textPaint)
+        if (preview) canvas.drawText("PREVIEW", WIDTH - 48f, 9f, textPaint)
         val valid = points.mapNotNull { it.documentsAdded }
         if (valid.isEmpty()) {
             if (!preview) canvas.drawText("COLLECTING", PAD_X, HEIGHT - 6f, textPaint)
