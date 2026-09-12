@@ -51,7 +51,6 @@ EOF
 remote="${STARINTEL_UPDATE_REMOTE:-https://github.com/lost-rob0t/starintel-wearos.git}"
 state_file="${STARINTEL_UPDATE_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/starintel-wearos/update-state}"
 source_mode="master"
-tag_name=""
 watch_serial="${ANDROID_SERIAL:-}"
 phone_serial=""
 install_watch=1
@@ -130,7 +129,7 @@ while (($#)); do
   esac
 done
 
-for command in git nix mktemp awk sort tail date; do
+for command in git mktemp awk sort tail date; do
   command -v "$command" >/dev/null 2>&1 || {
     echo "error: required command is missing: $command" >&2
     exit 1
@@ -258,6 +257,11 @@ if ((check_only)); then
   fi
   exit 0
 fi
+
+command -v nix >/dev/null 2>&1 || {
+  echo "error: nix is required to build/install updates" >&2
+  exit 1
+}
 
 git -C "$workdir" checkout -q --detach "$resolved_commit"
 
