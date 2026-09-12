@@ -57,7 +57,7 @@ cert_digest() {
   local output
   output="$("$apksigner_bin" verify --verbose --print-certs "$apk")" || return $?
   printf '%s\n' "$output" >&2
-  printf '%s\n' "$output" | awk -F': ' '/^Signer .*certificate SHA-256 digest:/ { print tolower($2) }' | sort -u
+  printf '%s\n' "$output" | awk -F': ' '/^(Signer |V[0-9.]+ Signer:).*certificate SHA-256 digest:/ { print tolower($NF) }' | sort -u
 }
 
 package_name() {

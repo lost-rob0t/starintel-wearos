@@ -22,6 +22,8 @@ jobs:
           gradle-version: '9.6.0'
       - name: Build and test
         run: gradle --stacktrace :phone-app:testDebugUnitTest :phone-app:assembleDebug :wear-app:testDebugUnitTest :wear-app:assembleDebug :watchface:assembleDebug
+      - name: Test companion signer diagnostics
+        run: python3 scripts/test-companion-signing.py
       - name: Verify companion signer parity
         run: bash scripts/verify-companion-signing.sh phone-app/build/outputs/apk/debug/phone-app-debug.apk wear-app/build/outputs/apk/debug/wear-app-debug.apk
       - name: Publish Android companion APK
