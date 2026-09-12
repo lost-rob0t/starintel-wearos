@@ -60,6 +60,18 @@ def serialized(element: ET.Element) -> str:
     return ET.tostring(element, encoding="unicode")
 
 
+def require_normal_only_decoration(element: ET.Element, label: str) -> None:
+    draws = element.findall("PartDraw")
+    if not draws:
+        fail(f"{label}: missing face-owned decoration")
+    for draw in draws:
+        text = serialized(draw)
+        if "presentationMode" not in text:
+            fail(f"{label}: decoration must disappear in Ultra Black")
+        if draw.find("Variant[@mode='AMBIENT'][@target='alpha'][@value='0']") is None:
+            fail(f"{label}: decoration must disappear in ambient/AOD")
+
+
 def main() -> None:
     raw = WATCHFACE.read_text(encoding="utf-8")
     root = ET.fromstring(raw)
@@ -131,31 +143,66 @@ def main() -> None:
         policy = by_id[side_id].find("DefaultProviderPolicy")
         if policy is None or policy.get("defaultSystemProvider") != "EMPTY":
             fail(f"slot {side_id}: side slot must default to EMPTY")
+
+        short = by_id[side_id].find("Complication[@type='SHORT_TEXT']")
         ranged = by_id[side_id].find("Complication[@type='RANGED_VALUE']")
-        assert ranged is not None
+        assert short is not None and ranged is not None
+        require_normal_only_decoration(short, f"slot {side_id} short-text HUD")
+        require_normal_only_decoration(ranged, f"slot {side_id} ranged HUD")
+        if len(short.findall(".//Arc")) < 8:
+            fail(f"slot {side_id}: short-text curved bar must use segmented HUD arcs")
+
         dynamic_arcs = ranged.findall(".//Arc/Transform[@target='endAngle']")
         if len(dynamic_arcs) != 1:
             fail(f"slot {side_id}: curved ranged renderer must have one dynamic fill arc")
+        if len(ranged.findall(".//Arc")) < 5:
+            fail(f"slot {side_id}: ranged curved bar must include rail, progress, and tick geometry")
         if "[CONFIGURATION.themeColor.3]" not in serialized(ranged):
             fail(f"slot {side_id}: curved ranged renderer must expose an unfilled track")
 
     for lower_id in LOWER_IDS:
+        short = by_id[lower_id].find("Complication[@type='SHORT_TEXT']")
         ranged = by_id[lower_id].find("Complication[@type='RANGED_VALUE']")
-        assert ranged is not None
+        assert short is not None and ranged is not None
+        require_normal_only_decoration(short, f"slot {lower_id} short-text HUD")
+        require_normal_only_decoration(ranged, f"slot {lower_id} ranged HUD")
+
+        if len(short.findall(".//Ellipse")) < 2:
+            fail(f"slot {lower_id}: Neon short-text renderer must keep concentric HUD rings")
+        if len(short.findall(".//Arc")) < 4:
+            fail(f"slot {lower_id}: Neon short-text renderer must keep segmented accent arcs")
+        if len(short.findall(".//Line")) < 12:
+            fail(f"slot {lower_id}: Command/Terminal short-text renderer must keep angular HUD framing")
+
         if ranged.find(".//Arc/Transform[@target='endAngle']") is None:
             fail(f"slot {lower_id}: Neon renderer must have a dynamic circular fill")
         if ranged.find(".//Rectangle/Transform[@target='width']") is None:
             fail(f"slot {lower_id}: Command/Terminal renderer must have a dynamic horizontal fill")
+        if len(ranged.findall(".//Line")) < 8:
+            fail(f"slot {lower_id}: Command/Terminal ranged renderer must keep angular HUD framing")
         if "[CONFIGURATION.themeColor.3]" not in serialized(ranged):
             fail(f"slot {lower_id}: ranged renderer must expose an unfilled track")
 
     graph_policy = by_id[7].find("DefaultProviderPolicy")
     if graph_policy is None or not graph_policy.get("primaryProvider", "").endswith("ActivityGraphComplicationService"):
         fail("slot 7: activity graph must default to the real StarIntel graph provider")
+    graph_renderer = by_id[7].find("Complication[@type='SMALL_IMAGE']")
+    if graph_renderer is None:
+        fail("slot 7: missing activity graph renderer")
+    require_normal_only_decoration(graph_renderer, "slot 7 activity graph HUD")
+    if len(graph_renderer.findall(".//Line")) < 10:
+        fail("slot 7: activity graph must keep the angular StarIntel frame")
 
     weather_geo_policy = by_id[8].find("DefaultProviderPolicy")
     if weather_geo_policy is None or weather_geo_policy.get("defaultSystemProvider") != "EMPTY":
         fail("slot 8: shared weather/geo provider must remain user-selectable and default EMPTY")
+    for kind in ("SHORT_TEXT", "SMALL_IMAGE"):
+        renderer = by_id[8].find(f"Complication[@type='{kind}']")
+        if renderer is None:
+            fail(f"slot 8: missing {kind} renderer")
+        require_normal_only_decoration(renderer, f"slot 8 {kind} HUD")
+        if len(renderer.findall(".//Line")) < 10:
+            fail(f"slot 8 {kind}: weather/geo renderer must keep angular StarIntel framing")
 
     face_style = root.find("./UserConfigurations/ListConfiguration[@id='faceStyle']")
     if face_style is None:
