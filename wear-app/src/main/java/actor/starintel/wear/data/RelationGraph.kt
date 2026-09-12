@@ -47,7 +47,7 @@ class RelationGraphLoader private constructor(context: Context) {
         for (hit in relationSearch.hits) {
             if (relations.size >= MAX_RELATIONS) break
             if (!hit.secondary.split(" · ").any { it == "relation" }) continue
-            val document = api.document(hit.id).document ?: continue
+            val document = api.document(hit.id).json ?: continue
             if (document.optString("dtype") != "relation") continue
             val parsed = parseRelation(document) ?: continue
             if (rootId !in parsed.subjects && rootId !in parsed.objects) continue
@@ -62,7 +62,7 @@ class RelationGraphLoader private constructor(context: Context) {
 
         val nodes = mutableListOf(rootNode)
         for (id in endpointIds) {
-            val document = api.document(id).document
+            val document = api.document(id).json
             nodes += document?.let { nodeFrom(it, id) } ?: GraphNode(id, compactId(id), "unresolved")
         }
         val visible = nodes.map { it.id }.toHashSet()
@@ -90,10 +90,10 @@ class RelationGraphLoader private constructor(context: Context) {
     }
 
     private suspend fun resolveRoot(input: String): JSONObject? {
-        api.document(input).document?.let { return it }
+        api.document(input).json?.let { return it }
         val result = search.search(input, limit = 8)
         val hit = result.hits.firstOrNull() ?: return null
-        return api.document(hit.id).document
+        return api.document(hit.id).json
     }
 
     companion object {
