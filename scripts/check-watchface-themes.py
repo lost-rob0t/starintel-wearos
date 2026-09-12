@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 FACES = {
-    "neon": Path("watchface/src/main/res/raw/watchface.xml"),
+    "neon": Path("watchface/src/neon/res/raw/watchface.xml"),
     "command": Path("watchface/src/command/res/raw/watchface.xml"),
     "terminal": Path("watchface/src/terminal/res/raw/watchface.xml"),
 }
