@@ -8,6 +8,7 @@ Usage:
   install-phone --help
 
 ANDROID_SERIAL may be used instead of the positional serial.
+Set STARINTEL_INSTALL_ALLOW_DOWNGRADE=1 only when intentionally installing an older tagged build.
 EOF
 }
 
@@ -58,8 +59,13 @@ if ! "${adb_cmd[@]}" get-state >/dev/null 2>&1; then
   exit 1
 fi
 
+install_flags=(-r)
+if [[ "${STARINTEL_INSTALL_ALLOW_DOWNGRADE:-0}" == "1" ]]; then
+  install_flags+=(-d)
+fi
+
 echo "[1/2] Installing StarIntel Companion"
-"${adb_cmd[@]}" install -r "$phone_apk" >/dev/null
+"${adb_cmd[@]}" install "${install_flags[@]}" "$phone_apk" >/dev/null
 
 echo "[2/2] Verifying installed package"
 "${adb_cmd[@]}" shell pm path actor.starintel.wear | grep -q '^package:' || {
