@@ -20,8 +20,19 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.6.0'
+      - name: Validate face contracts
+        run: |
+          python3 scripts/check-watchface-slot-contract.py
+          python3 scripts/check-watchface-layout.py
+          python3 scripts/check-watchface-themes.py
       - name: Build and test
-        run: gradle --stacktrace :phone-app:testDebugUnitTest :phone-app:assembleDebug :wear-app:testDebugUnitTest :wear-app:assembleDebug :watchface:assembleDebug
+        run: |
+          gradle --stacktrace \
+            :phone-app:testDebugUnitTest :phone-app:assembleDebug \
+            :wear-app:testDebugUnitTest :wear-app:assembleDebug \
+            :watchface:assembleNeonDebug \
+            :watchface:assembleCommandDebug \
+            :watchface:assembleTerminalDebug
       - name: Publish Android companion APK
         uses: actions/upload-artifact@v4
         with:
@@ -34,11 +45,23 @@ jobs:
           name: starintel-wear-app-debug
           path: wear-app/build/outputs/apk/debug/wear-app-debug.apk
           if-no-files-found: error
-      - name: Publish watch face APK
+      - name: Publish Neon face APK
         uses: actions/upload-artifact@v4
         with:
-          name: starintel-watchface-debug
-          path: watchface/build/outputs/apk/debug/watchface-debug.apk
+          name: starintel-watchface-neon-debug
+          path: watchface/build/outputs/apk/neon/debug/watchface-neon-debug.apk
+          if-no-files-found: error
+      - name: Publish Command face APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: starintel-watchface-command-debug
+          path: watchface/build/outputs/apk/command/debug/watchface-command-debug.apk
+          if-no-files-found: error
+      - name: Publish Terminal face APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: starintel-watchface-terminal-debug
+          path: watchface/build/outputs/apk/terminal/debug/watchface-terminal-debug.apk
           if-no-files-found: error
 
   nix-build:
@@ -57,6 +80,7 @@ jobs:
           bash -n scripts/test-pair-android-qr.sh
           bash -n scripts/pair-watch.sh
           bash -n scripts/install-phone.sh
+          bash -n scripts/install-watch.sh
           bash scripts/test-pair-android-qr.sh
           nix run --no-update-lock-file .#pair-android -- --help
           nix run --no-update-lock-file .#pair-watch -- --help
@@ -71,7 +95,9 @@ jobs:
         run: |
           test -s build/nix/phone-app-debug.apk
           test -s build/nix/wear-app-debug.apk
-          test -s build/nix/watchface-debug.apk
+          test -s build/nix/watchface-neon-debug.apk
+          test -s build/nix/watchface-command-debug.apk
+          test -s build/nix/watchface-terminal-debug.apk
           ls -lh build/nix/*.apk
       - name: Publish matching Nix APK bundle
         uses: actions/upload-artifact@v4
@@ -93,7 +119,13 @@ jobs:
           git clone --depth 1 https://github.com/google/watchface.git /tmp/google-watchface
           cd /tmp/google-watchface/third_party/wff
           ./gradlew :specification:validator:executable-jar
-      - name: Validate WFF v1
+      - name: Validate all WFF v1 faces
         run: |
-          java -jar /tmp/google-watchface/third_party/wff/specification/validator/build/libs/wff-validator.jar \
-            1 watchface/src/main/res/raw/watchface.xml
+          validator=/tmp/google-watchface/third_party/wff/specification/validator/build/libs/wff-validator.jar
+          for face in \
+            watchface/src/main/res/raw/watchface.xml \
+            watchface/src/command/res/raw/watchface.xml \
+            watchface/src/terminal/res/raw/watchface.xml; do
+            echo "validating $face"
+            java -jar "$validator" 1 "$face"
+          done
