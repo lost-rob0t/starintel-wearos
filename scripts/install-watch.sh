@@ -14,6 +14,9 @@ ANDROID_SERIAL may be used instead of the positional serial.
   uninstall only actor.starintel.wear and install the deterministic repository-
   signed build. This clears the watch-side StarIntel configuration/API key, so
   send configuration again from the Android companion afterward.
+
+Set STARINTEL_SKIP_LAUNCH_SMOKE=1 only when you intentionally need to skip the
+post-install physical-device launcher crash test.
 EOF
 }
 
@@ -139,13 +142,13 @@ install_wear() {
   return 1
 }
 
-echo "[1/4] Installing StarIntel Wear app"
+echo "[1/5] Installing StarIntel Wear app"
 install_wear
 
-echo "[2/4] Installing StarIntel watch face"
+echo "[2/5] Installing StarIntel watch face"
 "${adb_cmd[@]}" install -r "$face_apk" >/dev/null
 
-echo "[3/4] Verifying installed packages"
+echo "[3/5] Verifying installed packages"
 "${adb_cmd[@]}" shell pm path actor.starintel.wear | grep -q '^package:' || {
   echo "error: actor.starintel.wear was not found after install" >&2
   exit 1
@@ -155,7 +158,21 @@ echo "[3/4] Verifying installed packages"
   exit 1
 }
 
-echo "[4/4] Install verified"
+echo "[4/5] Smoke-testing exported Wear launchers"
+if [[ "${STARINTEL_SKIP_LAUNCH_SMOKE:-0}" == "1" ]]; then
+  echo "Launcher smoke test explicitly skipped."
+elif [[ -f scripts/smoke-wear-launchers.sh ]]; then
+  if [[ -n "$serial" ]]; then
+    bash scripts/smoke-wear-launchers.sh "$serial"
+  else
+    bash scripts/smoke-wear-launchers.sh
+  fi
+else
+  echo "error: scripts/smoke-wear-launchers.sh is missing" >&2
+  exit 1
+fi
+
+echo "[5/5] Install verified"
 
 if [[ "${STARINTEL_OPEN_WATCH_SETUP:-0}" == "1" ]]; then
   echo "Opening on-watch fallback setup..."
