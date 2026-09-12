@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">StarIntel</string>
     <string name="search_app_name">StarIntel Search</string>
+    <string name="search_alerts_app_name">StarIntel Search Alerts</string>
     <string name="explorer_app_name">StarIntel Explorer</string>
     <string name="targets_app_name">StarIntel Targets</string>
     <string name="graph_app_name">StarIntel Graph</string>
