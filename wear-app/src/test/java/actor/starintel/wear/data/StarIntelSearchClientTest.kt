@@ -107,4 +107,11 @@ class StarIntelSearchClientTest {
 
         assertEquals("opaque-id", result.hits.single().title)
     }
+
+    @Test
+    fun oversizedSearchRetriesProgressivelySmallerPages() {
+        assertEquals(listOf(50, 16, 8, 4), StarIntelSearchClient.retryLimits(50))
+        assertEquals(listOf(12, 8, 4), StarIntelSearchClient.retryLimits(12))
+        assertEquals(listOf(4), StarIntelSearchClient.retryLimits(4))
+    }
 }

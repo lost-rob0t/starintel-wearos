@@ -170,7 +170,6 @@ object StarIntelSearchNotifier {
             } else {
                 Intent(context, SearchActivity::class.java)
                     .putExtra(SearchActivity.EXTRA_QUERY, saved.query)
-                    .putExtra(SearchActivity.EXTRA_SAVED_SEARCH_ID, saved.id)
             }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
             val pendingIntent = PendingIntent.getActivity(

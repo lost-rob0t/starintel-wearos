@@ -24,11 +24,10 @@ data class SearchResult(
 )
 
 class StarIntelSearchClient private constructor(context: Context) {
-    private val appContext = context.applicationContext
-    private val repository = StarIntelRepository.get(appContext)
-    private val apiKeyStore = ApiKeyStore(appContext)
+    private val repository = StarIntelRepository.get(context.applicationContext)
+    private val apiKeyStore = ApiKeyStore(context.applicationContext)
 
-    suspend fun search(query: String, limit: Int = 20): SearchResult = withContext(Dispatchers.IO) {
+    suspend fun search(query: String, limit: Int = DEFAULT_RESULTS): SearchResult = withContext(Dispatchers.IO) {
         val trimmed = query.trim()
         if (trimmed.isBlank()) return@withContext SearchResult(error = "Search query required")
         if (trimmed.length > MAX_QUERY_LENGTH) return@withContext SearchResult(error = "Search query too long")
@@ -39,11 +38,26 @@ class StarIntelSearchClient private constructor(context: Context) {
             return@withContext SearchResult(error = "StarIntel is not configured")
         }
 
-        val boundedLimit = limit.coerceIn(1, MAX_RESULTS)
+        val requestedLimit = limit.coerceIn(1, MAX_RESULTS)
         val encoded = URLEncoder.encode(trimmed, StandardCharsets.UTF_8.name())
-        val url = "$baseUrl/api/v1/search?q=$encoded&limit=$boundedLimit"
-        runCatching { parseSearchPayload(fetch(url, apiKey), boundedLimit) }
-            .getOrElse { failure -> SearchResult(error = safeError(failure)) }
+        var lastFailure: Throwable? = null
+
+        // Broad searches can legitimately match documents with large payloads. A watch
+        // should not fail just because the first requested page is too heavy: retry the
+        // exact same query with progressively smaller pages, while keeping a hard byte cap.
+        retryLimits(requestedLimit).forEach { boundedLimit ->
+            val url = "$baseUrl/api/v1/search?q=$encoded&limit=$boundedLimit"
+            try {
+                return@withContext parseSearchPayload(fetch(url, apiKey), boundedLimit)
+            } catch (failure: Throwable) {
+                lastFailure = failure
+                if (failure.message != RESPONSE_TOO_LARGE) {
+                    return@withContext SearchResult(error = safeError(failure))
+                }
+            }
+        }
+
+        SearchResult(error = safeError(lastFailure ?: IllegalStateException(RESPONSE_TOO_LARGE)))
     }
 
     private fun fetch(url: String, apiKey: String): String {
@@ -68,7 +82,7 @@ class StarIntelSearchClient private constructor(context: Context) {
                 )
             }
             if (connection.contentLengthLong > StarIntelRepository.MAX_RESPONSE_BYTES) {
-                throw IllegalStateException("Search response too large")
+                throw IllegalStateException(RESPONSE_TOO_LARGE)
             }
 
             connection.inputStream.bufferedReader().use { reader ->
@@ -80,7 +94,7 @@ class StarIntelSearchClient private constructor(context: Context) {
                     if (read < 0) break
                     total += read
                     if (total > StarIntelRepository.MAX_RESPONSE_BYTES) {
-                        throw IllegalStateException("Search response too large")
+                        throw IllegalStateException(RESPONSE_TOO_LARGE)
                     }
                     builder.append(buffer, 0, read)
                 }
@@ -93,15 +107,23 @@ class StarIntelSearchClient private constructor(context: Context) {
 
     private fun safeError(failure: Throwable): String = when {
         failure.message?.startsWith("HTTP ") == true -> failure.message!!
-        failure.message == "Search response too large" -> failure.message!!
+        failure.message == RESPONSE_TOO_LARGE -> "Search results are too large for the watch; narrow the query"
         else -> "Search unavailable"
     }
 
     companion object {
         private const val MAX_QUERY_LENGTH = 512
+        private const val DEFAULT_RESULTS = 16
         private const val MAX_RESULTS = 50
         private const val CONNECT_TIMEOUT_MS = 4_000
         private const val READ_TIMEOUT_MS = 6_000
+        private const val RESPONSE_TOO_LARGE = "Search response too large"
+
+        internal fun retryLimits(requested: Int): List<Int> = buildList {
+            listOf(requested, minOf(requested, 16), minOf(requested, 8), minOf(requested, 4))
+                .distinct()
+                .forEach(::add)
+        }
 
         @Volatile private var instance: StarIntelSearchClient? = null
 
