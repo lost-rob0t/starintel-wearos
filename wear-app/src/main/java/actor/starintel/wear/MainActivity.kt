@@ -12,6 +12,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import actor.starintel.update.UpdateActivity
 import actor.starintel.wear.data.StarIntelRepository
 import actor.starintel.wear.data.StarIntelSnapshot
 import actor.starintel.wear.data.ageLabel
@@ -86,6 +87,10 @@ class MainActivity : Activity() {
             text = "REFRESH"
             setOnClickListener { load(force = true) }
         }
+        val updates = Button(this).apply {
+            text = "UPDATES"
+            setOnClickListener { startActivity(Intent(this@MainActivity, UpdateActivity::class.java)) }
+        }
         val settings = Button(this).apply {
             text = "SETTINGS"
             setOnClickListener { startActivity(Intent(this@MainActivity, ConfigActivity::class.java)) }
@@ -94,6 +99,7 @@ class MainActivity : Activity() {
         root.addView(graph, matchWrap(top = 10))
         root.addView(search, matchWrap(top = 3))
         root.addView(refresh, matchWrap(top = 3))
+        root.addView(updates, matchWrap(top = 3))
         root.addView(settings, matchWrap(top = 3))
 
         setContentView(ScrollView(this).apply {

@@ -1,6 +1,7 @@
 package actor.starintel.mobile
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -19,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import actor.starintel.update.UpdateActivity
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.MessageClient
@@ -121,6 +123,11 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
             setOnClickListener { sendConfiguration() }
         }
 
+        val updates = Button(this).apply {
+            text = "UPDATES · MASTER / TAGGED"
+            setOnClickListener { startActivity(Intent(this@MainActivity, UpdateActivity::class.java)) }
+        }
+
         progress = ProgressBar(this).apply {
             visibility = View.GONE
             isIndeterminate = true
@@ -144,6 +151,7 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
         root.addView(apiKey, matchWrap(top = 6))
         root.addView(privacy, matchWrap(top = 10))
         root.addView(send, matchWrap(top = 24))
+        root.addView(updates, matchWrap(top = 8))
         root.addView(progress, centeredWrap(top = 14))
         root.addView(status, matchWrap(top = 14))
 
@@ -152,8 +160,6 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
             addView(root)
         })
 
-        // Keep this listener for the activity lifetime so a short app switch does not
-        // discard the acknowledgement for an already-sent credential transfer.
         messageClient.addListener(this)
     }
 
