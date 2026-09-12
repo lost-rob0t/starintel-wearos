@@ -39,7 +39,7 @@ find_apksigner() {
   local sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
   if [[ -n "$sdk_root" ]]; then
     local candidate
-    candidate="$(find "$sdk_root/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner 2>/dev/null | sort -V | tail -n1 || true)"
+    candidate="$(find -L "$sdk_root/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner 2>/dev/null | sort -V | tail -n1 || true)"
     if [[ -n "$candidate" ]]; then
       printf '%s\n' "$candidate"
       return 0
@@ -68,7 +68,7 @@ package_name() {
   else
     local sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
     if [[ -n "$sdk_root" ]]; then
-      aapt_bin="$(find "$sdk_root/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt 2>/dev/null | sort -V | tail -n1 || true)"
+      aapt_bin="$(find -L "$sdk_root/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt 2>/dev/null | sort -V | tail -n1 || true)"
     fi
   fi
 

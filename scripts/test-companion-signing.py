@@ -47,3 +47,11 @@ print("package: name='" + package + "'")
         result = subprocess.run(["bash", str(SCRIPT), str(phone), str(wear)], env=env, text=True, capture_output=True)
         assert (result.returncode == 0) == expected, (name, result.stdout, result.stderr)
         print(f"PASS: {name}")
+
+    sdk = root / "sdk"
+    (sdk / "build-tools").mkdir(parents=True)
+    (sdk / "build-tools" / "36.0.0").symlink_to(root, target_is_directory=True)
+    env = dict(os.environ, ANDROID_HOME=str(sdk), PHONE_CERTS=legacy, WEAR_CERTS=legacy)
+    result = subprocess.run(["bash", str(SCRIPT), str(phone), str(wear)], env=env, text=True, capture_output=True)
+    assert result.returncode == 0, ("symlinked SDK", result.stdout, result.stderr)
+    print("PASS: symlinked SDK tool discovery")
