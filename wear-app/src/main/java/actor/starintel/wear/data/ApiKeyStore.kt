@@ -10,12 +10,12 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-internal class ApiKeyStore(context: Context) {
+internal class ApiKeyStore(context: Context) : SecretStore {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun hasValue(): Boolean = prefs.contains(KEY_CIPHERTEXT) && prefs.contains(KEY_IV)
+    override fun hasValue(): Boolean = prefs.contains(KEY_CIPHERTEXT) && prefs.contains(KEY_IV)
 
-    fun save(value: String) {
+    override fun save(value: String) {
         require(value.isNotBlank()) { "API key must not be blank" }
 
         val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -30,7 +30,7 @@ internal class ApiKeyStore(context: Context) {
         ) { "Could not persist encrypted API key" }
     }
 
-    fun read(): String? {
+    override fun read(): String? {
         val encrypted = prefs.getString(KEY_CIPHERTEXT, null) ?: return null
         val iv = prefs.getString(KEY_IV, null) ?: return null
 
@@ -46,15 +46,13 @@ internal class ApiKeyStore(context: Context) {
         }.getOrNull()
     }
 
-    fun clear() {
+    override fun clear() {
         check(prefs.edit().remove(KEY_CIPHERTEXT).remove(KEY_IV).commit()) {
             "Could not clear encrypted API key"
         }
         runCatching {
             val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
-            if (keyStore.containsAlias(KEY_ALIAS)) {
-                keyStore.deleteEntry(KEY_ALIAS)
-            }
+            if (keyStore.containsAlias(KEY_ALIAS)) keyStore.deleteEntry(KEY_ALIAS)
         }
     }
 
