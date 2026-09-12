@@ -42,6 +42,7 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
     private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
     private val messageClient by lazy { Wearable.getMessageClient(this) }
     private val capabilityClient by lazy { Wearable.getCapabilityClient(this) }
+    private val nodeClient by lazy { Wearable.getNodeClient(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,6 +80,11 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
             setTextColor(MUTED)
             setPadding(dp(14), dp(12), dp(14), dp(12))
             background = rounded(CARD, dp(14), STROKE)
+        }
+
+        val refreshWatch = Button(this).apply {
+            text = "REFRESH WATCH CONNECTION"
+            setOnClickListener { refreshWatchState() }
         }
 
         val serverLabel = label("Server origin")
@@ -138,7 +144,8 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
         root.addView(title, matchWrap(top = 4))
         root.addView(subtitle, matchWrap(top = 8))
         root.addView(watchStatus, matchWrap(top = 24))
-        root.addView(serverLabel, matchWrap(top = 28))
+        root.addView(refreshWatch, matchWrap(top = 8))
+        root.addView(serverLabel, matchWrap(top = 20))
         root.addView(serverUrl, matchWrap(top = 6))
         root.addView(keyLabel, matchWrap(top = 20))
         root.addView(apiKey, matchWrap(top = 6))
@@ -205,6 +212,7 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
 
     private fun refreshWatchState() {
         if (pending != null) return
+        reachableNode = null
         watchStatus.text = "Checking for StarIntel Wear…"
         watchStatus.setTextColor(MUTED)
         send.isEnabled = false
@@ -212,29 +220,64 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
         capabilityClient
             .getCapability(CompanionProtocol.CAPABILITY, CapabilityClient.FILTER_REACHABLE)
             .addOnSuccessListener { capability ->
-                val node = capability.nodes
-                    .sortedWith(compareByDescending<Node> { it.isNearby }.thenBy { it.displayName })
-                    .firstOrNull()
-                reachableNode = node
+                val node = preferredNode(capability.nodes)
+                if (node != null) {
+                    useNode(node, receiverAdvertised = true)
+                } else {
+                    findConnectedWatch()
+                }
+            }
+            .addOnFailureListener {
+                // Capability propagation can lag after an adb install. Fall back to the
+                // connected-node list and let MessageClient be the actual receiver probe.
+                findConnectedWatch()
+            }
+    }
+
+    private fun findConnectedWatch() {
+        nodeClient.connectedNodes
+            .addOnSuccessListener { nodes ->
+                val node = preferredNode(nodes)
                 if (node == null) {
-                    watchStatus.text = "○  StarIntel Wear is not reachable"
+                    reachableNode = null
+                    watchStatus.text = "○  No paired Wear OS watch reachable"
                     watchStatus.setTextColor(WARNING)
-                    showStatus("Install/open StarIntel Wear on the paired watch, then return here.", success = false)
+                    showStatus("Open Galaxy Wearable / reconnect the watch, then tap REFRESH WATCH CONNECTION.", success = false)
                     send.isEnabled = false
                 } else {
-                    watchStatus.text = "●  Connected to ${node.displayName}"
-                    watchStatus.setTextColor(CYAN)
-                    showStatus("Ready to send configuration securely.", success = null)
-                    send.isEnabled = true
+                    useNode(node, receiverAdvertised = false)
                 }
             }
             .addOnFailureListener {
                 reachableNode = null
-                watchStatus.text = "○  Could not check paired watch"
+                watchStatus.text = "○  Could not query paired Wear OS devices"
                 watchStatus.setTextColor(WARNING)
-                showStatus("Wear OS connection check failed. Reopen the app and try again.", success = false)
+                showStatus("Wear OS transport is unavailable. Reconnect the watch and retry.", success = false)
                 send.isEnabled = false
             }
+    }
+
+    private fun preferredNode(nodes: Collection<Node>): Node? = nodes
+        .sortedWith(compareByDescending<Node> { it.isNearby }.thenBy { it.displayName })
+        .firstOrNull()
+
+    private fun useNode(node: Node, receiverAdvertised: Boolean) {
+        reachableNode = node
+        watchStatus.text = if (receiverAdvertised) {
+            "●  StarIntel Wear · ${node.displayName}"
+        } else {
+            "◐  Paired watch · ${node.displayName}"
+        }
+        watchStatus.setTextColor(if (receiverAdvertised) CYAN else MUTED)
+        showStatus(
+            if (receiverAdvertised) {
+                "Ready to send configuration securely."
+            } else {
+                "Watch is connected; StarIntel capability has not propagated yet. SEND will probe the receiver directly."
+            },
+            success = null,
+        )
+        send.isEnabled = true
     }
 
     private fun sendConfiguration() {
@@ -261,7 +304,7 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
             return
         }
         if (node == null) {
-            showStatus("No reachable StarIntel watch was found.", success = false)
+            showStatus("No reachable Wear OS watch was found.", success = false)
             refreshWatchState()
             return
         }
@@ -294,8 +337,12 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
                 if (pending?.requestId != requestId) return@addOnFailureListener
                 pending = null
                 setBusy(false)
-                showStatus("Could not send configuration to the watch.", success = false)
-                refreshWatchState()
+                watchStatus.text = "○  StarIntel receiver rejected transport"
+                watchStatus.setTextColor(WARNING)
+                showStatus(
+                    "Could not reach the StarIntel receiver. Reinstall the phone and Wear APKs from the same build bundle so their package signatures match, then retry.",
+                    success = false,
+                )
             }
     }
 
@@ -305,7 +352,7 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
                 pending = null
                 setBusy(false)
                 showStatus(
-                    "No confirmation arrived. The watch may have applied the configuration; check the watch before retrying.",
+                    "The watch did not acknowledge setup. Reinstall both APKs from the same build bundle, open StarIntel once on the watch, then retry.",
                     success = false,
                 )
             }
