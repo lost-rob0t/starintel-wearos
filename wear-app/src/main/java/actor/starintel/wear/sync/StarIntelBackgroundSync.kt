@@ -14,6 +14,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.wear.tiles.TileService
 import actor.starintel.wear.DocumentViewerActivity
 import actor.starintel.wear.R
@@ -37,26 +38,59 @@ import kotlinx.coroutines.launch
 object StarIntelBackgroundSync {
     const val MIN_PERIOD_MINUTES = 15
     private const val JOB_ID = 0x535449
+    private const val TAG = "StarIntelSync"
 
-    fun ensureScheduled(context: Context) {
+    /**
+     * Background sync is an optimization, never a prerequisite for opening the UI.
+     *
+     * Some Wear OS vendor builds reject persisted jobs even when the manifest contains
+     * RECEIVE_BOOT_COMPLETED. A scheduler exception used to escape from Activity.onCreate(),
+     * which made every launcher surface crash. Keep the persisted job when supported and
+     * fall back to a non-persisted periodic job when the platform rejects it.
+     */
+    fun ensureScheduled(context: Context): Boolean {
         val appContext = context.applicationContext
-        val scheduler = appContext.getSystemService(JobScheduler::class.java)
-        if (scheduler.getPendingJob(JOB_ID) != null) return
+        val scheduler = runCatching { appContext.getSystemService(JobScheduler::class.java) }
+            .onFailure { Log.w(TAG, "JobScheduler unavailable", it) }
+            .getOrNull()
+            ?: return false
 
-        val info = JobInfo.Builder(
-            JOB_ID,
-            ComponentName(appContext, StarIntelSyncJobService::class.java),
-        )
-            .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-            .setPersisted(true)
-            .setPeriodic(MIN_PERIOD_MINUTES * 60_000L)
-            .build()
-        scheduler.schedule(info)
+        val existing = runCatching { scheduler.getPendingJob(JOB_ID) }
+            .onFailure { Log.w(TAG, "Could not inspect pending sync job", it) }
+            .getOrNull()
+        if (existing != null) return true
+
+        if (schedule(scheduler, appContext, persisted = true)) return true
+
+        // Samsung/Wear OS builds can reject persisted periodic jobs. A non-persisted job is
+        // still useful and will be re-established the next time any StarIntel surface opens.
+        runCatching { scheduler.cancel(JOB_ID) }
+        return schedule(scheduler, appContext, persisted = false)
     }
 
     fun cancel(context: Context) {
-        context.getSystemService(JobScheduler::class.java).cancel(JOB_ID)
+        runCatching {
+            context.applicationContext.getSystemService(JobScheduler::class.java)?.cancel(JOB_ID)
+        }.onFailure { Log.w(TAG, "Could not cancel sync job", it) }
     }
+
+    private fun schedule(
+        scheduler: JobScheduler,
+        context: Context,
+        persisted: Boolean,
+    ): Boolean = runCatching {
+        val builder = JobInfo.Builder(
+            JOB_ID,
+            ComponentName(context, StarIntelSyncJobService::class.java),
+        )
+            .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+            .setPeriodic(MIN_PERIOD_MINUTES * 60_000L)
+        if (persisted) builder.setPersisted(true)
+
+        scheduler.schedule(builder.build()) == JobScheduler.RESULT_SUCCESS
+    }.onFailure {
+        Log.w(TAG, "Could not schedule ${if (persisted) "persisted" else "fallback"} sync job", it)
+    }.getOrDefault(false)
 }
 
 class StarIntelSyncJobService : JobService() {
@@ -65,11 +99,17 @@ class StarIntelSyncJobService : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
         scope.launch {
             try {
-                StarIntelRepository.get(applicationContext).snapshot(forceRefresh = true)
-                runSavedSearches(applicationContext)
+                runCatching {
+                    StarIntelRepository.get(applicationContext).snapshot(forceRefresh = true)
+                }.onFailure { Log.w(TAG, "Background stats refresh failed", it) }
+
+                runCatching {
+                    runSavedSearches(applicationContext)
+                }.onFailure { Log.w(TAG, "Saved-search refresh failed", it) }
+
                 requestStarIntelTileUpdates(applicationContext)
             } finally {
-                jobFinished(params, false)
+                runCatching { jobFinished(params, false) }
             }
         }
         return true
@@ -81,18 +121,26 @@ class StarIntelSyncJobService : JobService() {
         scope.cancel()
         super.onDestroy()
     }
+
+    companion object {
+        private const val TAG = "StarIntelSyncJob"
+    }
 }
 
 internal suspend fun runSavedSearches(context: Context, nowMs: Long = System.currentTimeMillis()) {
     val store = SavedSearchStore(context)
     val client = StarIntelSearchClient.get(context)
     store.due(nowMs).forEach { saved ->
-        val result = client.search(saved.query, limit = 50)
-        if (result.error != null) return@forEach
-        val update = store.recordRun(saved.id, result.hits.map { it.id }, nowMs) ?: return@forEach
-        if (update.newIds.isEmpty()) return@forEach
-        val newHits = result.hits.filter { it.id in update.newIds }
-        StarIntelSearchNotifier.notify(context, saved, newHits)
+        runCatching {
+            val result = client.search(saved.query, limit = 50)
+            if (result.error != null) return@runCatching
+            val update = store.recordRun(saved.id, result.hits.map { it.id }, nowMs) ?: return@runCatching
+            if (update.newIds.isEmpty()) return@runCatching
+            val newHits = result.hits.filter { it.id in update.newIds }
+            StarIntelSearchNotifier.notify(context, saved, newHits)
+        }.onFailure {
+            Log.w("StarIntelSearch", "Saved search ${saved.id} failed", it)
+        }
     }
 }
 
@@ -106,49 +154,65 @@ object StarIntelSearchNotifier {
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return
 
-        val manager = context.getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= 26) {
-            manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT).apply {
-                    description = "New matches from saved StarIntel searches"
-                },
+        runCatching {
+            val manager = context.getSystemService(NotificationManager::class.java) ?: return
+            if (Build.VERSION.SDK_INT >= 26) {
+                manager.createNotificationChannel(
+                    NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT).apply {
+                        description = "New matches from saved StarIntel searches"
+                    },
+                )
+            }
+
+            val destination = if (hits.size == 1) {
+                Intent(context, DocumentViewerActivity::class.java)
+                    .putExtra(DocumentViewerActivity.EXTRA_DOCUMENT_ID, hits.first().id)
+            } else {
+                Intent(context, SearchActivity::class.java)
+                    .putExtra(SearchActivity.EXTRA_QUERY, saved.query)
+                    .putExtra(SearchActivity.EXTRA_SAVED_SEARCH_ID, saved.id)
+            }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                saved.id.hashCode(),
+                destination,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
+            val title = if (hits.size == 1) "${saved.label}: new match" else "${saved.label}: ${hits.size} new matches"
+            val text = if (hits.size == 1) hits.first().title else hits.take(3).joinToString(" · ") { it.title }
+            val notification = Notification.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_starintel)
+                .setContentTitle(title.take(80))
+                .setContentText(text.take(180))
+                .setCategory(Notification.CATEGORY_STATUS)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+                .build()
+            manager.notify(saved.id.hashCode(), notification)
+        }.onFailure {
+            Log.w("StarIntelSearch", "Could not post saved-search notification", it)
         }
-
-        val destination = if (hits.size == 1) {
-            Intent(context, DocumentViewerActivity::class.java)
-                .putExtra(DocumentViewerActivity.EXTRA_DOCUMENT_ID, hits.first().id)
-        } else {
-            Intent(context, SearchActivity::class.java)
-                .putExtra(SearchActivity.EXTRA_QUERY, saved.query)
-                .putExtra(SearchActivity.EXTRA_SAVED_SEARCH_ID, saved.id)
-        }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            saved.id.hashCode(),
-            destination,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val title = if (hits.size == 1) "${saved.label}: new match" else "${saved.label}: ${hits.size} new matches"
-        val text = if (hits.size == 1) hits.first().title else hits.take(3).joinToString(" · ") { it.title }
-        val notification = Notification.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_starintel)
-            .setContentTitle(title.take(80))
-            .setContentText(text.take(180))
-            .setCategory(Notification.CATEGORY_STATUS)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-            .build()
-        manager.notify(saved.id.hashCode(), notification)
     }
 }
 
-fun requestStarIntelTileUpdates(context: Context) {
-    val updater = TileService.getUpdater(context.applicationContext)
-    updater.requestUpdate(OpsTileService::class.java)
-    updater.requestUpdate(TargetsTileService::class.java)
-    updater.requestUpdate(CorpusTileService::class.java)
-    updater.requestUpdate(ActivityTileService::class.java)
-    updater.requestUpdate(SearchTileService::class.java)
+fun requestStarIntelTileUpdates(context: Context): Boolean {
+    val updater = runCatching { TileService.getUpdater(context.applicationContext) }
+        .onFailure { Log.w("StarIntelTiles", "Tile updater unavailable", it) }
+        .getOrNull()
+        ?: return false
+
+    var requested = false
+    listOf(
+        OpsTileService::class.java,
+        TargetsTileService::class.java,
+        CorpusTileService::class.java,
+        ActivityTileService::class.java,
+        SearchTileService::class.java,
+    ).forEach { service ->
+        runCatching { updater.requestUpdate(service) }
+            .onSuccess { requested = true }
+            .onFailure { Log.w("StarIntelTiles", "Tile refresh failed for ${service.simpleName}", it) }
+    }
+    return requested
 }
