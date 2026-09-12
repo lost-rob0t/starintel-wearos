@@ -18,6 +18,7 @@ import android.widget.TextView
 import androidx.wear.tiles.TileService
 import actor.starintel.wear.data.StarIntelRepository
 import actor.starintel.wear.sync.CompanionConfigProtocol
+import actor.starintel.wear.tiles.ActivityTileService
 import actor.starintel.wear.tiles.CorpusTileService
 import actor.starintel.wear.tiles.OpsTileService
 import actor.starintel.wear.tiles.TargetsTileService
@@ -226,6 +227,7 @@ class ConfigActivity : Activity() {
         updater.requestUpdate(OpsTileService::class.java)
         updater.requestUpdate(TargetsTileService::class.java)
         updater.requestUpdate(CorpusTileService::class.java)
+        updater.requestUpdate(ActivityTileService::class.java)
     }
 
     private fun label(textValue: String) = TextView(this).apply {
