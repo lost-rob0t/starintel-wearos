@@ -21,17 +21,24 @@ abstract class StarIntelActivity : Activity() {
 
     private val autoSyncScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var autoSyncJob: Job? = null
+    private lateinit var createdThemeId: StarIntelThemeId
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         palette = StarIntelThemeStore(this).current()
+        createdThemeId = palette.id
         StarIntelBackgroundSync.ensureScheduled(this)
     }
 
     override fun onResume() {
         super.onResume()
-        palette = StarIntelThemeStore(this).current()
+        val current = StarIntelThemeStore(this).current()
+        if (current.id != createdThemeId) {
+            recreate()
+            return
+        }
+        palette = current
         autoSyncJob?.cancel()
         autoSyncJob = autoSyncScope.launch {
             while (isActive) {
