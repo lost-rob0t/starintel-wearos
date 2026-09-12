@@ -27,6 +27,15 @@
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
         <activity
+            android:name=".SearchAlertsActivity"
+            android:icon="@drawable/ic_launcher_search_alerts"
+            android:exported="true"
+            android:label="@string/search_alerts_app_name"
+            android:launchMode="singleTask"
+            android:taskAffinity="actor.starintel.wear.searchalerts">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+        <activity
             android:name=".ExplorerActivity"
             android:icon="@drawable/ic_launcher_explorer"
             android:exported="true"
