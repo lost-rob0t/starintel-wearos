@@ -4,7 +4,11 @@
     <string name="tile_ops">StarIntel Ops</string>
     <string name="tile_targets">StarIntel Targets</string>
     <string name="tile_corpus">StarIntel Corpus</string>
+
     <string name="complication_status">StarIntel status</string>
     <string name="complication_targets">StarIntel targets</string>
     <string name="complication_documents">StarIntel documents</string>
+    <string name="complication_target_documents">StarIntel target documents</string>
+    <string name="complication_investigation_targets">StarIntel investigation targets</string>
+    <string name="complication_freshness">StarIntel sync freshness</string>
 </resources>
