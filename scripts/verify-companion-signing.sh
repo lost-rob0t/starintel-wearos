@@ -55,7 +55,7 @@ apksigner_bin="$(find_apksigner)"
 cert_digest() {
   local apk="$1"
   "$apksigner_bin" verify --print-certs "$apk" \
-    | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ { print $2; exit }'
+    | awk -F': ' '/^Signer .*certificate SHA-256 digest:/ { print tolower($2) }' | sort -u
 }
 
 package_name() {

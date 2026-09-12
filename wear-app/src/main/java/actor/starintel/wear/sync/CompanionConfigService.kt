@@ -78,15 +78,17 @@ class CompanionConfigService : WearableListenerService() {
                     return@withLock
                 }
 
-                StarIntelBackgroundSync.ensureScheduled(applicationContext)
-                requestStarIntelTileUpdates(applicationContext)
                 sendAck(
                     nodeId = messageEvent.sourceNodeId,
                     requestId = requestId,
                     ok = true,
                     code = CompanionConfigProtocol.CODE_OK,
-                    detail = "Configured · ${test.documentsTotal} docs · auto-sync on",
+                    detail = "Configured · ${test.documentsTotal} docs",
                 )
+                // Configuration success depends on the committed configuration only.
+                // Optional platform services must not delay or prevent its acknowledgment.
+                runCatching { StarIntelBackgroundSync.ensureScheduled(applicationContext) }
+                runCatching { requestStarIntelTileUpdates(applicationContext) }
             }
         }
     }
