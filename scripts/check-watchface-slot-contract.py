@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministically verify the shared WFF complication-slot contract."""
+"""Deterministically verify the approved Neon HUD WFF complication-slot contract."""
 
 from __future__ import annotations
 
@@ -14,8 +14,11 @@ EXPECTED = {
     3: ("BoundingOval", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
     4: ("BoundingArc", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
     5: ("BoundingArc", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
-    6: ("BoundingRoundBox", {"SHORT_TEXT", "LONG_TEXT", "EMPTY"}),
+    6: ("BoundingOval", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
+    7: ("BoundingRoundBox", {"SMALL_IMAGE", "EMPTY"}),
+    8: ("BoundingRoundBox", {"SHORT_TEXT", "EMPTY"}),
 }
+LOWER_IDS = (1, 2, 3, 6)
 
 
 def fail(message: str) -> None:
@@ -58,12 +61,30 @@ def main() -> None:
         if len(empty) != 1 or list(empty[0]):
             fail(f"slot {slot_id}: EMPTY renderer must be exactly one content-free element")
 
+    lower = [by_id[slot_id].find("BoundingOval") for slot_id in LOWER_IDS]
+    boxes = [(int(b.get("x", "0")), int(b.get("y", "0")), int(b.get("width", "0")), int(b.get("height", "0"))) for b in lower if b is not None]
+    if len(boxes) != 4 or any(width != height for _, _, width, height in boxes):
+        fail("Neon lower complication positions must be four circular BoundingOval slots")
+
     for side_id in (4, 5):
         policy = by_id[side_id].find("DefaultProviderPolicy")
-        if policy is None:
-            fail(f"slot {side_id}: missing DefaultProviderPolicy")
-        if policy.get("defaultSystemProvider") != "EMPTY":
+        if policy is None or policy.get("defaultSystemProvider") != "EMPTY":
             fail(f"slot {side_id}: side slot must default to EMPTY")
+
+    graph_policy = by_id[7].find("DefaultProviderPolicy")
+    if graph_policy is None or not graph_policy.get("primaryProvider", "").endswith("ActivityGraphComplicationService"):
+        fail("slot 7: activity graph must default to the real StarIntel graph provider")
+
+    weather_policy = by_id[8].find("DefaultProviderPolicy")
+    if weather_policy is None or weather_policy.get("defaultSystemProvider") != "EMPTY":
+        fail("slot 8: weather provider must remain user-selectable and default EMPTY")
+
+    face_style = root.find("./UserConfigurations/ListConfiguration[@id='faceStyle']")
+    if face_style is None:
+        fail("missing faceStyle ListConfiguration")
+    options = face_style.findall("ListOption")
+    if len(options) != 1 or options[0].get("id") != "0":
+        fail("#35 must expose exactly the implemented Neon face style until #36/#37 land")
 
     print("slot-contract: OK")
 
