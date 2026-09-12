@@ -52,7 +52,15 @@ nix run .#check
 
 ## Pair Android devices with Nix
 
-The generic pairing command works for Android phones and Wear OS watches and uses only Nix-provided `adb`:
+For Android devices that expose **Pair device with QR code**, the easiest path is:
+
+```sh
+nix run .#pair-android -- --qr
+```
+
+Open **Developer options → Wireless debugging → Pair device with QR code**, then scan the terminal QR. The helper uses Android's native ADB Wi-Fi QR format, waits for the matching `_adb-tls-pairing._tcp` mDNS service, pairs it, discovers the normal `_adb-tls-connect._tcp` endpoint, connects it, and verifies that endpoint is online. `qrencode` is supplied by the Nix app/dev shell. See `docs/adb-qr-pairing.md` for protocol and troubleshooting details.
+
+The generic pairing-code command works for Android phones and Wear OS watches and uses only Nix-provided `adb`:
 
 ```sh
 nix run .#pair-android -- HOST:PAIR_PORT HOST:ADB_PORT
@@ -101,15 +109,17 @@ Then on the phone/watch:
 
 1. Turn **Wireless debugging** off and back on.
 2. Check **Paired devices**. If this workstation is missing, it must be paired again.
-3. Open **Pair device with pairing code** and note the fresh pairing endpoint/code.
-4. Note the current normal Wireless debugging IP/port.
-5. Pair and connect again:
+3. On a QR-capable phone/device, run `nix run .#pair-android -- --qr` and scan the generated QR; otherwise open **Pair device with pairing code** and note the fresh pairing endpoint/code.
+4. For pairing-code mode, note the current normal Wireless debugging IP/port.
+5. Pair/connect again.
+
+Pairing-code fallback:
 
 ```sh
 nix run .#pair-android -- HOST:PAIR_PORT HOST:ADB_PORT
 ```
 
-`--connect` cannot restore a trust relationship after the device has forgotten the workstation; a fresh `adb pair` is required.
+`--connect` cannot restore a trust relationship after the device has forgotten the workstation; a fresh pairing operation is required.
 
 ## Install the Android companion
 
@@ -121,7 +131,13 @@ nix run .#build-phone
 nix run .#build-all
 ```
 
-On the Android phone, enable **Developer options → Wireless debugging → Pair device with pairing code**, then pair/connect it:
+On the Android phone, enable **Developer options → Wireless debugging**. Pair and connect it with the QR flow:
+
+```sh
+nix run .#pair-android -- --qr
+```
+
+Or use the pairing-code fallback:
 
 ```sh
 nix run .#pair-android -- PHONE_IP:PAIR_PORT PHONE_IP:ADB_PORT
