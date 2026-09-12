@@ -13,6 +13,7 @@ CANVAS = 450
 CENTER = 225.0
 SAFE_RADIUS = 212.0
 MIN_GAP = 6
+ARC_SAMPLE_DEGREES = 1
 FACES = {
     "neon": Path("watchface/src/main/res/raw/watchface.xml"),
     "command": Path("watchface/src/command/res/raw/watchface.xml"),
@@ -43,6 +44,18 @@ class Box:
         return self.y + self.h
 
 
+@dataclass(frozen=True)
+class ArcSpec:
+    slot_id: int
+    cx: float
+    cy: float
+    width: float
+    height: float
+    thickness: float
+    start: float
+    end: float
+
+
 def fail(message: str) -> None:
     print(f"layout-contract: {message}", file=sys.stderr)
     raise SystemExit(1)
@@ -67,6 +80,14 @@ def integer(node: ET.Element, key: str) -> int:
         return int(node.get(key, "0"))
     except ValueError:
         fail(f"{node.tag}: {key} must be a static integer for layout validation")
+        raise AssertionError("unreachable")
+
+
+def number(node: ET.Element, key: str) -> float:
+    try:
+        return float(node.get(key, "0"))
+    except ValueError:
+        fail(f"{node.tag}: {key} must be numeric for layout validation")
         raise AssertionError("unreachable")
 
 
@@ -147,20 +168,76 @@ def check_renderer_content(face: str, slot: ET.Element, slot_id: int) -> None:
                 check_draw_geometry(face=face, slot_id=slot_id, draw=node)
 
 
+def point_rect_distance(x: float, y: float, box: Box) -> float:
+    dx = max(box.x - x, 0.0, x - box.right)
+    dy = max(box.y - y, 0.0, y - box.bottom)
+    return math.hypot(dx, dy)
+
+
+def arc_points(arc: ArcSpec):
+    # WFF angles use 0 degrees at 12 o'clock and increase clockwise.
+    start = arc.start
+    end = arc.end
+    if end < start:
+        end += 360.0
+    angle = start
+    while angle <= end + 1e-6:
+        radians = math.radians(angle)
+        x = arc.cx + (arc.width / 2.0) * math.sin(radians)
+        y = arc.cy - (arc.height / 2.0) * math.cos(radians)
+        yield angle % 360.0, x, y
+        angle += ARC_SAMPLE_DEGREES
+
+
+def check_arc_clearance(face: str, arc: ArcSpec, boxes: list[Box]) -> None:
+    outer_radius = max(arc.width, arc.height) / 2.0 + arc.thickness / 2.0
+    if outer_radius > SAFE_RADIUS:
+        fail(
+            f"{face} slot {arc.slot_id}: curved rail outer radius "
+            f"{outer_radius:.1f}px exceeds {SAFE_RADIUS:.1f}px safe radius"
+        )
+
+    clearance = arc.thickness / 2.0 + MIN_GAP
+    for angle, x, y in arc_points(arc):
+        for box in boxes:
+            if point_rect_distance(x, y, box) < clearance:
+                fail(
+                    f"{face} slot {arc.slot_id}: curved rail at {angle:.0f}deg "
+                    f"collides with slot {box.slot_id} (<{clearance:.1f}px clearance)"
+                )
+        for index, rect in enumerate(RESERVED[face]):
+            reserved = Box(-(index + 1), *rect)
+            if point_rect_distance(x, y, reserved) < clearance:
+                fail(
+                    f"{face} slot {arc.slot_id}: curved rail at {angle:.0f}deg "
+                    "collides with face-owned clock/header geometry"
+                )
+
+
 def check_face(name: str, path: Path) -> None:
     root = ET.parse(path).getroot()
     boxes: list[Box] = []
+    arcs: list[ArcSpec] = []
+
     for slot in root.findall(".//ComplicationSlot"):
         slot_id = int(slot.get("slotId", "-1"))
-        # Curved edge slots intentionally use full-canvas render coordinates and
-        # occupy the bezel. Validate their envelope separately from rectangular slots.
+        check_renderer_content(name, slot, slot_id)
+
         arc = slot.find("BoundingArc")
         if arc is not None:
-            width = int(arc.get("width", "0"))
-            height = int(arc.get("height", "0"))
-            thickness = int(arc.get("thickness", "0"))
-            if width > 410 or height > 410 or thickness > 34:
+            spec = ArcSpec(
+                slot_id=slot_id,
+                cx=number(arc, "centerX"),
+                cy=number(arc, "centerY"),
+                width=number(arc, "width"),
+                height=number(arc, "height"),
+                thickness=number(arc, "thickness"),
+                start=number(arc, "startAngle"),
+                end=number(arc, "endAngle"),
+            )
+            if spec.width > 410 or spec.height > 410 or spec.thickness > 34:
                 fail(f"{name} slot {slot_id}: curved slot exceeds safe bezel envelope")
+            arcs.append(spec)
             continue
 
         box = Box(
@@ -184,14 +261,15 @@ def check_face(name: str, path: Path) -> None:
         for reserved in RESERVED[name]:
             if rect_overlaps(box, reserved):
                 fail(f"{name} slot {slot_id}: overlaps face-owned clock/header region {reserved}")
-
-        check_renderer_content(name, slot, slot_id)
         boxes.append(box)
 
     for index, left in enumerate(boxes):
         for right in boxes[index + 1 :]:
             if overlaps(left, right, MIN_GAP):
                 fail(f"{name}: slot {left.slot_id} and slot {right.slot_id} overlap or have <{MIN_GAP}px gap")
+
+    for arc in arcs:
+        check_arc_clearance(name, arc, boxes)
 
 
 def main() -> None:
