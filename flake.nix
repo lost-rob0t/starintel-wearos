@@ -30,7 +30,6 @@
           androidSdk = androidComposition.androidsdk;
           jdk = pkgs.jdk17;
           gradle = pkgs.gradle_9.override { java = jdk; };
-
           androidHome = "${androidSdk}/libexec/android-sdk";
           aapt2 = "${androidHome}/build-tools/36.0.0/aapt2";
 
@@ -39,7 +38,6 @@
               echo "error: run this from the starintel-wearos repository root" >&2
               exit 2
             fi
-
             export ANDROID_HOME="${androidHome}"
             export ANDROID_SDK_ROOT="$ANDROID_HOME"
             export JAVA_HOME="${jdk}"
@@ -50,6 +48,7 @@
 
           wffContractChecks = ''
             python3 scripts/check-watchface-slot-contract.py
+            python3 scripts/check-watchface-layout.py
             python3 scripts/check-watchface-themes.py
           '';
 
@@ -78,11 +77,22 @@
             outputName = "wear-app-debug.apk";
           };
 
-          buildWatchface = mkBuildApp {
-            name = "build-watchface";
-            task = ":watchface:assembleDebug";
-            sourceApk = "watchface/build/outputs/apk/debug/watchface-debug.apk";
-            outputName = "watchface-debug.apk";
+          buildWatchface = pkgs.writeShellApplication {
+            name = "starintel-build-watchface";
+            runtimeInputs = [ gradle pkgs.coreutils pkgs.python3 ];
+            text = common + wffContractChecks + ''
+              gradle --no-daemon --stacktrace \
+                :watchface:assembleNeonDebug \
+                :watchface:assembleCommandDebug \
+                :watchface:assembleTerminalDebug
+              cp -f watchface/build/outputs/apk/neon/debug/watchface-neon-debug.apk build/nix/watchface-neon-debug.apk
+              cp -f watchface/build/outputs/apk/command/debug/watchface-command-debug.apk build/nix/watchface-command-debug.apk
+              cp -f watchface/build/outputs/apk/terminal/debug/watchface-terminal-debug.apk build/nix/watchface-terminal-debug.apk
+              printf 'built:\n  %s\n  %s\n  %s\n' \
+                build/nix/watchface-neon-debug.apk \
+                build/nix/watchface-command-debug.apk \
+                build/nix/watchface-terminal-debug.apk
+            '';
           };
 
           buildAll = pkgs.writeShellApplication {
@@ -92,17 +102,23 @@
               gradle --no-daemon --stacktrace \
                 :phone-app:testDebugUnitTest :phone-app:assembleDebug \
                 :wear-app:testDebugUnitTest :wear-app:assembleDebug \
-                :watchface:assembleDebug
+                :watchface:assembleNeonDebug \
+                :watchface:assembleCommandDebug \
+                :watchface:assembleTerminalDebug
 
               cp -f phone-app/build/outputs/apk/debug/phone-app-debug.apk build/nix/phone-app-debug.apk
               cp -f wear-app/build/outputs/apk/debug/wear-app-debug.apk build/nix/wear-app-debug.apk
-              cp -f watchface/build/outputs/apk/debug/watchface-debug.apk build/nix/watchface-debug.apk
+              cp -f watchface/build/outputs/apk/neon/debug/watchface-neon-debug.apk build/nix/watchface-neon-debug.apk
+              cp -f watchface/build/outputs/apk/command/debug/watchface-command-debug.apk build/nix/watchface-command-debug.apk
+              cp -f watchface/build/outputs/apk/terminal/debug/watchface-terminal-debug.apk build/nix/watchface-terminal-debug.apk
 
               echo "built:"
               printf '  %s\n' \
                 build/nix/phone-app-debug.apk \
                 build/nix/wear-app-debug.apk \
-                build/nix/watchface-debug.apk
+                build/nix/watchface-neon-debug.apk \
+                build/nix/watchface-command-debug.apk \
+                build/nix/watchface-terminal-debug.apk
             '';
           };
 
@@ -113,7 +129,9 @@
               gradle --no-daemon --stacktrace \
                 :phone-app:testDebugUnitTest \
                 :wear-app:testDebugUnitTest \
-                :watchface:assembleDebug
+                :watchface:assembleNeonDebug \
+                :watchface:assembleCommandDebug \
+                :watchface:assembleTerminalDebug
             '';
           };
 
@@ -125,7 +143,6 @@
                 echo "error: run this from the starintel-wearos repository root" >&2
                 exit 2
               fi
-
               exec bash scripts/pair-android.sh "$@"
             '';
           };
@@ -138,7 +155,6 @@
                 echo "error: run this from the starintel-wearos repository root" >&2
                 exit 2
               fi
-
               exec bash scripts/pair-watch.sh "$@"
             '';
           };
@@ -151,7 +167,6 @@
                 echo "error: run this from the starintel-wearos repository root" >&2
                 exit 2
               fi
-
               export STARINTEL_PHONE_APK="''${STARINTEL_PHONE_APK:-build/nix/phone-app-debug.apk}"
               exec bash scripts/install-phone.sh "$@"
             '';
@@ -165,9 +180,10 @@
                 echo "error: run this from the starintel-wearos repository root" >&2
                 exit 2
               fi
-
               export STARINTEL_WEAR_APK="''${STARINTEL_WEAR_APK:-build/nix/wear-app-debug.apk}"
-              export STARINTEL_FACE_APK="''${STARINTEL_FACE_APK:-build/nix/watchface-debug.apk}"
+              export STARINTEL_NEON_FACE_APK="''${STARINTEL_NEON_FACE_APK:-build/nix/watchface-neon-debug.apk}"
+              export STARINTEL_COMMAND_FACE_APK="''${STARINTEL_COMMAND_FACE_APK:-build/nix/watchface-command-debug.apk}"
+              export STARINTEL_TERMINAL_FACE_APK="''${STARINTEL_TERMINAL_FACE_APK:-build/nix/watchface-terminal-debug.apk}"
               exec bash scripts/install-watch.sh "$@"
             '';
           };
@@ -194,46 +210,16 @@
       apps = forAllSystems (system:
         let e = mkEnv system;
         in {
-          build-phone = {
-            type = "app";
-            program = "${e.buildPhone}/bin/starintel-build-phone";
-          };
-          build-wear = {
-            type = "app";
-            program = "${e.buildWear}/bin/starintel-build-wear";
-          };
-          build-watchface = {
-            type = "app";
-            program = "${e.buildWatchface}/bin/starintel-build-watchface";
-          };
-          build-all = {
-            type = "app";
-            program = "${e.buildAll}/bin/starintel-build-all";
-          };
-          check = {
-            type = "app";
-            program = "${e.checkAll}/bin/starintel-check";
-          };
-          pair-android = {
-            type = "app";
-            program = "${e.pairAndroid}/bin/starintel-pair-android";
-          };
-          pair-watch = {
-            type = "app";
-            program = "${e.pairWatch}/bin/starintel-pair-watch";
-          };
-          install-phone = {
-            type = "app";
-            program = "${e.installPhone}/bin/starintel-install-phone";
-          };
-          install-watch = {
-            type = "app";
-            program = "${e.installWatch}/bin/starintel-install-watch";
-          };
-          default = {
-            type = "app";
-            program = "${e.buildAll}/bin/starintel-build-all";
-          };
+          build-phone = { type = "app"; program = "${e.buildPhone}/bin/starintel-build-phone"; };
+          build-wear = { type = "app"; program = "${e.buildWear}/bin/starintel-build-wear"; };
+          build-watchface = { type = "app"; program = "${e.buildWatchface}/bin/starintel-build-watchface"; };
+          build-all = { type = "app"; program = "${e.buildAll}/bin/starintel-build-all"; };
+          check = { type = "app"; program = "${e.checkAll}/bin/starintel-check"; };
+          pair-android = { type = "app"; program = "${e.pairAndroid}/bin/starintel-pair-android"; };
+          pair-watch = { type = "app"; program = "${e.pairWatch}/bin/starintel-pair-watch"; };
+          install-phone = { type = "app"; program = "${e.installPhone}/bin/starintel-install-phone"; };
+          install-watch = { type = "app"; program = "${e.installWatch}/bin/starintel-install-watch"; };
+          default = { type = "app"; program = "${e.buildAll}/bin/starintel-build-all"; };
         });
 
       devShells = forAllSystems (system:
@@ -241,11 +227,9 @@
         in {
           default = e.pkgs.mkShell {
             packages = [ e.jdk e.gradle e.androidSdk e.pkgs.qrencode e.pkgs.python3 ];
-
             ANDROID_HOME = "${e.androidSdk}/libexec/android-sdk";
             ANDROID_SDK_ROOT = "${e.androidSdk}/libexec/android-sdk";
             JAVA_HOME = "${e.jdk}";
-
             shellHook = ''
               export GRADLE_USER_HOME="''${GRADLE_USER_HOME:-''${XDG_CACHE_HOME:-$HOME/.cache}/starintel-wearos/gradle}"
               export GRADLE_OPTS="-Dorg.gradle.project.android.aapt2FromMavenOverride=$ANDROID_HOME/build-tools/36.0.0/aapt2 -Dorg.gradle.java.home=$JAVA_HOME ''${GRADLE_OPTS:-}"
@@ -260,8 +244,6 @@
 
       checks = forAllSystems (system:
         let e = mkEnv system;
-        in {
-          toolchain = e.toolchain;
-        });
+        in { toolchain = e.toolchain; });
     };
 }
