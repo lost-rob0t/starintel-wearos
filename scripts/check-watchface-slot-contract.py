@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministically verify the approved Neon HUD WFF complication-slot contract."""
+"""Deterministically verify the shared WFF v1 slot and Astra face contract."""
 
 from __future__ import annotations
 
@@ -16,9 +16,22 @@ EXPECTED = {
     5: ("BoundingArc", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
     6: ("BoundingOval", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
     7: ("BoundingRoundBox", {"SMALL_IMAGE", "EMPTY"}),
-    8: ("BoundingRoundBox", {"SHORT_TEXT", "EMPTY"}),
+    8: ("BoundingRoundBox", {"SHORT_TEXT", "SMALL_IMAGE", "EMPTY"}),
 }
 LOWER_IDS = (1, 2, 3, 6)
+FACE_SLOTS = {
+    "0": {1, 2, 3, 4, 5, 6, 7, 8},
+    "1": {1, 2, 3, 6, 7, 8},
+    "2": {1, 2, 3, 6},
+}
+FACE_EXPRESSIONS = {
+    "neon_normal",
+    "neon_ultra",
+    "command_normal",
+    "command_ultra",
+    "terminal_normal",
+    "terminal_ultra",
+}
 
 
 def fail(message: str) -> None:
@@ -26,8 +39,13 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
+def option_ids(config: ET.Element) -> set[str]:
+    return {item.get("id", "") for item in config.findall("ListOption")}
+
+
 def main() -> None:
-    root = ET.parse(WATCHFACE).getroot()
+    raw = WATCHFACE.read_text(encoding="utf-8")
+    root = ET.fromstring(raw)
     slots = root.findall(".//ComplicationSlot")
     by_id: dict[int, ET.Element] = {}
 
@@ -62,9 +80,18 @@ def main() -> None:
             fail(f"slot {slot_id}: EMPTY renderer must be exactly one content-free element")
 
     lower = [by_id[slot_id].find("BoundingOval") for slot_id in LOWER_IDS]
-    boxes = [(int(b.get("x", "0")), int(b.get("y", "0")), int(b.get("width", "0")), int(b.get("height", "0"))) for b in lower if b is not None]
+    boxes = [
+        (
+            int(box.get("x", "0")),
+            int(box.get("y", "0")),
+            int(box.get("width", "0")),
+            int(box.get("height", "0")),
+        )
+        for box in lower
+        if box is not None
+    ]
     if len(boxes) != 4 or any(width != height for _, _, width, height in boxes):
-        fail("Neon lower complication positions must be four circular BoundingOval slots")
+        fail("lower metric positions must remain four circular BoundingOval slots")
 
     for side_id in (4, 5):
         policy = by_id[side_id].find("DefaultProviderPolicy")
@@ -75,16 +102,49 @@ def main() -> None:
     if graph_policy is None or not graph_policy.get("primaryProvider", "").endswith("ActivityGraphComplicationService"):
         fail("slot 7: activity graph must default to the real StarIntel graph provider")
 
-    weather_policy = by_id[8].find("DefaultProviderPolicy")
-    if weather_policy is None or weather_policy.get("defaultSystemProvider") != "EMPTY":
-        fail("slot 8: weather provider must remain user-selectable and default EMPTY")
+    weather_geo_policy = by_id[8].find("DefaultProviderPolicy")
+    if weather_geo_policy is None or weather_geo_policy.get("defaultSystemProvider") != "EMPTY":
+        fail("slot 8: shared weather/geo provider must remain user-selectable and default EMPTY")
 
     face_style = root.find("./UserConfigurations/ListConfiguration[@id='faceStyle']")
     if face_style is None:
         fail("missing faceStyle ListConfiguration")
-    options = face_style.findall("ListOption")
-    if len(options) != 1 or options[0].get("id") != "0":
-        fail("#35 must expose exactly the implemented Neon face style until #36/#37 land")
+    if option_ids(face_style) != set(FACE_SLOTS):
+        fail(f"faceStyle options {sorted(option_ids(face_style))} != {sorted(FACE_SLOTS)}")
+    for option in face_style.findall("ListOption"):
+        option_id = option.get("id", "")
+        actual = {int(value) for value in option.get("complicationSlotIds", "").split()}
+        if actual != FACE_SLOTS[option_id]:
+            fail(f"face {option_id}: slots {sorted(actual)} != {sorted(FACE_SLOTS[option_id])}")
+
+    presentation = root.find("./UserConfigurations/ListConfiguration[@id='presentationMode']")
+    if presentation is None or option_ids(presentation) != {"0", "1"}:
+        fail("presentationMode must expose exactly Normal (0) and Ultra Black (1)")
+
+    conditions = root.findall("./Scene/Condition")
+    if len(conditions) != 1:
+        fail("scene must use one face/presentation Condition")
+    names = {
+        expression.get("name", "")
+        for expression in conditions[0].findall("./Expressions/Expression")
+    }
+    if names != FACE_EXPRESSIONS:
+        fail(f"face/presentation expressions {sorted(names)} != {sorted(FACE_EXPRESSIONS)}")
+
+    compares = {compare.get("expression", "") for compare in conditions[0].findall("Compare")}
+    if compares != FACE_EXPRESSIONS:
+        fail("every face/presentation expression must have a render branch")
+
+    if "[CONFIGURATION.presentationMode]" not in raw:
+        fail("presentationMode must drive render behavior")
+
+    graph = by_id[7].find("Complication[@type='SMALL_IMAGE']/PartImage")
+    if graph is None or "presentationMode" not in ET.tostring(graph, encoding="unicode"):
+        fail("activity graph must be suppressed in Ultra Black mode")
+
+    geo = by_id[8].find("Complication[@type='SMALL_IMAGE']/PartImage")
+    if geo is None or "presentationMode" not in ET.tostring(geo, encoding="unicode"):
+        fail("geo image must be suppressed in Ultra Black mode")
 
     print("slot-contract: OK")
 

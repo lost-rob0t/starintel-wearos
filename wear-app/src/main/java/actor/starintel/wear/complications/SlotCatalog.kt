@@ -5,6 +5,7 @@ enum class SlotDataType {
     SHORT_TEXT,
     LONG_TEXT,
     RANGED_VALUE,
+    SMALL_IMAGE,
     EMPTY,
 }
 
@@ -12,6 +13,7 @@ enum class SlotFamily {
     CIRCULAR,
     CURVED,
     TEXT,
+    PANEL,
 }
 
 data class SlotContract(
@@ -28,7 +30,10 @@ enum class SlotVisualState {
 
 /**
  * Shared slot ABI between the WFF resource, providers, companion configuration,
- * and tests. Existing IDs 1..3 are intentionally preserved.
+ * and tests. IDs are stable because Wear OS persists provider assignments by ID.
+ *
+ * WFF v1 caps a face at eight slots, so the three Astra faces intentionally
+ * reuse this catalog instead of manufacturing per-face IDs.
  */
 object SlotCatalog {
     val lowerLeft = SlotContract(
@@ -61,11 +66,27 @@ object SlotCatalog {
         family = SlotFamily.CURVED,
         supportedTypes = setOf(SlotDataType.SHORT_TEXT, SlotDataType.RANGED_VALUE, SlotDataType.EMPTY),
     )
+
+    /** Historical key retained for companion/config compatibility; WFF #50 made it the fourth lower slot. */
     val textRegion = SlotContract(
         id = 6,
         key = "text_region",
-        family = SlotFamily.TEXT,
-        supportedTypes = setOf(SlotDataType.SHORT_TEXT, SlotDataType.LONG_TEXT, SlotDataType.EMPTY),
+        family = SlotFamily.CIRCULAR,
+        supportedTypes = setOf(SlotDataType.SHORT_TEXT, SlotDataType.RANGED_VALUE, SlotDataType.EMPTY),
+    )
+
+    val activityGraph = SlotContract(
+        id = 7,
+        key = "activity_graph",
+        family = SlotFamily.PANEL,
+        supportedTypes = setOf(SlotDataType.SMALL_IMAGE, SlotDataType.EMPTY),
+    )
+
+    val weatherGeo = SlotContract(
+        id = 8,
+        key = "weather_geo",
+        family = SlotFamily.PANEL,
+        supportedTypes = setOf(SlotDataType.SHORT_TEXT, SlotDataType.SMALL_IMAGE, SlotDataType.EMPTY),
     )
 
     val all: List<SlotContract> = listOf(
@@ -75,6 +96,8 @@ object SlotCatalog {
         leftEdge,
         rightEdge,
         textRegion,
+        activityGraph,
+        weatherGeo,
     )
 
     init {
