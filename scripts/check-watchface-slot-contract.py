@@ -12,8 +12,8 @@ EXPECTED = {
     1: ("BoundingOval", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
     2: ("BoundingOval", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
     3: ("BoundingOval", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
-    4: ("BoundingArc", {"RANGED_VALUE", "EMPTY"}),
-    5: ("BoundingArc", {"RANGED_VALUE", "EMPTY"}),
+    4: ("BoundingArc", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
+    5: ("BoundingArc", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
     6: ("BoundingRoundBox", {"SHORT_TEXT", "LONG_TEXT", "EMPTY"}),
 }
 
