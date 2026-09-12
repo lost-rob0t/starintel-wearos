@@ -4,19 +4,48 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  install-phone PHONE_IP:ADB_PORT
+  install-phone [--clean] PHONE_IP:ADB_PORT
   install-phone --help
 
 ANDROID_SERIAL may be used instead of the positional serial.
+
+--clean
+  If an older StarIntel Companion is signed by a different debug certificate,
+  uninstall it and install the deterministic repository-signed build. This clears
+  the companion app's local preferences; the API key is never stored on the phone.
 EOF
 }
 
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  usage
-  exit 0
-fi
+clean=0
+serial_arg=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --clean)
+      clean=1
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    -* )
+      echo "error: unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+    *)
+      if [[ -n "$serial_arg" ]]; then
+        echo "error: unexpected extra argument: $1" >&2
+        usage >&2
+        exit 2
+      fi
+      serial_arg="$1"
+      shift
+      ;;
+  esac
+done
 
-serial="${ANDROID_SERIAL:-${1:-}}"
+serial="${ANDROID_SERIAL:-$serial_arg}"
 if [[ -z "$serial" ]]; then
   usage >&2
   exit 2
@@ -51,6 +80,12 @@ if [[ ! -r "$phone_apk" ]]; then
   exit 1
 fi
 
+# If a matching Wear APK is present locally, refuse to install a mismatched pair.
+wear_candidate="${STARINTEL_WEAR_APK:-build/nix/wear-app-debug.apk}"
+if [[ -r "$wear_candidate" && -f scripts/verify-companion-signing.sh ]]; then
+  bash scripts/verify-companion-signing.sh "$phone_apk" "$wear_candidate"
+fi
+
 adb_cmd=(adb -s "$serial")
 if ! "${adb_cmd[@]}" get-state >/dev/null 2>&1; then
   echo "error: phone is not reachable through adb at $serial" >&2
@@ -58,8 +93,33 @@ if ! "${adb_cmd[@]}" get-state >/dev/null 2>&1; then
   exit 1
 fi
 
+install_apk() {
+  local output
+  if output="$("${adb_cmd[@]}" install -r "$phone_apk" 2>&1)"; then
+    return 0
+  fi
+
+  if grep -q 'INSTALL_FAILED_UPDATE_INCOMPATIBLE' <<<"$output"; then
+    if [[ "$clean" != "1" ]]; then
+      echo "error: installed companion uses an older/different debug signing certificate" >&2
+      echo "The phone and Wear APK must share one signer for Wearable Data Layer." >&2
+      echo "rerun with --clean to replace the old debug install:" >&2
+      echo "  install-phone --clean $serial" >&2
+      exit 3
+    fi
+
+    echo "Old companion signer detected; performing clean debug reinstall."
+    "${adb_cmd[@]}" uninstall actor.starintel.wear >/dev/null 2>&1 || true
+    "${adb_cmd[@]}" install "$phone_apk" >/dev/null
+    return 0
+  fi
+
+  printf '%s\n' "$output" >&2
+  return 1
+}
+
 echo "[1/2] Installing StarIntel Companion"
-"${adb_cmd[@]}" install -r "$phone_apk" >/dev/null
+install_apk
 
 echo "[2/2] Verifying installed package"
 "${adb_cmd[@]}" shell pm path actor.starintel.wear | grep -q '^package:' || {

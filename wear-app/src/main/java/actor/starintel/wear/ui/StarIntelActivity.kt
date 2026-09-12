@@ -2,6 +2,7 @@ package actor.starintel.wear.ui
 
 import android.app.Activity
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
 import actor.starintel.wear.data.StarIntelRepository
 import actor.starintel.wear.sync.StarIntelBackgroundSync
@@ -28,7 +29,11 @@ abstract class StarIntelActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         palette = StarIntelThemeStore(this).current()
         createdThemeId = palette.id
-        StarIntelBackgroundSync.ensureScheduled(this)
+
+        // Background work must never be able to take down a launcher Activity. The scheduler
+        // already has its own fallback path; keep this outer guard as the lifecycle boundary.
+        runCatching { StarIntelBackgroundSync.ensureScheduled(this) }
+            .onFailure { Log.w(TAG, "Background sync scheduling skipped", it) }
     }
 
     override fun onResume() {
@@ -45,6 +50,8 @@ abstract class StarIntelActivity : Activity() {
                 runCatching {
                     StarIntelRepository.get(applicationContext).snapshot(forceRefresh = true)
                     requestStarIntelTileUpdates(applicationContext)
+                }.onFailure {
+                    Log.w(TAG, "Foreground refresh failed", it)
                 }
                 delay(FOREGROUND_SYNC_MS)
             }
@@ -63,6 +70,7 @@ abstract class StarIntelActivity : Activity() {
     }
 
     companion object {
+        private const val TAG = "StarIntelActivity"
         private const val FOREGROUND_SYNC_MS = 60_000L
     }
 }
