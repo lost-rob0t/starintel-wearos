@@ -82,7 +82,7 @@ cat <<'INSTRUCTIONS'
 On the Android device:
   Developer options -> Wireless debugging -> Pair device with QR code
 
-Scan this terminal QR. The generated pairing secret is single-use.
+Scan this terminal QR. The generated pairing secret is fresh for this attempt.
 INSTRUCTIONS
 echo
 qrencode -t ANSIUTF8 -m 1 "$payload"
