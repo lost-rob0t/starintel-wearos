@@ -12,11 +12,14 @@ import androidx.wear.protolayout.types.layoutString
 import androidx.wear.tiles.Material3TileService
 import androidx.wear.tiles.RequestBuilders.TileRequest
 import androidx.wear.tiles.TileBuilders.Tile
+import actor.starintel.wear.ExplorerActivity
 import actor.starintel.wear.GraphActivity
 import actor.starintel.wear.MainActivity
 import actor.starintel.wear.SearchActivity
+import actor.starintel.wear.TargetsActivity
 import actor.starintel.wear.data.ActivityHistoryStore
 import actor.starintel.wear.data.ActivityRange
+import actor.starintel.wear.data.SavedSearchStore
 import actor.starintel.wear.data.StarIntelRepository
 import actor.starintel.wear.data.StarIntelSnapshot
 import actor.starintel.wear.data.ageLabel
@@ -43,9 +46,18 @@ abstract class StarIntelTileService(
         } else {
             0L
         }
-        val copy = copyFor(kind, snapshot, activityLastHour)
+        val searchStore = if (kind == TileKind.SEARCH) SavedSearchStore(applicationContext) else null
+        val copy = copyFor(
+            kind = kind,
+            data = snapshot,
+            activityLastHour = activityLastHour,
+            activeSearches = searchStore?.activeCount() ?: 0,
+            newSearchMatches = searchStore?.latestNewMatchCount() ?: 0,
+        )
         val destination = when {
             !snapshot.configured -> MainActivity::class.java
+            kind == TileKind.TARGETS -> TargetsActivity::class.java
+            kind == TileKind.CORPUS -> ExplorerActivity::class.java
             kind == TileKind.ACTIVITY -> GraphActivity::class.java
             kind == TileKind.SEARCH -> SearchActivity::class.java
             else -> MainActivity::class.java
@@ -82,7 +94,13 @@ abstract class StarIntelTileService(
             .build()
     }
 
-    private fun copyFor(kind: TileKind, data: StarIntelSnapshot, activityLastHour: Long): TileCopy {
+    private fun copyFor(
+        kind: TileKind,
+        data: StarIntelSnapshot,
+        activityLastHour: Long,
+        activeSearches: Int,
+        newSearchMatches: Int,
+    ): TileCopy {
         if (!data.configured) {
             return TileCopy("StarIntel", "SETUP", "Open the app", "server + private key")
         }
@@ -102,7 +120,7 @@ abstract class StarIntelTileService(
             TileKind.TARGETS -> TileCopy(
                 title = "StarIntel · Targets",
                 primary = data.targetsTotal.compactCount(),
-                secondary = "${data.targetCount.compactCount()} target · ${data.investigationTargetCount.compactCount()} inv",
+                secondary = "tap to create · ${data.targetCount.compactCount()} target",
                 footer = if (data.reachable) data.ageLabel() else "cached",
             )
 
@@ -111,12 +129,12 @@ abstract class StarIntelTileService(
                     .sortedByDescending { it.value }
                     .take(2)
                     .joinToString(" · ") { "${it.key} ${it.value.compactCount()}" }
-                    .ifBlank { "aggregate documents" }
+                    .ifBlank { "tap to explore corpus" }
                 TileCopy(
-                    title = "StarIntel · Corpus",
+                    title = "StarIntel · Explorer",
                     primary = data.documentsTotal.compactCount(),
                     secondary = topTypes,
-                    footer = if (data.reachable) data.ageLabel() else "cached",
+                    footer = if (data.reachable) "tap to browse · ${data.ageLabel()}" else "cached · tap to browse",
                 )
             }
 
@@ -124,14 +142,14 @@ abstract class StarIntelTileService(
                 title = "StarIntel · Activity",
                 primary = "+${activityLastHour.compactCount()}",
                 secondary = "docs · last 1h",
-                footer = if (data.reachable) data.ageLabel() else "cached history",
+                footer = if (data.reachable) "tap for graph · ${data.ageLabel()}" else "cached history · tap for graph",
             )
 
             TileKind.SEARCH -> TileCopy(
                 title = "StarIntel · Search",
-                primary = "SEARCH",
-                secondary = "query the corpus",
-                footer = if (data.reachable) "server online" else "cached status · tap to open",
+                primary = if (newSearchMatches > 0) "+$newSearchMatches" else activeSearches.toString(),
+                secondary = if (newSearchMatches > 0) "new matches" else "$activeSearches active monitors",
+                footer = "tap to search / configure",
             )
         }
     }

@@ -1,60 +1,55 @@
 package actor.starintel.wear
 
-import android.app.Activity
 import android.app.AlertDialog
-import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
 import android.text.InputType
 import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.wear.tiles.TileService
 import actor.starintel.wear.data.StarIntelRepository
 import actor.starintel.wear.sync.CompanionConfigProtocol
-import actor.starintel.wear.tiles.ActivityTileService
-import actor.starintel.wear.tiles.CorpusTileService
-import actor.starintel.wear.tiles.OpsTileService
-import actor.starintel.wear.tiles.SearchTileService
-import actor.starintel.wear.tiles.TargetsTileService
+import actor.starintel.wear.sync.StarIntelBackgroundSync
+import actor.starintel.wear.sync.requestStarIntelTileUpdates
+import actor.starintel.wear.ui.StarIntelActivity
+import actor.starintel.wear.ui.applyStarIntelInput
+import actor.starintel.wear.ui.applyStarIntelTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
-class ConfigActivity : Activity() {
+class ConfigActivity : StarIntelActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
 
         val repository = StarIntelRepository.get(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(dp(26), dp(22), dp(26), dp(28))
-            setBackgroundColor(Color.rgb(5, 7, 10))
+            setBackgroundColor(palette.background)
         }
 
         val title = TextView(this).apply {
-            text = "STARINTEL"
-            textSize = 20f
+            text = "STARINTEL SETTINGS"
+            textSize = 18f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(CYAN)
+            setTextColor(palette.accent)
             gravity = Gravity.CENTER
         }
         val recommendation = TextView(this).apply {
-            text = "Use the Android companion for easier setup. This screen is the on-watch fallback."
+            text = "Use the Android companion for easier setup. This is the on-watch fallback."
             textSize = 11f
-            setTextColor(MUTED)
+            setTextColor(palette.muted)
             gravity = Gravity.CENTER
         }
         val configState = TextView(this).apply {
@@ -64,43 +59,39 @@ class ConfigActivity : Activity() {
                 else -> "●  Configuration saved securely"
             }
             textSize = 12f
-            setTextColor(if (repository.hasApiKey() && repository.baseUrl().isNotBlank()) CYAN else MUTED)
+            setTextColor(if (repository.hasApiKey() && repository.baseUrl().isNotBlank()) palette.accent else palette.muted)
             gravity = Gravity.CENTER
         }
 
-        val serverUrlLabel = label("Server origin")
         val url = EditText(this).apply {
             setSingleLine(true)
             setText(repository.baseUrl())
             hint = "https://server.example"
             textSize = 13f
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.GRAY)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            applyStarIntelInput(palette)
         }
-        val apiKeyLabel = label("Private API key")
         val apiKey = EditText(this).apply {
             setSingleLine(true)
-            hint = if (repository.hasApiKey()) {
-                "Saved securely · leave blank to keep"
-            } else {
-                "star_sk_v1_…"
-            }
+            hint = if (repository.hasApiKey()) "Saved securely · leave blank to keep" else "star_sk_v1_…"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             transformationMethod = PasswordTransformationMethod.getInstance()
             textSize = 12f
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.GRAY)
+            applyStarIntelInput(palette)
         }
-        val save = Button(this).apply { text = "TEST + SAVE" }
+        val save = Button(this).apply {
+            text = "TEST + SAVE"
+            applyStarIntelTheme(palette)
+        }
         val forgetKey = Button(this).apply {
             text = "REMOVE SAVED KEY"
             isEnabled = repository.hasApiKey()
+            applyStarIntelTheme(palette)
         }
         val status = TextView(this).apply {
             text = "Changes are saved only after the authenticated test succeeds."
             textSize = 11f
-            setTextColor(MUTED)
+            setTextColor(palette.muted)
             gravity = Gravity.CENTER
         }
 
@@ -113,22 +104,22 @@ class ConfigActivity : Activity() {
 
             if (candidateUrl == null) {
                 status.text = if (BuildConfig.DEBUG) "Enter a valid server origin" else "Use a valid https:// server origin"
-                status.setTextColor(WARNING)
+                status.setTextColor(palette.warning)
                 return@setOnClickListener
             }
             if (candidateKey.isBlank() && !repository.hasApiKey()) {
                 status.text = "API key required"
-                status.setTextColor(WARNING)
+                status.setTextColor(palette.warning)
                 return@setOnClickListener
             }
             if (candidateKey.isNotBlank() && !CompanionConfigProtocol.validApiKey(candidateKey)) {
                 status.text = "Invalid star_sk_v1_… API key"
-                status.setTextColor(WARNING)
+                status.setTextColor(palette.warning)
                 return@setOnClickListener
             }
 
             status.text = "Testing authenticated connection…"
-            status.setTextColor(MUTED)
+            status.setTextColor(palette.muted)
             save.isEnabled = false
             forgetKey.isEnabled = false
             url.isEnabled = false
@@ -153,7 +144,7 @@ class ConfigActivity : Activity() {
                     )
                     if (!committed) {
                         status.text = "Could not save configuration securely"
-                        status.setTextColor(WARNING)
+                        status.setTextColor(palette.warning)
                         return@launch
                     }
 
@@ -161,14 +152,15 @@ class ConfigActivity : Activity() {
                     apiKey.hint = "Saved securely · leave blank to keep"
                     forgetKey.isEnabled = true
                     configState.text = "●  Configuration saved securely"
-                    configState.setTextColor(CYAN)
-                    status.text = "Authenticated · ${snapshot.documentsTotal} docs"
-                    status.setTextColor(CYAN)
-                    requestTileUpdates()
+                    configState.setTextColor(palette.accent)
+                    status.text = "Authenticated · ${snapshot.documentsTotal} docs · auto-sync on"
+                    status.setTextColor(palette.accent)
+                    StarIntelBackgroundSync.ensureScheduled(this@ConfigActivity)
+                    requestStarIntelTileUpdates(this@ConfigActivity)
                 } else {
                     val code = CompanionConfigProtocol.errorCode(snapshot.error)
                     status.text = CompanionConfigProtocol.safeDetail(code)
-                    status.setTextColor(WARNING)
+                    status.setTextColor(palette.warning)
                 }
             }
         }
@@ -176,7 +168,7 @@ class ConfigActivity : Activity() {
         forgetKey.setOnClickListener {
             AlertDialog.Builder(this)
                 .setTitle("Remove API key?")
-                .setMessage("StarIntel Tiles will stop refreshing until a new key is configured.")
+                .setMessage("StarIntel sync, Tiles, and search monitors will stop until a new key is configured.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Remove") { _, _ ->
                     val removed = runCatching {
@@ -185,18 +177,19 @@ class ConfigActivity : Activity() {
                     }.getOrDefault(false)
                     if (!removed) {
                         status.text = "Could not remove saved key"
-                        status.setTextColor(WARNING)
+                        status.setTextColor(palette.warning)
                         return@setPositiveButton
                     }
 
+                    StarIntelBackgroundSync.cancel(this)
                     apiKey.text.clear()
                     apiKey.hint = "star_sk_v1_…"
                     forgetKey.isEnabled = false
                     configState.text = "○  API key missing"
-                    configState.setTextColor(MUTED)
-                    status.text = "Saved key removed"
-                    status.setTextColor(MUTED)
-                    requestTileUpdates()
+                    configState.setTextColor(palette.muted)
+                    status.text = "Saved key removed · auto-sync stopped"
+                    status.setTextColor(palette.muted)
+                    requestStarIntelTileUpdates(this)
                 }
                 .show()
         }
@@ -204,9 +197,9 @@ class ConfigActivity : Activity() {
         root.addView(title, matchWrap())
         root.addView(recommendation, matchWrap(top = 5))
         root.addView(configState, matchWrap(top = 8))
-        root.addView(serverUrlLabel, matchWrap(top = 12))
+        root.addView(label("Server origin"), matchWrap(top = 12))
         root.addView(url, matchWrap(top = 2))
-        root.addView(apiKeyLabel, matchWrap(top = 8))
+        root.addView(label("Private API key"), matchWrap(top = 8))
         root.addView(apiKey, matchWrap(top = 2))
         root.addView(save, matchWrap(top = 8))
         root.addView(forgetKey, matchWrap(top = 3))
@@ -223,19 +216,10 @@ class ConfigActivity : Activity() {
         super.onDestroy()
     }
 
-    private fun requestTileUpdates() {
-        val updater = TileService.getUpdater(applicationContext)
-        updater.requestUpdate(OpsTileService::class.java)
-        updater.requestUpdate(TargetsTileService::class.java)
-        updater.requestUpdate(CorpusTileService::class.java)
-        updater.requestUpdate(ActivityTileService::class.java)
-        updater.requestUpdate(SearchTileService::class.java)
-    }
-
     private fun label(textValue: String) = TextView(this).apply {
         text = textValue
         textSize = 11f
-        setTextColor(MUTED)
+        setTextColor(palette.muted)
         gravity = Gravity.CENTER
     }
 
@@ -245,10 +229,4 @@ class ConfigActivity : Activity() {
     ).apply { topMargin = dp(top) }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
-
-    companion object {
-        private val CYAN = Color.rgb(0, 229, 255)
-        private val MUTED = Color.rgb(176, 187, 199)
-        private val WARNING = Color.rgb(255, 132, 132)
-    }
 }

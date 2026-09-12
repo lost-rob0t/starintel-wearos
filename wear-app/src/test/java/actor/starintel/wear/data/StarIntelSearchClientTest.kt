@@ -48,6 +48,32 @@ class StarIntelSearchClientTest {
     }
 
     @Test
+    fun parsesCanonicalV09NestedData() {
+        val result = parseSearchPayload(
+            """
+            {
+              "rows": [{
+                "id": "target:github:alice",
+                "doc": {
+                  "_id": "target:github:alice",
+                  "dtype": "target",
+                  "dataset": "investigation-a",
+                  "data": {
+                    "target": "alice",
+                    "actor": "user-hunt",
+                    "platform": "github"
+                  }
+                }
+              }]
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("alice", result.hits.single().title)
+        assertEquals("target · investigation-a · github · user-hunt", result.hits.single().secondary)
+    }
+
+    @Test
     fun missingRowsIsSafeEmptyResult() {
         val result = parseSearchPayload("{\"bookmark\":\"done\"}")
 

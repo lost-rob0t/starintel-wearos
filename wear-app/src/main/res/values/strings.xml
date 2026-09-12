@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">StarIntel</string>
+    <string name="search_app_name">StarIntel Search</string>
+    <string name="explorer_app_name">StarIntel Explorer</string>
+    <string name="targets_app_name">StarIntel Targets</string>
     <string name="graph_app_name">StarIntel Graph</string>
     <string name="tile_ops">StarIntel Ops</string>
     <string name="tile_targets">StarIntel Targets</string>
