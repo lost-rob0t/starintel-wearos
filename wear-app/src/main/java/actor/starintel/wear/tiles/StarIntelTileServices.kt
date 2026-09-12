@@ -12,13 +12,16 @@ import androidx.wear.protolayout.types.layoutString
 import androidx.wear.tiles.Material3TileService
 import androidx.wear.tiles.RequestBuilders.TileRequest
 import androidx.wear.tiles.TileBuilders.Tile
-import actor.starintel.wear.ConfigActivity
+import actor.starintel.wear.GraphActivity
+import actor.starintel.wear.MainActivity
+import actor.starintel.wear.data.ActivityHistoryStore
+import actor.starintel.wear.data.ActivityRange
 import actor.starintel.wear.data.StarIntelRepository
 import actor.starintel.wear.data.StarIntelSnapshot
 import actor.starintel.wear.data.ageLabel
 import actor.starintel.wear.data.compactCount
 
-enum class TileKind { OPS, TARGETS, CORPUS }
+enum class TileKind { OPS, TARGETS, CORPUS, ACTIVITY }
 
 data class TileCopy(
     val title: String,
@@ -32,11 +35,19 @@ abstract class StarIntelTileService(
 ) : Material3TileService() {
     override suspend fun MaterialScope.tileResponse(requestParams: TileRequest): Tile {
         val snapshot = StarIntelRepository.get(applicationContext).snapshot()
-        val copy = copyFor(kind, snapshot)
+        val activityLastHour = if (kind == TileKind.ACTIVITY) {
+            ActivityHistoryStore.get(applicationContext)
+                .points(ActivityRange.H1)
+                .sumOf { it.documentsAdded ?: 0L }
+        } else {
+            0L
+        }
+        val copy = copyFor(kind, snapshot, activityLastHour)
+        val destination = if (kind == TileKind.ACTIVITY) GraphActivity::class.java else MainActivity::class.java
         val pendingIntent = PendingIntent.getActivity(
             this@StarIntelTileService,
             kind.ordinal,
-            Intent(this@StarIntelTileService, ConfigActivity::class.java),
+            Intent(this@StarIntelTileService, destination),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val openApp = requestParams.scope.clickable(
@@ -65,7 +76,7 @@ abstract class StarIntelTileService(
             .build()
     }
 
-    private fun copyFor(kind: TileKind, data: StarIntelSnapshot): TileCopy {
+    private fun copyFor(kind: TileKind, data: StarIntelSnapshot, activityLastHour: Long): TileCopy {
         if (!data.configured) {
             return TileCopy("StarIntel", "SETUP", "Open the app", "server + private key")
         }
@@ -102,6 +113,13 @@ abstract class StarIntelTileService(
                     footer = if (data.reachable) data.ageLabel() else "cached",
                 )
             }
+
+            TileKind.ACTIVITY -> TileCopy(
+                title = "StarIntel · Activity",
+                primary = "+${activityLastHour.compactCount()}",
+                secondary = "docs · last 1h",
+                footer = if (data.reachable) data.ageLabel() else "cached history",
+            )
         }
     }
 
@@ -113,3 +131,4 @@ abstract class StarIntelTileService(
 class OpsTileService : StarIntelTileService(TileKind.OPS)
 class TargetsTileService : StarIntelTileService(TileKind.TARGETS)
 class CorpusTileService : StarIntelTileService(TileKind.CORPUS)
+class ActivityTileService : StarIntelTileService(TileKind.ACTIVITY)
