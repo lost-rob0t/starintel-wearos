@@ -14,6 +14,7 @@ import androidx.wear.tiles.RequestBuilders.TileRequest
 import androidx.wear.tiles.TileBuilders.Tile
 import actor.starintel.wear.GraphActivity
 import actor.starintel.wear.MainActivity
+import actor.starintel.wear.SearchActivity
 import actor.starintel.wear.data.ActivityHistoryStore
 import actor.starintel.wear.data.ActivityRange
 import actor.starintel.wear.data.StarIntelRepository
@@ -21,7 +22,7 @@ import actor.starintel.wear.data.StarIntelSnapshot
 import actor.starintel.wear.data.ageLabel
 import actor.starintel.wear.data.compactCount
 
-enum class TileKind { OPS, TARGETS, CORPUS, ACTIVITY }
+enum class TileKind { OPS, TARGETS, CORPUS, ACTIVITY, SEARCH }
 
 data class TileCopy(
     val title: String,
@@ -43,7 +44,12 @@ abstract class StarIntelTileService(
             0L
         }
         val copy = copyFor(kind, snapshot, activityLastHour)
-        val destination = if (kind == TileKind.ACTIVITY) GraphActivity::class.java else MainActivity::class.java
+        val destination = when {
+            !snapshot.configured -> MainActivity::class.java
+            kind == TileKind.ACTIVITY -> GraphActivity::class.java
+            kind == TileKind.SEARCH -> SearchActivity::class.java
+            else -> MainActivity::class.java
+        }
         val pendingIntent = PendingIntent.getActivity(
             this@StarIntelTileService,
             kind.ordinal,
@@ -120,6 +126,13 @@ abstract class StarIntelTileService(
                 secondary = "docs · last 1h",
                 footer = if (data.reachable) data.ageLabel() else "cached history",
             )
+
+            TileKind.SEARCH -> TileCopy(
+                title = "StarIntel · Search",
+                primary = "SEARCH",
+                secondary = "query the corpus",
+                footer = if (data.reachable) "server online" else "cached status · tap to open",
+            )
         }
     }
 
@@ -132,3 +145,4 @@ class OpsTileService : StarIntelTileService(TileKind.OPS)
 class TargetsTileService : StarIntelTileService(TileKind.TARGETS)
 class CorpusTileService : StarIntelTileService(TileKind.CORPUS)
 class ActivityTileService : StarIntelTileService(TileKind.ACTIVITY)
+class SearchTileService : StarIntelTileService(TileKind.SEARCH)
