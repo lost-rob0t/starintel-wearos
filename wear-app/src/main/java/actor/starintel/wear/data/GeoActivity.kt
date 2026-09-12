@@ -4,6 +4,7 @@ import android.content.Context
 import java.net.HttpURLConnection
 import java.net.URLEncoder
 import java.net.URL
+import java.security.MessageDigest
 import kotlin.math.floor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -141,7 +142,7 @@ class GeoActivityRepository private constructor(context: Context) {
             )
         }
 
-        val cached = loadCached(now)
+        val cached = loadCached(now, base, apiKey)
         if (!forceRefresh && cached != null && now - cached.fetchedAtMs < GEO_CACHE_MS) {
             return@withContext cached
         }
@@ -159,14 +160,16 @@ class GeoActivityRepository private constructor(context: Context) {
                 addAll(GeoActivityModel.parseSearchDocuments(search(base, apiKey, "dtype:address")))
             }
 
-            GeoActivitySnapshot(
+            val result = GeoActivitySnapshot(
                 configured = true,
                 reachable = true,
                 fetchedAtMs = now,
                 totalGeocodedDocuments = total,
                 sampledDocuments = coordinates.size,
                 buckets = GeoActivityModel.aggregate(coordinates),
-            ).also(::saveCached)
+            )
+            saveCached(result, base, apiKey)
+            result
         }.getOrElse { failure ->
             cached?.copy(
                 reachable = false,
@@ -206,7 +209,7 @@ class GeoActivityRepository private constructor(context: Context) {
         }
     }
 
-    private fun saveCached(snapshot: GeoActivitySnapshot) {
+    private fun saveCached(snapshot: GeoActivitySnapshot, base: String, apiKey: String) {
         val buckets = JSONArray()
         snapshot.buckets.forEach { bucket ->
             buckets.put(
@@ -219,6 +222,7 @@ class GeoActivityRepository private constructor(context: Context) {
 
         val root = JSONObject()
             .put("version", 1)
+            .put("scope", scopeFingerprint(base, apiKey))
             .put("fetched_at_ms", snapshot.fetchedAtMs)
             .put("total", snapshot.totalGeocodedDocuments)
             .put("sampled", snapshot.sampledDocuments)
@@ -226,10 +230,11 @@ class GeoActivityRepository private constructor(context: Context) {
         prefs.edit().putString(KEY_JSON, root.toString()).apply()
     }
 
-    private fun loadCached(now: Long): GeoActivitySnapshot? = runCatching {
+    private fun loadCached(now: Long, base: String, apiKey: String): GeoActivitySnapshot? = runCatching {
         val raw = prefs.getString(KEY_JSON, null) ?: return null
         val root = JSONObject(raw)
         if (root.optInt("version", 0) != 1) return null
+        if (root.optString("scope") != scopeFingerprint(base, apiKey)) return null
 
         val fetchedAt = root.optLong("fetched_at_ms", 0L)
         val bucketsJson = root.optJSONArray("buckets") ?: JSONArray()
@@ -255,6 +260,12 @@ class GeoActivityRepository private constructor(context: Context) {
             stale = fetchedAt <= 0L || now - fetchedAt > GEO_STALE_MS,
         )
     }.getOrNull()
+
+    private fun scopeFingerprint(base: String, apiKey: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest("$base\u0000$apiKey".toByteArray(Charsets.UTF_8))
+        return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
+    }
 
     companion object {
         private const val PREFS = "starintel_geo_activity"
