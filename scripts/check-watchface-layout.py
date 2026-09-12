@@ -15,7 +15,7 @@ SAFE_RADIUS = 212.0
 MIN_GAP = 6
 ARC_SAMPLE_DEGREES = 1
 FACES = {
-    "neon": Path("watchface/src/main/res/raw/watchface.xml"),
+    "neon": Path("watchface/src/neon/res/raw/watchface.xml"),
     "command": Path("watchface/src/command/res/raw/watchface.xml"),
     "terminal": Path("watchface/src/terminal/res/raw/watchface.xml"),
 }
