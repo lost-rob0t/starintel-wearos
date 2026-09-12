@@ -2,7 +2,7 @@ package actor.starintel.mobile
 
 import actor.starintel.update.UpdateFeed
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFails
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class UpdateFeedTest {
@@ -49,7 +49,7 @@ class UpdateFeedTest {
     @Test
     fun rejectsUnknownSchema() {
         val invalid = goodManifest.replace("\"schema\": 1", "\"schema\": 2")
-        assertFails { UpdateFeed.parse(invalid) }
+        assertThrows(IllegalArgumentException::class.java) { UpdateFeed.parse(invalid) }
     }
 
     @Test
@@ -58,7 +58,7 @@ class UpdateFeedTest {
             "https://example.invalid/starintel-phone.apk",
             "http://example.invalid/starintel-phone.apk",
         )
-        assertFails { UpdateFeed.parse(invalid) }
+        assertThrows(IllegalArgumentException::class.java) { UpdateFeed.parse(invalid) }
     }
 
     @Test
@@ -67,6 +67,6 @@ class UpdateFeedTest {
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "not-a-sha",
         )
-        assertFails { UpdateFeed.parse(invalid) }
+        assertThrows(IllegalArgumentException::class.java) { UpdateFeed.parse(invalid) }
     }
 }
