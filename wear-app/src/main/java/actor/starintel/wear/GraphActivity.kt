@@ -1,8 +1,6 @@
 package actor.starintel.wear
 
-import android.app.Activity
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -11,7 +9,6 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -21,13 +18,16 @@ import actor.starintel.wear.data.ActivityPoint
 import actor.starintel.wear.data.ActivityRange
 import actor.starintel.wear.data.StarIntelRepository
 import actor.starintel.wear.data.compactCount
+import actor.starintel.wear.ui.StarIntelActivity
+import actor.starintel.wear.ui.StarIntelPalette
+import actor.starintel.wear.ui.applyStarIntelTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
-class GraphActivity : Activity() {
+class GraphActivity : StarIntelActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var repository: StarIntelRepository
     private lateinit var history: ActivityHistoryStore
@@ -38,7 +38,6 @@ class GraphActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         repository = StarIntelRepository.get(this)
         history = ActivityHistoryStore.get(this)
 
@@ -46,26 +45,26 @@ class GraphActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(dp(18), dp(18), dp(18), dp(24))
-            setBackgroundColor(BACKGROUND)
+            setBackgroundColor(palette.background)
         }
 
         root.addView(TextView(this).apply {
             text = "ACTIVITY"
             textSize = 18f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(CYAN)
+            setTextColor(palette.accent)
             gravity = Gravity.CENTER
         }, matchWrap())
 
         status = TextView(this).apply {
             text = "Loading activity history…"
             textSize = 10f
-            setTextColor(MUTED)
+            setTextColor(palette.muted)
             gravity = Gravity.CENTER
         }
         root.addView(status, matchWrap(top = 4))
 
-        graph = ActivityGraphView(this)
+        graph = ActivityGraphView(this, palette)
         root.addView(graph, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             dp(210),
@@ -82,6 +81,7 @@ class GraphActivity : Activity() {
                 minWidth = 0
                 minimumWidth = 0
                 setPadding(0, 0, 0, 0)
+                applyStarIntelTheme(palette)
                 setOnClickListener {
                     range = candidate
                     renderHistory()
@@ -92,6 +92,7 @@ class GraphActivity : Activity() {
 
         refresh = Button(this).apply {
             text = "SYNC + REDRAW"
+            applyStarIntelTheme(palette)
             setOnClickListener { sync() }
         }
         root.addView(refresh, matchWrap(top = 5))
@@ -115,6 +116,7 @@ class GraphActivity : Activity() {
     private fun sync() {
         refresh.isEnabled = false
         status.text = "Syncing latest StarIntel stats…"
+        status.setTextColor(palette.muted)
         scope.launch {
             repository.snapshot(forceRefresh = true)
             renderHistory()
@@ -132,6 +134,7 @@ class GraphActivity : Activity() {
         } else {
             "${range.label} · +${total.compactCount()} docs · ${values.size} intervals"
         }
+        status.setTextColor(if (values.isEmpty()) palette.muted else palette.accent)
         graph.setData(points, range, nowSeconds)
     }
 
@@ -141,39 +144,36 @@ class GraphActivity : Activity() {
     ).apply { topMargin = dp(top) }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
-
-    companion object {
-        private val BACKGROUND = Color.rgb(5, 7, 10)
-        private val CYAN = Color.rgb(0, 229, 255)
-        private val MUTED = Color.rgb(176, 187, 199)
-    }
 }
 
-private class ActivityGraphView(context: android.content.Context) : View(context) {
+private class ActivityGraphView(
+    context: android.content.Context,
+    private val palette: StarIntelPalette,
+) : View(context) {
     private val density = resources.displayMetrics.density
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(31, 45, 52)
+        color = palette.surface
         strokeWidth = 1f * density
         style = Paint.Style.STROKE
     }
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(0, 229, 255)
+        color = palette.accent
         strokeWidth = 2f * density
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
     private val pointPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(176, 247, 255)
+        color = palette.accent
         style = Paint.Style.FILL
     }
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(176, 187, 199)
+        color = palette.muted
         textSize = 9f * density
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
     }
     private val emptyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(176, 187, 199)
+        color = palette.muted
         textSize = 11f * density
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
@@ -192,7 +192,7 @@ private class ActivityGraphView(context: android.content.Context) : View(context
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        canvas.drawColor(Color.rgb(5, 7, 10))
+        canvas.drawColor(palette.background)
 
         val plot = RectF(dp(24f), dp(10f), width - dp(10f), height - dp(28f))
         if (plot.width() <= 0f || plot.height() <= 0f) return
