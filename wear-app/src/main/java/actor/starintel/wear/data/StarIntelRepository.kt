@@ -29,23 +29,30 @@ class StarIntelRepository private constructor(context: Context) {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val apiKeyStore = ApiKeyStore(appContext)
+    private val activityHistory = ActivityHistoryStore.get(appContext)
 
     fun baseUrl(): String = prefs.getString(KEY_BASE_URL, "")?.trim().orEmpty()
 
     fun setBaseUrl(value: String) {
         val normalized = value.trim().trimEnd('/')
+        val changed = normalized != baseUrl()
         prefs.edit().putString(KEY_BASE_URL, normalized).apply()
+        if (changed) activityHistory.clear()
     }
 
     fun hasApiKey(): Boolean = apiKeyStore.hasValue()
 
     fun setApiKey(value: String) {
-        apiKeyStore.save(value.trim())
+        val normalized = value.trim()
+        val changed = normalized != apiKeyStore.read()
+        apiKeyStore.save(normalized)
+        if (changed) activityHistory.clear()
     }
 
     fun clearApiKey() {
         apiKeyStore.clear()
         prefs.edit().remove(KEY_STATS_JSON).remove(KEY_RECEIVED_AT).apply()
+        activityHistory.clear()
     }
 
     fun commitConfiguration(baseUrl: String, apiKey: String?): Boolean {
@@ -62,6 +69,9 @@ class StarIntelRepository private constructor(context: Context) {
                 "Could not persist server URL"
             }
             prefs.edit().remove(KEY_STATS_JSON).remove(KEY_RECEIVED_AT).apply()
+            if (normalizedBase != previousBase || (candidateKey != null && candidateKey != previousKey)) {
+                activityHistory.clear()
+            }
             true
         }.getOrElse {
             runCatching {
@@ -139,6 +149,7 @@ class StarIntelRepository private constructor(context: Context) {
                 .putString(KEY_STATS_JSON, raw)
                 .putLong(KEY_RECEIVED_AT, now)
                 .apply()
+            activityHistory.record(parsed)
             parsed
         }.getOrElse { failure ->
             cached?.copy(
