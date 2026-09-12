@@ -172,13 +172,26 @@
             '';
           };
 
+          updateStarIntel = pkgs.writeShellApplication {
+            name = "starintel-update";
+            runtimeInputs = [ pkgs.bash pkgs.git pkgs.nix pkgs.coreutils pkgs.gawk ];
+            text = ''
+              if [[ ! -f scripts/update-starintel.sh ]]; then
+                echo "error: run this from the starintel-wearos repository root" >&2
+                exit 2
+              fi
+
+              exec bash scripts/update-starintel.sh "$@"
+            '';
+          };
+
           toolchain = pkgs.buildEnv {
             name = "starintel-wearos-android-toolchain";
             paths = [ jdk gradle androidSdk pkgs.python3 ];
           };
         in
         {
-          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildWear buildWatchface buildAll checkAll pairAndroid pairWatch installPhone installWatch;
+          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildWear buildWatchface buildAll checkAll pairAndroid pairWatch installPhone installWatch updateStarIntel;
         };
     in
     {
@@ -230,6 +243,10 @@
             type = "app";
             program = "${e.installWatch}/bin/starintel-install-watch";
           };
+          update = {
+            type = "app";
+            program = "${e.updateStarIntel}/bin/starintel-update";
+          };
           default = {
             type = "app";
             program = "${e.buildAll}/bin/starintel-build-all";
@@ -240,7 +257,7 @@
         let e = mkEnv system;
         in {
           default = e.pkgs.mkShell {
-            packages = [ e.jdk e.gradle e.androidSdk e.pkgs.qrencode e.pkgs.python3 ];
+            packages = [ e.jdk e.gradle e.androidSdk e.pkgs.qrencode e.pkgs.python3 e.pkgs.git ];
 
             ANDROID_HOME = "${e.androidSdk}/libexec/android-sdk";
             ANDROID_SDK_ROOT = "${e.androidSdk}/libexec/android-sdk";
