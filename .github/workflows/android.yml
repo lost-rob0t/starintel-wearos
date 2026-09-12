@@ -59,17 +59,19 @@ jobs:
           bash -n scripts/test-pair-android-qr.sh
           bash -n scripts/pair-watch.sh
           bash -n scripts/install-phone.sh
+          bash -n scripts/install-watch.sh
           bash -n scripts/verify-companion-signing.sh
           bash scripts/test-pair-android-qr.sh
           nix run --no-update-lock-file .#pair-android -- --help
           nix run --no-update-lock-file .#pair-watch -- --help
           nix run --no-update-lock-file .#install-phone -- --help
+          nix run --no-update-lock-file .#install-watch -- --help
           nix run --no-update-lock-file .#pair-android -- --reset-adb
           nix run --no-update-lock-file .#pair-android -- --diagnose
       - name: Build all APKs through Nix
         run: nix run --no-update-lock-file .#build-all
       - name: Verify Nix companion signer parity
-        run: bash scripts/verify-companion-signing.sh build/nix/phone-app-debug.apk build/nix/wear-app-debug.apk
+        run: nix develop --no-update-lock-file --command bash scripts/verify-companion-signing.sh build/nix/phone-app-debug.apk build/nix/wear-app-debug.apk
       - name: Verify lock did not drift
         run: git diff --exit-code -- flake.lock
       - name: Verify Nix-staged APKs
