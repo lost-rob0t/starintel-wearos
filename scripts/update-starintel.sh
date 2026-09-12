@@ -14,8 +14,9 @@ Source modes:
   --source master     Track the remote master branch. If this repository has no
                       master branch, follow the remote default branch (currently main).
   --source main       Track refs/heads/main explicitly.
-  --source tagged     Install the highest version-like tag.
-  --source tag:NAME   Install exactly NAME.
+  --source tagged     Install the highest stable version tag (v1.2.3-style).
+                      Rolling/non-version tags such as master-channel are ignored.
+  --source tag:NAME   Install exactly NAME, including an intentional prerelease tag.
   --tag NAME          Alias for --source tag:NAME.
   --latest-tag        Alias for --source tagged.
 
@@ -43,7 +44,7 @@ Environment:
 Examples:
   nix run .#update -- --source master --watch 10.50.50.69:5555
   nix run .#update -- --latest-tag --watch 10.50.50.69:5555
-  nix run .#update -- --tag v0.2.0 --watch 10.50.50.69:5555
+  nix run .#update -- --tag v0.2.0-rc1 --watch 10.50.50.69:5555
   nix run .#update -- --check --source master
 EOF
 }
@@ -129,7 +130,7 @@ while (($#)); do
   esac
 done
 
-for command in git mktemp awk sort tail date; do
+for command in git mktemp awk sort tail date grep; do
   command -v "$command" >/dev/null 2>&1 || {
     echo "error: required command is missing: $command" >&2
     exit 1
@@ -142,6 +143,10 @@ list_remote_tags() {
     | sort -V
 }
 
+list_stable_version_tags() {
+  list_remote_tags | grep -E '^[vV]?[0-9]+(\.[0-9]+){1,3}$' || true
+}
+
 if ((list_tags)); then
   list_remote_tags
   exit 0
@@ -149,7 +154,7 @@ fi
 
 validate_tag() {
   local candidate="$1"
-  if [[ -z "$candidate" || ! "$candidate" =~ ^[A-Za-z0-9][A-Za-z0-9._/+~-]*$ ]]; then
+  if [[ -z "$candidate" || ! "$candidate" =~ ^[A-Za-z0-9][A-Za-z0-9._+~-]*$ ]]; then
     echo "error: invalid tag name: $candidate" >&2
     exit 2
   fi
@@ -186,9 +191,9 @@ case "$source_mode" in
     ;;
   tagged)
     resolved_kind="tag"
-    resolved_name="$(list_remote_tags | tail -n 1)"
+    resolved_name="$(list_stable_version_tags | tail -n 1)"
     if [[ -z "$resolved_name" ]]; then
-      echo "error: no tags exist on update remote" >&2
+      echo "error: no stable version tags exist on update remote" >&2
       exit 1
     fi
     ;;
