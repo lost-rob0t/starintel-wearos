@@ -1,0 +1,173 @@
+name: Update Releases
+
+on:
+  push:
+    branches: [main]
+    tags: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-update:
+    runs-on: ubuntu-latest
+    env:
+      SIGNING_B64: ${{ secrets.STARINTEL_UPDATE_KEYSTORE_B64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.STARINTEL_UPDATE_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.STARINTEL_UPDATE_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.STARINTEL_UPDATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check update signing configuration
+        id: signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$SIGNING_B64" || -z "$KEYSTORE_PASSWORD" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Update release publishing skipped: configure STARINTEL_UPDATE_KEYSTORE_B64, STARINTEL_UPDATE_KEYSTORE_PASSWORD, STARINTEL_UPDATE_KEY_ALIAS, and STARINTEL_UPDATE_KEY_PASSWORD."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: cachix/install-nix-action@v31
+        if: steps.signing.outputs.ready == 'true'
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: android-actions/setup-android@v3
+        if: steps.signing.outputs.ready == 'true'
+
+      - name: Install APK signature verifier
+        if: steps.signing.outputs.ready == 'true'
+        run: yes | sdkmanager "build-tools;36.0.0"
+
+      - name: Resolve update channel metadata
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_code=$((1000000 + GITHUB_RUN_NUMBER))
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            if [[ ! "$GITHUB_REF_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._+~-]*$ ]]; then
+              echo "error: update tags must use [A-Za-z0-9._+~-] so release URLs remain canonical" >&2
+              exit 2
+            fi
+            channel="tagged"
+            release_tag="$GITHUB_REF_NAME"
+            source_ref="$GITHUB_REF_NAME"
+            version_name="${GITHUB_REF_NAME#v}"
+          else
+            channel="master"
+            release_tag="master-channel"
+            source_ref="main"
+            version_name="0.1.0-master.${GITHUB_SHA:0:10}"
+          fi
+          {
+            echo "STARINTEL_UPDATE_CHANNEL=$channel"
+            echo "STARINTEL_RELEASE_TAG=$release_tag"
+            echo "STARINTEL_SOURCE_REF=$source_ref"
+            echo "STARINTEL_VERSION_CODE=$version_code"
+            echo "STARINTEL_VERSION_NAME=$version_name"
+            echo "STARINTEL_SOURCE_COMMIT=$GITHUB_SHA"
+          } >> "$GITHUB_ENV"
+
+      - name: Restore persistent Android signing key
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/starintel-update.jks"
+          printf '%s' "$SIGNING_B64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          {
+            echo "STARINTEL_KEYSTORE_FILE=$keystore"
+            echo "STARINTEL_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "STARINTEL_KEY_ALIAS=$KEY_ALIAS"
+            echo "STARINTEL_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Build signed update set through Nix
+        if: steps.signing.outputs.ready == 'true'
+        run: nix run --no-update-lock-file .#build-all
+
+      - name: Verify one signing identity across the update set
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          phone_cert="$($apksigner verify --print-certs build/nix/phone-app-debug.apk | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print $2; exit}')"
+          wear_cert="$($apksigner verify --print-certs build/nix/wear-app-debug.apk | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print $2; exit}')"
+          face_cert="$($apksigner verify --print-certs build/nix/watchface-debug.apk | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print $2; exit}')"
+          [[ -n "$phone_cert" && "$phone_cert" == "$wear_cert" && "$phone_cert" == "$face_cert" ]] || {
+            echo "error: update APK signing identities differ" >&2
+            exit 1
+          }
+          echo "Signing certificate: $phone_cert"
+
+      - name: Generate checksum-pinned update feed
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/generate-update-manifest.py \
+            --channel "$STARINTEL_UPDATE_CHANNEL" \
+            --ref "$STARINTEL_SOURCE_REF" \
+            --commit "$STARINTEL_SOURCE_COMMIT" \
+            --version-code "$STARINTEL_VERSION_CODE" \
+            --version-name "$STARINTEL_VERSION_NAME" \
+            --release-tag "$STARINTEL_RELEASE_TAG"
+          cp build/nix/phone-app-debug.apk build/nix/starintel-phone.apk
+          cp build/nix/wear-app-debug.apk build/nix/starintel-wear.apk
+          cp build/nix/watchface-debug.apk build/nix/starintel-watchface.apk
+          python3 -m json.tool build/nix/update.json >/dev/null
+
+      - name: Move rolling master channel tag
+        if: steps.signing.outputs.ready == 'true' && env.STARINTEL_UPDATE_CHANNEL == 'master'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git tag -f master-channel "$GITHUB_SHA"
+          git push --force origin refs/tags/master-channel
+
+      - name: Ensure GitHub release exists
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$STARINTEL_RELEASE_TAG" >/dev/null 2>&1; then
+            exit 0
+          fi
+          if [[ "$STARINTEL_UPDATE_CHANNEL" == "master" ]]; then
+            gh release create "$STARINTEL_RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "StarIntel master channel" \
+              --notes "Rolling signed StarIntel Wear OS development channel." \
+              --prerelease
+          else
+            gh release create "$STARINTEL_RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$STARINTEL_RELEASE_TAG" \
+              --generate-notes
+          fi
+
+      - name: Publish signed APKs and update manifest
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$STARINTEL_RELEASE_TAG" \
+            build/nix/update.json \
+            build/nix/starintel-phone.apk \
+            build/nix/starintel-wear.apk \
+            build/nix/starintel-watchface.apk \
+            --clobber
