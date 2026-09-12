@@ -19,11 +19,11 @@ class SlotCatalogTest {
     }
 
     @Test
-    fun sideSlotsAreRealRangedValueSlots() {
+    fun sideSlotsAcceptTextAndRangedProvidersWithoutInventingConversions() {
         val sides = listOf(SlotCatalog.leftEdge, SlotCatalog.rightEdge)
-        assertTrue(sides.all { it.family == SlotFamily.CURVED_RANGED })
+        assertTrue(sides.all { it.family == SlotFamily.CURVED })
+        assertTrue(sides.all { SlotDataType.SHORT_TEXT in it.supportedTypes })
         assertTrue(sides.all { SlotDataType.RANGED_VALUE in it.supportedTypes })
-        assertTrue(sides.all { SlotDataType.SHORT_TEXT !in it.supportedTypes })
     }
 
     @Test

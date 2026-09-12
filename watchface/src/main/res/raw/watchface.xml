@@ -37,7 +37,7 @@
         <ComplicationSlot
             slotId="4"
             displayName="@string/slot_left_edge"
-            supportedTypes="RANGED_VALUE EMPTY"
+            supportedTypes="SHORT_TEXT RANGED_VALUE EMPTY"
             x="0" y="0" width="450" height="450">
             <BoundingArc
                 centerX="225" centerY="225" width="410" height="410"
@@ -47,6 +47,15 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
+            <Complication type="SHORT_TEXT">
+                <PartText x="12" y="190" width="84" height="70">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#00E5FF">
+                            <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
             <Complication type="RANGED_VALUE">
                 <PartDraw x="0" y="0" width="450" height="450">
                     <Arc
@@ -58,6 +67,13 @@
                         <Stroke color="#00E5FF" thickness="10" cap="ROUND" />
                     </Arc>
                 </PartDraw>
+                <PartText x="12" y="190" width="84" height="70">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#F7FBFF">
+                            <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>
@@ -65,7 +81,7 @@
         <ComplicationSlot
             slotId="5"
             displayName="@string/slot_right_edge"
-            supportedTypes="RANGED_VALUE EMPTY"
+            supportedTypes="SHORT_TEXT RANGED_VALUE EMPTY"
             x="0" y="0" width="450" height="450">
             <BoundingArc
                 centerX="225" centerY="225" width="410" height="410"
@@ -75,6 +91,15 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
+            <Complication type="SHORT_TEXT">
+                <PartText x="354" y="190" width="84" height="70">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#B388FF">
+                            <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
             <Complication type="RANGED_VALUE">
                 <PartDraw x="0" y="0" width="450" height="450">
                     <Arc
@@ -86,6 +111,13 @@
                         <Stroke color="#B388FF" thickness="10" cap="ROUND" />
                     </Arc>
                 </PartDraw>
+                <PartText x="354" y="190" width="84" height="70">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#F7FBFF">
+                            <Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>
