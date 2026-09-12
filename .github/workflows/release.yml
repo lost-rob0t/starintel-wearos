@@ -59,13 +59,25 @@ jobs:
         run: |
           set -euo pipefail
           expected="${VERSION#v}"
+          codes=()
           for module in phone-app wear-app watchface; do
-            actual="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' "$module/build.gradle.kts")"
+            file="$module/build.gradle.kts"
+            actual="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' "$file")"
+            code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' "$file")"
             if [[ "$actual" != "$expected" ]]; then
               echo "error: $module versionName=$actual, tag expects $expected" >&2
               exit 1
             fi
+            if [[ -z "$code" ]]; then
+              echo "error: could not read $module versionCode" >&2
+              exit 1
+            fi
+            codes+=("$code")
           done
+          if [[ "${codes[0]}" != "${codes[1]}" || "${codes[0]}" != "${codes[2]}" ]]; then
+            echo "error: versionCode mismatch: ${codes[*]}" >&2
+            exit 1
+          fi
 
       - name: Evaluate pinned Nix flake
         run: nix flake check --no-update-lock-file --show-trace
@@ -81,7 +93,23 @@ jobs:
         run: |
           python3 scripts/check-watchface-slot-contract.py
           python3 scripts/check-watchface-themes.py
-          python3 scripts/check-watchface-round-bounds.py
+          python3 scripts/check-watchface-round-bounds.py watchface/src/main/res/raw/watchface.xml
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build WFF validator
+        run: |
+          git clone --depth 1 https://github.com/google/watchface.git /tmp/google-watchface
+          cd /tmp/google-watchface/third_party/wff
+          ./gradlew :specification:validator:executable-jar
+
+      - name: Validate WFF v1
+        run: |
+          java -jar /tmp/google-watchface/third_party/wff/specification/validator/build/libs/wff-validator.jar \
+            1 watchface/src/main/res/raw/watchface.xml
 
       - name: Build all installable APKs through Nix
         run: nix run --no-update-lock-file .#build-all
@@ -99,6 +127,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          commit="$(git rev-parse HEAD)"
           mkdir -p dist
           cp build/nix/phone-app-debug.apk "dist/starintel-phone-${VERSION}.apk"
           cp build/nix/wear-app-debug.apk "dist/starintel-wear-${VERSION}.apk"
@@ -107,7 +136,7 @@ jobs:
             cd dist
             sha256sum ./*.apk > SHA256SUMS
             printf 'version=%s\ncommit=%s\nbuild=nix run --no-update-lock-file .#build-all\n' \
-              "$VERSION" "$GITHUB_SHA" > RELEASE-MANIFEST.txt
+              "$VERSION" "$commit" > RELEASE-MANIFEST.txt
             zip -9 "starintel-wearos-${VERSION}-apks.zip" ./*.apk SHA256SUMS RELEASE-MANIFEST.txt
           )
 
