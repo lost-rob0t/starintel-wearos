@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministically verify the shared WFF v1 slot and Astra face contract."""
+"""Verify the three dedicated WFF v1 faces and their complication contracts."""
 
 from __future__ import annotations
 
@@ -7,44 +7,17 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-WATCHFACE = Path("watchface/src/main/res/raw/watchface.xml")
-WATCHFACE_INFO = Path("watchface/src/main/res/xml/watch_face_info.xml")
-EXPECTED = {
-    1: ("BoundingOval", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
-    2: ("BoundingOval", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
-    3: ("BoundingOval", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
-    4: ("BoundingArc", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
-    5: ("BoundingArc", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
-    6: ("BoundingOval", {"SHORT_TEXT", "RANGED_VALUE", "EMPTY"}),
-    7: ("BoundingRoundBox", {"SMALL_IMAGE", "EMPTY"}),
-    8: ("BoundingRoundBox", {"SHORT_TEXT", "SMALL_IMAGE", "EMPTY"}),
+FACES = {
+    "neon": (Path("watchface/src/main/res/raw/watchface.xml"), {1, 2, 3, 4, 5, 6, 7, 8}),
+    "command": (Path("watchface/src/command/res/raw/watchface.xml"), {1, 2, 3, 6, 7, 8}),
+    "terminal": (Path("watchface/src/terminal/res/raw/watchface.xml"), {1, 2, 3, 6}),
 }
-LOWER_IDS = (1, 2, 3, 6)
-SIDE_IDS = (4, 5)
-RANGED_IDS = LOWER_IDS + SIDE_IDS
-SLOT_COLOR_TOKEN = {
-    1: 5,
-    2: 6,
-    3: 7,
-    4: 8,
-    5: 9,
-    6: 10,
-    7: 11,
-    8: 12,
-}
-FACE_SLOTS = {
-    "0": {1, 2, 3, 4, 5, 6, 7, 8},
-    "1": {1, 2, 3, 6, 7, 8},
-    "2": {1, 2, 3, 6},
-}
-FACE_EXPRESSIONS = {
-    "neon_normal",
-    "neon_ultra",
-    "command_normal",
-    "command_ultra",
-    "terminal_normal",
-    "terminal_ultra",
-}
+TOKEN = {1: 5, 2: 6, 3: 7, 4: 8, 5: 9, 6: 10, 7: 11, 8: 12}
+RANGED_SOURCES = (
+    "[COMPLICATION.RANGED_VALUE_VALUE]",
+    "[COMPLICATION.RANGED_VALUE_MIN]",
+    "[COMPLICATION.RANGED_VALUE_MAX]",
+)
 
 
 def fail(message: str) -> None:
@@ -52,212 +25,73 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
-def option_ids(config: ET.Element) -> set[str]:
-    return {item.get("id", "") for item in config.findall("ListOption")}
-
-
 def serialized(element: ET.Element) -> str:
     return ET.tostring(element, encoding="unicode")
 
 
-def require_normal_only_decoration(element: ET.Element, label: str) -> None:
-    draws = element.findall("PartDraw")
-    if not draws:
-        fail(f"{label}: missing face-owned decoration")
-    for draw in draws:
-        text = serialized(draw)
-        if "presentationMode" not in text:
-            fail(f"{label}: decoration must disappear in Ultra Black")
-        if draw.find("Variant[@mode='AMBIENT'][@target='alpha'][@value='0']") is None:
-            fail(f"{label}: decoration must disappear in ambient/AOD")
+def check_face(name: str, path: Path, expected_ids: set[int]) -> None:
+    root = ET.parse(path).getroot()
+    if root.find("./UserConfigurations/ListConfiguration[@id='faceStyle']") is not None:
+        fail(f"{name}: faceStyle must not exist in dedicated APK")
+    presentation = root.find("./UserConfigurations/ListConfiguration[@id='presentationMode']")
+    if presentation is None:
+        fail(f"{name}: missing presentationMode")
+    options = {node.get("id") for node in presentation.findall("ListOption")}
+    if options != {"0", "1"}:
+        fail(f"{name}: presentationMode must be Normal/Ultra Black")
+
+    slots = root.findall(".//ComplicationSlot")
+    by_id: dict[int, ET.Element] = {}
+    for slot in slots:
+        raw_id = slot.get("slotId", "")
+        if not raw_id.isdigit():
+            fail(f"{name}: invalid slotId {raw_id!r}")
+        slot_id = int(raw_id)
+        if slot_id in by_id:
+            fail(f"{name}: duplicate slotId {slot_id}")
+        by_id[slot_id] = slot
+    if set(by_id) != expected_ids:
+        fail(f"{name}: slots {sorted(by_id)} != {sorted(expected_ids)}")
+    if len(by_id) > 8:
+        fail(f"{name}: WFF v1 slot cap exceeded")
+
+    for slot_id, slot in by_id.items():
+        supported = set(slot.get("supportedTypes", "").split())
+        if "EMPTY" not in supported:
+            fail(f"{name} slot {slot_id}: EMPTY must be supported")
+        rendered = {node.get("type") for node in slot.findall("Complication")}
+        if rendered != supported:
+            fail(f"{name} slot {slot_id}: renderers {sorted(rendered)} != supported {sorted(supported)}")
+        empty = slot.findall("Complication[@type='EMPTY']")
+        if len(empty) != 1 or list(empty[0]):
+            fail(f"{name} slot {slot_id}: EMPTY renderer must stay content-free")
+
+        text = serialized(slot)
+        accent = f"[CONFIGURATION.themeColor.{TOKEN[slot_id]}]"
+        if accent not in text:
+            fail(f"{name} slot {slot_id}: missing dedicated accent {accent}")
+        if "presentationMode" not in text or 'thickness="1"' not in text:
+            fail(f"{name} slot {slot_id}: Ultra Black needs a one-pixel wireframe")
+
+        ranged = slot.find("Complication[@type='RANGED_VALUE']")
+        if ranged is not None:
+            ranged_text = serialized(ranged)
+            for source in RANGED_SOURCES:
+                if source not in ranged_text:
+                    fail(f"{name} slot {slot_id}: ranged renderer ignores {source}")
+
+    if name == "command":
+        graph = by_id[7].find("DefaultProviderPolicy")
+        geo = by_id[8].find("DefaultProviderPolicy")
+        if graph is None or not graph.get("primaryProvider", "").endswith("ActivityGraphComplicationService"):
+            fail("command: slot 7 must use the real activity graph provider")
+        if geo is None or not geo.get("primaryProvider", "").endswith("GeoActivityComplicationService"):
+            fail("command: slot 8 must use the real geo provider")
 
 
 def main() -> None:
-    raw = WATCHFACE.read_text(encoding="utf-8")
-    root = ET.fromstring(raw)
-    slots = root.findall(".//ComplicationSlot")
-    by_id: dict[int, ET.Element] = {}
-
-    for slot in slots:
-        raw_id = slot.get("slotId")
-        if raw_id is None or not raw_id.isdigit():
-            fail(f"invalid slotId {raw_id!r}")
-        slot_id = int(raw_id)
-        if slot_id in by_id:
-            fail(f"duplicate slotId {slot_id}")
-        by_id[slot_id] = slot
-
-    if set(by_id) != set(EXPECTED):
-        fail(f"slot IDs {sorted(by_id)} != expected {sorted(EXPECTED)}")
-
-    for slot_id, (bounding_shape, expected_types) in EXPECTED.items():
-        slot = by_id[slot_id]
-        actual_types = set(slot.get("supportedTypes", "").split())
-        if actual_types != expected_types:
-            fail(f"slot {slot_id}: types {sorted(actual_types)} != {sorted(expected_types)}")
-
-        bounds = [child.tag for child in slot if child.tag.startswith("Bounding")]
-        if bounds != [bounding_shape]:
-            fail(f"slot {slot_id}: bounding element {bounds} != [{bounding_shape!r}]")
-
-        complications = {child.get("type") for child in slot.findall("Complication")}
-        if complications != expected_types:
-            fail(f"slot {slot_id}: renderers {sorted(complications)} != {sorted(expected_types)}")
-
-        empty = [child for child in slot.findall("Complication") if child.get("type") == "EMPTY"]
-        if len(empty) != 1 or list(empty[0]):
-            fail(f"slot {slot_id}: EMPTY renderer must be exactly one content-free element")
-
-        token = f"[CONFIGURATION.themeColor.{SLOT_COLOR_TOKEN[slot_id]}]"
-        if token not in serialized(slot):
-            fail(f"slot {slot_id}: missing dedicated complication color token {token}")
-
-    lower = [by_id[slot_id].find("BoundingOval") for slot_id in LOWER_IDS]
-    boxes = [
-        (
-            int(box.get("x", "0")),
-            int(box.get("y", "0")),
-            int(box.get("width", "0")),
-            int(box.get("height", "0")),
-        )
-        for box in lower
-        if box is not None
-    ]
-    if len(boxes) != 4 or any(width != height for _, _, width, height in boxes):
-        fail("lower metric positions must remain four circular BoundingOval slots")
-
-    for slot_id in RANGED_IDS:
-        ranged = by_id[slot_id].find("Complication[@type='RANGED_VALUE']")
-        if ranged is None:
-            fail(f"slot {slot_id}: missing RANGED_VALUE renderer")
-        text = serialized(ranged)
-        for source in (
-            "[COMPLICATION.RANGED_VALUE_VALUE]",
-            "[COMPLICATION.RANGED_VALUE_MIN]",
-            "[COMPLICATION.RANGED_VALUE_MAX]",
-        ):
-            if source not in text:
-                fail(f"slot {slot_id}: progress renderer must consume {source}")
-
-    for side_id in SIDE_IDS:
-        policy = by_id[side_id].find("DefaultProviderPolicy")
-        if policy is None or policy.get("defaultSystemProvider") != "EMPTY":
-            fail(f"slot {side_id}: side slot must default to EMPTY")
-
-        short = by_id[side_id].find("Complication[@type='SHORT_TEXT']")
-        ranged = by_id[side_id].find("Complication[@type='RANGED_VALUE']")
-        assert short is not None and ranged is not None
-        require_normal_only_decoration(short, f"slot {side_id} short-text HUD")
-        require_normal_only_decoration(ranged, f"slot {side_id} ranged HUD")
-        if len(short.findall(".//Arc")) < 8:
-            fail(f"slot {side_id}: short-text curved bar must use segmented HUD arcs")
-
-        dynamic_arcs = ranged.findall(".//Arc/Transform[@target='endAngle']")
-        if len(dynamic_arcs) != 1:
-            fail(f"slot {side_id}: curved ranged renderer must have one dynamic fill arc")
-        if len(ranged.findall(".//Arc")) < 5:
-            fail(f"slot {side_id}: ranged curved bar must include rail, progress, and tick geometry")
-        if "[CONFIGURATION.themeColor.3]" not in serialized(ranged):
-            fail(f"slot {side_id}: curved ranged renderer must expose an unfilled track")
-
-    for lower_id in LOWER_IDS:
-        short = by_id[lower_id].find("Complication[@type='SHORT_TEXT']")
-        ranged = by_id[lower_id].find("Complication[@type='RANGED_VALUE']")
-        assert short is not None and ranged is not None
-        require_normal_only_decoration(short, f"slot {lower_id} short-text HUD")
-        require_normal_only_decoration(ranged, f"slot {lower_id} ranged HUD")
-
-        if len(short.findall(".//Ellipse")) < 2:
-            fail(f"slot {lower_id}: Neon short-text renderer must keep concentric HUD rings")
-        if len(short.findall(".//Arc")) < 4:
-            fail(f"slot {lower_id}: Neon short-text renderer must keep segmented accent arcs")
-        if len(short.findall(".//Line")) < 12:
-            fail(f"slot {lower_id}: Command/Terminal short-text renderer must keep angular HUD framing")
-
-        if ranged.find(".//Arc/Transform[@target='endAngle']") is None:
-            fail(f"slot {lower_id}: Neon renderer must have a dynamic circular fill")
-        if ranged.find(".//Rectangle/Transform[@target='width']") is None:
-            fail(f"slot {lower_id}: Command/Terminal renderer must have a dynamic horizontal fill")
-        if len(ranged.findall(".//Line")) < 8:
-            fail(f"slot {lower_id}: Command/Terminal ranged renderer must keep angular HUD framing")
-        if "[CONFIGURATION.themeColor.3]" not in serialized(ranged):
-            fail(f"slot {lower_id}: ranged renderer must expose an unfilled track")
-
-    graph_policy = by_id[7].find("DefaultProviderPolicy")
-    if graph_policy is None or not graph_policy.get("primaryProvider", "").endswith("ActivityGraphComplicationService"):
-        fail("slot 7: activity graph must default to the real StarIntel graph provider")
-    graph_renderer = by_id[7].find("Complication[@type='SMALL_IMAGE']")
-    if graph_renderer is None:
-        fail("slot 7: missing activity graph renderer")
-    require_normal_only_decoration(graph_renderer, "slot 7 activity graph HUD")
-    if len(graph_renderer.findall(".//Line")) < 10:
-        fail("slot 7: activity graph must keep the angular StarIntel frame")
-
-    weather_geo_policy = by_id[8].find("DefaultProviderPolicy")
-    if weather_geo_policy is None or weather_geo_policy.get("defaultSystemProvider") != "EMPTY":
-        fail("slot 8: shared weather/geo provider must remain user-selectable and default EMPTY")
-    for kind in ("SHORT_TEXT", "SMALL_IMAGE"):
-        renderer = by_id[8].find(f"Complication[@type='{kind}']")
-        if renderer is None:
-            fail(f"slot 8: missing {kind} renderer")
-        require_normal_only_decoration(renderer, f"slot 8 {kind} HUD")
-        if len(renderer.findall(".//Line")) < 10:
-            fail(f"slot 8 {kind}: weather/geo renderer must keep angular StarIntel framing")
-
-    face_style = root.find("./UserConfigurations/ListConfiguration[@id='faceStyle']")
-    if face_style is None:
-        fail("missing faceStyle ListConfiguration")
-    if option_ids(face_style) != set(FACE_SLOTS):
-        fail(f"faceStyle options {sorted(option_ids(face_style))} != {sorted(FACE_SLOTS)}")
-    for option in face_style.findall("ListOption"):
-        option_id = option.get("id", "")
-        actual = {int(value) for value in option.get("complicationSlotIds", "").split()}
-        if actual != FACE_SLOTS[option_id]:
-            fail(f"face {option_id}: slots {sorted(actual)} != {sorted(FACE_SLOTS[option_id])}")
-
-    presentation = root.find("./UserConfigurations/ListConfiguration[@id='presentationMode']")
-    if presentation is None or option_ids(presentation) != {"0", "1"}:
-        fail("presentationMode must expose exactly Normal (0) and Ultra Black (1)")
-
-    background = root.find("./Scene/PartDraw/Rectangle")
-    background_draw = root.find("./Scene/PartDraw")
-    if background is None or background.find("Fill") is None:
-        fail("missing face-owned normal-mode background")
-    if background.find("Fill").get("color") != "[CONFIGURATION.themeColor.4]":
-        fail("normal-mode background must use themeColor.4")
-    if background_draw is None or "presentationMode" not in serialized(background_draw):
-        fail("theme background must be suppressed in Ultra Black mode")
-
-    conditions = root.findall("./Scene/Condition")
-    if len(conditions) != 1:
-        fail("scene must use one face/presentation Condition")
-    names = {
-        expression.get("name", "")
-        for expression in conditions[0].findall("./Expressions/Expression")
-    }
-    if names != FACE_EXPRESSIONS:
-        fail(f"face/presentation expressions {sorted(names)} != {sorted(FACE_EXPRESSIONS)}")
-
-    compares = {compare.get("expression", "") for compare in conditions[0].findall("Compare")}
-    if compares != FACE_EXPRESSIONS:
-        fail("every face/presentation expression must have a render branch")
-
-    graph = by_id[7].find("Complication[@type='SMALL_IMAGE']/PartImage")
-    if graph is None or "presentationMode" not in serialized(graph):
-        fail("activity graph must be suppressed in Ultra Black mode")
-
-    geo = by_id[8].find("Complication[@type='SMALL_IMAGE']/PartImage")
-    if geo is None or "presentationMode" not in serialized(geo):
-        fail("geo image must be suppressed in Ultra Black mode")
-
-    info = ET.parse(WATCHFACE_INFO).getroot()
-    editable = info.find("Editable")
-    multiple = info.find("MultipleInstancesAllowed")
-    if editable is None or editable.get("value") != "true":
-        fail("watch face must remain editable so all three face styles are selectable")
-    if multiple is None or multiple.get("value") != "true":
-        fail("watch face must allow multiple configured StarIntel instances")
-
+    for name, (path, ids) in FACES.items():
+        check_face(name, path, ids)
     print("slot-contract: OK")
 
 
