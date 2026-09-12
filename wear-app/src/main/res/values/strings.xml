@@ -5,6 +5,7 @@
     <string name="tile_targets">StarIntel Targets</string>
     <string name="tile_corpus">StarIntel Corpus</string>
     <string name="tile_activity">StarIntel Activity</string>
+    <string name="tile_search">StarIntel Search</string>
     <string name="complication_status">StarIntel status</string>
     <string name="complication_targets">StarIntel targets</string>
     <string name="complication_documents">StarIntel documents</string>
