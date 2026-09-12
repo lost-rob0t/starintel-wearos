@@ -6,6 +6,7 @@
     <string name="explorer_app_name">StarIntel Explorer</string>
     <string name="targets_app_name">StarIntel Targets</string>
     <string name="graph_app_name">StarIntel Graph</string>
+    <string name="gauges_app_name">StarIntel Gauges</string>
     <string name="tile_ops">StarIntel Ops</string>
     <string name="tile_targets">StarIntel Targets</string>
     <string name="tile_corpus">StarIntel Corpus</string>
@@ -19,4 +20,8 @@
     <string name="complication_freshness">StarIntel sync freshness</string>
     <string name="complication_activity_graph">StarIntel activity graph</string>
     <string name="complication_geo_activity">StarIntel geo activity</string>
+    <string name="complication_documents_goal">StarIntel document goal</string>
+    <string name="complication_targets_goal">StarIntel target goal</string>
+    <string name="complication_document_type_goal">StarIntel document type goal</string>
+    <string name="complication_document_rate_goal">StarIntel document rate goal</string>
 </resources>
