@@ -35,7 +35,7 @@ android {
         }
     }
 
-    sourceSets.getByName("main").java.srcDir("../shared/src/main/java")
+    sourceSets.getByName("main").kotlin.srcDir("../shared/src/main/java")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
