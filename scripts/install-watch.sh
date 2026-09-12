@@ -58,11 +58,16 @@ if ! "${adb_cmd[@]}" get-state >/dev/null 2>&1; then
   exit 1
 fi
 
+install_flags=(-r)
+if [[ "${STARINTEL_INSTALL_ALLOW_DOWNGRADE:-0}" == "1" ]]; then
+  install_flags+=(-d)
+fi
+
 echo "[1/4] Installing StarIntel Wear app"
-"${adb_cmd[@]}" install -r "$wear_apk" >/dev/null
+"${adb_cmd[@]}" install "${install_flags[@]}" "$wear_apk" >/dev/null
 
 echo "[2/4] Installing StarIntel watch face"
-"${adb_cmd[@]}" install -r "$face_apk" >/dev/null
+"${adb_cmd[@]}" install "${install_flags[@]}" "$face_apk" >/dev/null
 
 echo "[3/4] Verifying installed packages"
 "${adb_cmd[@]}" shell pm path actor.starintel.wear | grep -q '^package:' || {
