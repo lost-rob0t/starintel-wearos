@@ -97,6 +97,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Check round-screen safe bounds
+        run: python3 scripts/check-watchface-round-bounds.py watchface/src/main/res/raw/watchface.xml
       - name: Build WFF validator
         run: |
           git clone --depth 1 https://github.com/google/watchface.git /tmp/google-watchface
