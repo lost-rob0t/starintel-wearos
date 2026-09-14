@@ -7,8 +7,8 @@ Usage:
   scripts/release.sh vX.Y.Z[-suffix] [--dry-run] [--skip-local-checks] [--no-wait]
 
 Creates a release tag from an exact, clean main HEAD. The tag triggers the
-GitHub Release workflow, which rebuilds every APK through Nix, validates the
-watch face and signer parity, and publishes versioned release assets.
+GitHub Release workflow, which rebuilds every APK through Nix, validates all
+three watch faces and signer parity, and publishes versioned release assets.
 
 Options:
   --dry-run            Validate everything without creating or pushing a tag.
@@ -105,17 +105,19 @@ if [[ "$skip_local_checks" == false ]]; then
   nix develop --no-update-lock-file --command \
     gradle --stacktrace :phone-app:testDebugUnitTest :wear-app:testDebugUnitTest
 
-  echo "==> validating watch-face contracts"
+  echo "==> validating all three watch-face contracts"
   python3 scripts/check-watchface-slot-contract.py
+  python3 scripts/check-watchface-layout.py
   python3 scripts/check-watchface-themes.py
-  python3 scripts/check-watchface-round-bounds.py
 
   echo "==> building APKs"
   nix run --no-update-lock-file .#build-all
   for apk in \
     build/nix/phone-app-debug.apk \
     build/nix/wear-app-debug.apk \
-    build/nix/watchface-debug.apk; do
+    build/nix/watchface-neon-debug.apk \
+    build/nix/watchface-command-debug.apk \
+    build/nix/watchface-terminal-debug.apk; do
     test -s "$apk"
   done
 

@@ -130,8 +130,8 @@ jobs:
         if: steps.meta.outputs.publish == 'true'
         run: |
           python3 scripts/check-watchface-slot-contract.py
+          python3 scripts/check-watchface-layout.py
           python3 scripts/check-watchface-themes.py
-          python3 scripts/check-watchface-round-bounds.py watchface/src/main/res/raw/watchface.xml
 
       - uses: actions/setup-java@v4
         if: steps.meta.outputs.publish == 'true'
@@ -146,11 +146,16 @@ jobs:
           cd /tmp/google-watchface/third_party/wff
           ./gradlew :specification:validator:executable-jar
 
-      - name: Validate WFF v1
+      - name: Validate all WFF v1 faces
         if: steps.meta.outputs.publish == 'true'
         run: |
-          java -jar /tmp/google-watchface/third_party/wff/specification/validator/build/libs/wff-validator.jar \
-            1 watchface/src/main/res/raw/watchface.xml
+          validator=/tmp/google-watchface/third_party/wff/specification/validator/build/libs/wff-validator.jar
+          for face in \
+            watchface/src/neon/res/raw/watchface.xml \
+            watchface/src/command/res/raw/watchface.xml \
+            watchface/src/terminal/res/raw/watchface.xml; do
+            java -jar "$validator" 1 "$face"
+          done
 
       - name: Build all installable APKs through Nix
         if: steps.meta.outputs.publish == 'true'
@@ -175,11 +180,13 @@ jobs:
           mkdir -p dist
           cp build/nix/phone-app-debug.apk "dist/starintel-phone-${VERSION}.apk"
           cp build/nix/wear-app-debug.apk "dist/starintel-wear-${VERSION}.apk"
-          cp build/nix/watchface-debug.apk "dist/starintel-watchface-${VERSION}.apk"
+          cp build/nix/watchface-neon-debug.apk "dist/starintel-watchface-neon-${VERSION}.apk"
+          cp build/nix/watchface-command-debug.apk "dist/starintel-watchface-command-${VERSION}.apk"
+          cp build/nix/watchface-terminal-debug.apk "dist/starintel-watchface-terminal-${VERSION}.apk"
           (
             cd dist
             sha256sum ./*.apk > SHA256SUMS
-            printf 'version=%s\ncommit=%s\nbuild=nix run --no-update-lock-file .#build-all\n' \
+            printf 'version=%s\ncommit=%s\nbuild=nix run --no-update-lock-file .#build-all\nfaces=neon,command,terminal\n' \
               "$VERSION" "$commit" > RELEASE-MANIFEST.txt
             zip -9 "starintel-wearos-${VERSION}-apks.zip" ./*.apk SHA256SUMS RELEASE-MANIFEST.txt
           )

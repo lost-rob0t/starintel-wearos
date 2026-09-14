@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WatchFace width="450" height="450">
+  <UserConfigurations>
+    <ListConfiguration id="presentationMode" displayName="@string/presentation_mode_picker" screenReaderText="@string/presentation_mode_picker" defaultValue="0">
+      <ListOption id="0" displayName="@string/presentation_mode_normal" screenReaderText="@string/presentation_mode_normal" />
+      <ListOption id="1" displayName="@string/presentation_mode_ultra_black" screenReaderText="@string/presentation_mode_ultra_black" />
+    </ListConfiguration>
+    <ColorConfiguration id="themeColor" displayName="@string/theme_picker" screenReaderText="@string/theme_picker" defaultValue="1">
+      <ColorOption id="0" displayName="@string/theme_starintel_cyan" colors="#00E5FF #6E7BFF #F7FBFF #273142 #000000 #6E7BFF #00E5FF #F7FBFF #6E7BFF #00E5FF #F7FBFF #6E7BFF #00E5FF" />
+      <ColorOption id="1" displayName="@string/theme_neon_magenta_cyan" colors="#2DE2E6 #F6019D #F3F4F5 #170C32 #202146 #92406E #FBA922 #2DE2E6 #F6019D #62FF00 #DD546E #9700CC #F3F4F5" />
+      <ColorOption id="2" displayName="@string/theme_starintel_gold" colors="#FFC857 #FF9F1C #FFF4D6 #5B4930 #000000 #FFC857 #FF9F1C #FFF4D6 #FFD166 #F28F3B #FCE694 #DDA15E #FFF4D6" />
+      <ColorOption id="3" displayName="@string/theme_tactical_green" colors="#62FF8A #20C96B #E9FFED #31543B #000000 #20C96B #62FF8A #E9FFED #20C96B #62FF8A #E9FFED #20C96B #62FF8A" />
+      <ColorOption id="4" displayName="@string/theme_monochrome" colors="#FFFFFF #BFC7D5 #FFFFFF #505865 #000000 #FFFFFF #D5DBE5 #BFC7D5 #FFFFFF #D5DBE5 #BFC7D5 #FFFFFF #D5DBE5" />
+      <ColorOption id="5" displayName="@string/theme_neutral" colors="#9CC2E5 #A8B4C4 #F5F7FA #4E5968 #000000 #9CC2E5 #A8B4C4 #F5F7FA #8FA6BF #B9C5D4 #D5DEE8 #7F95AB #E9EEF3" />
+    </ColorConfiguration>
+  </UserConfigurations>
+
+  <Scene backgroundColor="#000000">
+    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+      <Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;0&quot; ? 255 : 0" />
+      <Rectangle x="0" y="0" width="450" height="450"><Fill color="[CONFIGURATION.themeColor.4]" /></Rectangle>
+    </PartDraw>
+
+    <Condition>
+      <Expressions>
+        <Expression name="normal"><![CDATA[[CONFIGURATION.presentationMode] == "0"]]></Expression>
+        <Expression name="ultra"><![CDATA[[CONFIGURATION.presentationMode] == "1"]]></Expression>
+      </Expressions>
+      <Compare expression="normal">
+        <Group x="0" y="0" width="450" height="450">
+          <Group x="0" y="0" width="450" height="450">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <PartDraw x="0" y="0" width="450" height="450">
+              <Line startX="62" startY="64" endX="388" endY="64"><Stroke color="[CONFIGURATION.themeColor.3]" thickness="1" /></Line>
+              <Line startX="52" startY="184" endX="398" endY="184"><Stroke color="[CONFIGURATION.themeColor.0]" thickness="1" /></Line>
+              <Line startX="55" startY="282" endX="395" endY="282"><Stroke color="[CONFIGURATION.themeColor.3]" thickness="1" /></Line>
+              <Line startX="88" startY="370" endX="362" endY="370"><Stroke color="[CONFIGURATION.themeColor.0]" thickness="1" /></Line>
+            </PartDraw>
+          </Group>
+          <DigitalClock x="145" y="66" width="160" height="26"><TimeText x="0" y="0" width="160" height="26" format="EEE  MMM dd" align="CENTER"><Font family="SYNC_TO_DEVICE" size="14" width="CONDENSED" weight="SEMI_BOLD" color="[CONFIGURATION.themeColor.2]" /></TimeText></DigitalClock>
+          <DigitalClock x="82" y="92" width="286" height="80"><TimeText x="0" y="0" width="286" height="80" format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER"><Font family="SYNC_TO_DEVICE" size="70" width="EXTRA_CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.2]" /></TimeText></DigitalClock>
+          <PartText x="66" y="185" width="120" height="20"><Text align="START"><Font family="SYNC_TO_DEVICE" size="11" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.0]">INGEST TREND</Font></Text></PartText>
+          <PartText x="306" y="185" width="75" height="20"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="11" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.12]">GEO</Font></Text></PartText>
+        </Group>
+      </Compare>
+      <Compare expression="ultra">
+        <Group x="0" y="0" width="450" height="450">
+          <PartDraw x="0" y="0" width="450" height="450">
+            <Line startX="92" startY="78" endX="358" endY="78"><Stroke color="[CONFIGURATION.themeColor.0]" thickness="1" /></Line>
+            <Line startX="358" startY="78" endX="370" endY="90"><Stroke color="[CONFIGURATION.themeColor.0]" thickness="1" /></Line>
+            <Line startX="370" startY="90" endX="370" endY="166"><Stroke color="[CONFIGURATION.themeColor.0]" thickness="1" /></Line>
+            <Line startX="370" startY="166" endX="358" endY="178"><Stroke color="[CONFIGURATION.themeColor.0]" thickness="1" /></Line>
+            <Line startX="358" startY="178" endX="92" endY="178"><Stroke color="[CONFIGURATION.themeColor.0]" thickness="1" /></Line>
+            <Line startX="92" startY="178" endX="80" endY="166"><Stroke color="[CONFIGURATION.themeColor.0]" thickness="1" /></Line>
+            <Line startX="80" startY="166" endX="80" endY="90"><Stroke color="[CONFIGURATION.themeColor.0]" thickness="1" /></Line>
+            <Line startX="80" startY="90" endX="92" endY="78"><Stroke color="[CONFIGURATION.themeColor.0]" thickness="1" /></Line>
+          </PartDraw>
+          <DigitalClock x="88" y="96" width="274" height="68"><TimeText x="0" y="0" width="274" height="68" format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER"><Font family="SYNC_TO_DEVICE" size="62" width="EXTRA_CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.2]" /></TimeText></DigitalClock>
+        </Group>
+      </Compare>
+    </Condition>
+
+    <ComplicationSlot slotId="7" displayName="@string/slot_activity_graph" supportedTypes="SMALL_IMAGE EMPTY" x="65" y="205" width="225" height="68">
+      <BoundingRoundBox x="0" y="0" width="225" height="68" cornerRadius="6" outlinePadding="2" />
+      <DefaultProviderPolicy primaryProvider="actor.starintel.wear/actor.starintel.wear.complications.ActivityGraphComplicationService" primaryProviderType="SMALL_IMAGE" defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" />
+      <Complication type="SMALL_IMAGE">
+        <PartImage x="4" y="4" width="217" height="60" alpha="255"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;0&quot; ? 255 : 0" /><Variant mode="AMBIENT" target="alpha" value="0" /><Image resource="[COMPLICATION.SMALL_IMAGE]" /></PartImage>
+        <PartDraw x="0" y="0" width="225" height="68" alpha="255"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;0&quot; ? 255 : 0" /><Variant mode="AMBIENT" target="alpha" value="0" /><Rectangle x="1" y="1" width="223" height="66"><Stroke color="[CONFIGURATION.themeColor.11]" thickness="2" /></Rectangle></PartDraw>
+        <PartDraw x="0" y="0" width="225" height="68" alpha="0"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;1&quot; ? 255 : 0" /><Rectangle x="2" y="2" width="221" height="64"><Stroke color="[CONFIGURATION.themeColor.11]" thickness="1" /></Rectangle></PartDraw>
+      </Complication>
+      <Complication type="EMPTY" />
+    </ComplicationSlot>
+
+    <ComplicationSlot slotId="8" displayName="@string/slot_geo" supportedTypes="SHORT_TEXT SMALL_IMAGE EMPTY" x="305" y="205" width="75" height="68">
+      <BoundingRoundBox x="0" y="0" width="75" height="68" cornerRadius="6" outlinePadding="2" />
+      <DefaultProviderPolicy primaryProvider="actor.starintel.wear/actor.starintel.wear.complications.GeoActivityComplicationService" primaryProviderType="SMALL_IMAGE" defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" />
+      <Complication type="SHORT_TEXT">
+        <PartDraw x="0" y="0" width="75" height="68" alpha="255"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;0&quot; ? 255 : 0" /><Rectangle x="1" y="1" width="73" height="66"><Stroke color="[CONFIGURATION.themeColor.12]" thickness="2" /></Rectangle></PartDraw>
+        <PartDraw x="0" y="0" width="75" height="68" alpha="0"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;1&quot; ? 255 : 0" /><Rectangle x="2" y="2" width="71" height="64"><Stroke color="[CONFIGURATION.themeColor.12]" thickness="1" /></Rectangle></PartDraw>
+        <PartText x="6" y="8" width="63" height="52"><Text align="CENTER" ellipsis="TRUE" maxLines="1"><Font family="SYNC_TO_DEVICE" size="14" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.2]"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="SMALL_IMAGE">
+        <PartImage x="4" y="4" width="67" height="60" alpha="255"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;0&quot; ? 255 : 0" /><Image resource="[COMPLICATION.SMALL_IMAGE]" /></PartImage>
+        <PartDraw x="0" y="0" width="75" height="68" alpha="0"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;1&quot; ? 255 : 0" /><Rectangle x="2" y="2" width="71" height="64"><Stroke color="[CONFIGURATION.themeColor.12]" thickness="1" /></Rectangle></PartDraw>
+      </Complication>
+      <Complication type="EMPTY" />
+    </ComplicationSlot>
+
+    <ComplicationSlot slotId="1" displayName="@string/slot_documents" supportedTypes="SHORT_TEXT RANGED_VALUE EMPTY" x="75" y="295" width="60" height="60">
+      <BoundingRoundBox x="0" y="0" width="60" height="60" cornerRadius="6" outlinePadding="2" />
+      <DefaultProviderPolicy primaryProvider="actor.starintel.wear/actor.starintel.wear.complications.DocumentsComplicationService" primaryProviderType="SHORT_TEXT" defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" />
+      <Complication type="SHORT_TEXT">
+        <PartDraw x="0" y="0" width="60" height="60" alpha="255"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;0&quot; ? 255 : 0" /><Rectangle x="1" y="1" width="58" height="58"><Stroke color="[CONFIGURATION.themeColor.5]" thickness="2" /></Rectangle></PartDraw>
+        <PartDraw x="0" y="0" width="60" height="60" alpha="0"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;1&quot; ? 255 : 0" /><Rectangle x="2" y="2" width="56" height="56"><Stroke color="[CONFIGURATION.themeColor.5]" thickness="1" /></Rectangle></PartDraw>
+        <PartText x="5" y="8" width="50" height="42"><Text align="CENTER" ellipsis="TRUE" maxLines="1"><Font family="SYNC_TO_DEVICE" size="13" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.2]"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="RANGED_VALUE">
+        <PartDraw x="0" y="0" width="60" height="60" alpha="255"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;0&quot; ? 255 : 0" /><Rectangle x="1" y="1" width="58" height="58"><Stroke color="[CONFIGURATION.themeColor.5]" thickness="2" /></Rectangle><Line startX="6" startY="51" endX="54" endY="51"><Stroke color="[CONFIGURATION.themeColor.3]" thickness="3" /></Line><Rectangle x="6" y="49" width="1" height="4"><Transform target="width" value="[COMPLICATION.RANGED_VALUE_MAX] == [COMPLICATION.RANGED_VALUE_MIN] ? 0 : clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1) * 48" /><Fill color="[CONFIGURATION.themeColor.5]" /></Rectangle></PartDraw>
+        <PartDraw x="0" y="0" width="60" height="60" alpha="0"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;1&quot; ? 255 : 0" /><Rectangle x="2" y="2" width="56" height="56"><Stroke color="[CONFIGURATION.themeColor.5]" thickness="1" /></Rectangle></PartDraw>
+        <PartText x="5" y="6" width="50" height="38"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="13" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.2]"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="EMPTY" />
+    </ComplicationSlot>
+
+    <ComplicationSlot slotId="2" displayName="@string/slot_targets" supportedTypes="SHORT_TEXT RANGED_VALUE EMPTY" x="145" y="295" width="60" height="60">
+      <BoundingRoundBox x="0" y="0" width="60" height="60" cornerRadius="6" outlinePadding="2" />
+      <DefaultProviderPolicy primaryProvider="actor.starintel.wear/actor.starintel.wear.complications.TargetsComplicationService" primaryProviderType="SHORT_TEXT" defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" />
+      <Complication type="SHORT_TEXT">
+        <PartDraw x="0" y="0" width="60" height="60" alpha="255"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;0&quot; ? 255 : 0" /><Rectangle x="1" y="1" width="58" height="58"><Stroke color="[CONFIGURATION.themeColor.6]" thickness="2" /></Rectangle></PartDraw>
+        <PartDraw x="0" y="0" width="60" height="60" alpha="0"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;1&quot; ? 255 : 0" /><Rectangle x="2" y="2" width="56" height="56"><Stroke color="[CONFIGURATION.themeColor.6]" thickness="1" /></Rectangle></PartDraw>
+        <PartText x="5" y="8" width="50" height="42"><Text align="CENTER" ellipsis="TRUE" maxLines="1"><Font family="SYNC_TO_DEVICE" size="13" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.2]"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="RANGED_VALUE">
+        <PartDraw x="0" y="0" width="60" height="60" alpha="255"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;0&quot; ? 255 : 0" /><Rectangle x="1" y="1" width="58" height="58"><Stroke color="[CONFIGURATION.themeColor.6]" thickness="2" /></Rectangle><Line startX="6" startY="51" endX="54" endY="51"><Stroke color="[CONFIGURATION.themeColor.3]" thickness="3" /></Line><Rectangle x="6" y="49" width="1" height="4"><Transform target="width" value="[COMPLICATION.RANGED_VALUE_MAX] == [COMPLICATION.RANGED_VALUE_MIN] ? 0 : clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1) * 48" /><Fill color="[CONFIGURATION.themeColor.6]" /></Rectangle></PartDraw>
+        <PartDraw x="0" y="0" width="60" height="60" alpha="0"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;1&quot; ? 255 : 0" /><Rectangle x="2" y="2" width="56" height="56"><Stroke color="[CONFIGURATION.themeColor.6]" thickness="1" /></Rectangle></PartDraw>
+        <PartText x="5" y="6" width="50" height="38"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="13" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.2]"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="EMPTY" />
+    </ComplicationSlot>
+
+    <ComplicationSlot slotId="3" displayName="@string/slot_lower_center_right" supportedTypes="SHORT_TEXT RANGED_VALUE EMPTY" x="215" y="295" width="60" height="60">
+      <BoundingRoundBox x="0" y="0" width="60" height="60" cornerRadius="6" outlinePadding="2" />
+      <DefaultProviderPolicy primaryProvider="actor.starintel.wear/actor.starintel.wear.complications.InvestigationTargetsComplicationService" primaryProviderType="SHORT_TEXT" defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" />
+      <Complication type="SHORT_TEXT">
+        <PartDraw x="0" y="0" width="60" height="60" alpha="255"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;0&quot; ? 255 : 0" /><Rectangle x="1" y="1" width="58" height="58"><Stroke color="[CONFIGURATION.themeColor.7]" thickness="2" /></Rectangle></PartDraw>
+        <PartDraw x="0" y="0" width="60" height="60" alpha="0"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;1&quot; ? 255 : 0" /><Rectangle x="2" y="2" width="56" height="56"><Stroke color="[CONFIGURATION.themeColor.7]" thickness="1" /></Rectangle></PartDraw>
+        <PartText x="5" y="8" width="50" height="42"><Text align="CENTER" ellipsis="TRUE" maxLines="1"><Font family="SYNC_TO_DEVICE" size="13" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.2]"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="RANGED_VALUE">
+        <PartDraw x="0" y="0" width="60" height="60" alpha="255"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;0&quot; ? 255 : 0" /><Rectangle x="1" y="1" width="58" height="58"><Stroke color="[CONFIGURATION.themeColor.7]" thickness="2" /></Rectangle><Line startX="6" startY="51" endX="54" endY="51"><Stroke color="[CONFIGURATION.themeColor.3]" thickness="3" /></Line><Rectangle x="6" y="49" width="1" height="4"><Transform target="width" value="[COMPLICATION.RANGED_VALUE_MAX] == [COMPLICATION.RANGED_VALUE_MIN] ? 0 : clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1) * 48" /><Fill color="[CONFIGURATION.themeColor.7]" /></Rectangle></PartDraw>
+        <PartDraw x="0" y="0" width="60" height="60" alpha="0"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;1&quot; ? 255 : 0" /><Rectangle x="2" y="2" width="56" height="56"><Stroke color="[CONFIGURATION.themeColor.7]" thickness="1" /></Rectangle></PartDraw>
+        <PartText x="5" y="6" width="50" height="38"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="13" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.2]"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="EMPTY" />
+    </ComplicationSlot>
+
+    <ComplicationSlot slotId="6" displayName="@string/slot_lower_right" supportedTypes="SHORT_TEXT RANGED_VALUE EMPTY" x="285" y="295" width="60" height="60">
+      <BoundingRoundBox x="0" y="0" width="60" height="60" cornerRadius="6" outlinePadding="2" />
+      <DefaultProviderPolicy primaryProvider="actor.starintel.wear/actor.starintel.wear.complications.FreshnessComplicationService" primaryProviderType="SHORT_TEXT" defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" />
+      <Complication type="SHORT_TEXT">
+        <PartDraw x="0" y="0" width="60" height="60" alpha="255"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;0&quot; ? 255 : 0" /><Rectangle x="1" y="1" width="58" height="58"><Stroke color="[CONFIGURATION.themeColor.10]" thickness="2" /></Rectangle></PartDraw>
+        <PartDraw x="0" y="0" width="60" height="60" alpha="0"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;1&quot; ? 255 : 0" /><Rectangle x="2" y="2" width="56" height="56"><Stroke color="[CONFIGURATION.themeColor.10]" thickness="1" /></Rectangle></PartDraw>
+        <PartText x="5" y="8" width="50" height="42"><Text align="CENTER" ellipsis="TRUE" maxLines="1"><Font family="SYNC_TO_DEVICE" size="13" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.2]"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="RANGED_VALUE">
+        <PartDraw x="0" y="0" width="60" height="60" alpha="255"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;0&quot; ? 255 : 0" /><Rectangle x="1" y="1" width="58" height="58"><Stroke color="[CONFIGURATION.themeColor.10]" thickness="2" /></Rectangle><Line startX="6" startY="51" endX="54" endY="51"><Stroke color="[CONFIGURATION.themeColor.3]" thickness="3" /></Line><Rectangle x="6" y="49" width="1" height="4"><Transform target="width" value="[COMPLICATION.RANGED_VALUE_MAX] == [COMPLICATION.RANGED_VALUE_MIN] ? 0 : clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1) * 48" /><Fill color="[CONFIGURATION.themeColor.10]" /></Rectangle></PartDraw>
+        <PartDraw x="0" y="0" width="60" height="60" alpha="0"><Transform target="alpha" value="[CONFIGURATION.presentationMode] == &quot;1&quot; ? 255 : 0" /><Rectangle x="2" y="2" width="56" height="56"><Stroke color="[CONFIGURATION.themeColor.10]" thickness="1" /></Rectangle></PartDraw>
+        <PartText x="5" y="6" width="50" height="38"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="13" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.2]"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]" /></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="EMPTY" />
+    </ComplicationSlot>
+  </Scene>
+</WatchFace>
