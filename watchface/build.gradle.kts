@@ -14,4 +14,20 @@ android {
         versionCode = 2
         versionName = "0.1.1-alpha"
     }
+
+    flavorDimensions += "face"
+    productFlavors {
+        create("neon") {
+            dimension = "face"
+            applicationIdSuffix = ".neon"
+        }
+        create("command") {
+            dimension = "face"
+            applicationIdSuffix = ".command"
+        }
+        create("terminal") {
+            dimension = "face"
+            applicationIdSuffix = ".terminal"
+        }
+    }
 }

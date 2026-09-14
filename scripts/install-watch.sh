@@ -15,6 +15,10 @@ ANDROID_SERIAL may be used instead of the positional serial.
   signed build. This clears the watch-side StarIntel configuration/API key, so
   send configuration again from the Android companion afterward.
 
+Installs all three independent watch-face packages: Neon, Command, and Terminal.
+The stale legacy multiplexed actor.starintel.watchface package is removed so it
+cannot shadow the three picker entries.
+
 Set STARINTEL_SKIP_LAUNCH_SMOKE=1 only when you intentionally need to skip the
 post-install physical-device launcher crash test.
 EOF
@@ -79,23 +83,40 @@ if [[ -z "$wear_apk" ]]; then
     "starintel-wear-app-debug/wear-app-debug.apk")"
 fi
 
-face_apk="${STARINTEL_FACE_APK:-}"
-if [[ -z "$face_apk" ]]; then
-  face_apk="$(pick_apk "watch face" \
-    "build/nix/watchface-debug.apk" \
-    "watchface/build/outputs/apk/debug/watchface-debug.apk" \
-    "watchface-debug.apk" \
-    "starintel-watchface-debug/watchface-debug.apk")"
+neon_apk="${STARINTEL_NEON_FACE_APK:-}"
+if [[ -z "$neon_apk" ]]; then
+  neon_apk="$(pick_apk "Neon watch face" \
+    "build/nix/watchface-neon-debug.apk" \
+    "watchface/build/outputs/apk/neon/debug/watchface-neon-debug.apk" \
+    "watchface-neon-debug.apk" \
+    "starintel-watchface-neon-debug/watchface-neon-debug.apk")"
 fi
 
-for apk in "$wear_apk" "$face_apk"; do
+command_apk="${STARINTEL_COMMAND_FACE_APK:-}"
+if [[ -z "$command_apk" ]]; then
+  command_apk="$(pick_apk "Command watch face" \
+    "build/nix/watchface-command-debug.apk" \
+    "watchface/build/outputs/apk/command/debug/watchface-command-debug.apk" \
+    "watchface-command-debug.apk" \
+    "starintel-watchface-command-debug/watchface-command-debug.apk")"
+fi
+
+terminal_apk="${STARINTEL_TERMINAL_FACE_APK:-}"
+if [[ -z "$terminal_apk" ]]; then
+  terminal_apk="$(pick_apk "Terminal watch face" \
+    "build/nix/watchface-terminal-debug.apk" \
+    "watchface/build/outputs/apk/terminal/debug/watchface-terminal-debug.apk" \
+    "watchface-terminal-debug.apk" \
+    "starintel-watchface-terminal-debug/watchface-terminal-debug.apk")"
+fi
+
+for apk in "$wear_apk" "$neon_apk" "$command_apk" "$terminal_apk"; do
   if [[ ! -r "$apk" ]]; then
     echo "error: APK is not readable: $apk" >&2
     exit 1
   fi
 done
 
-# If a matching phone APK is available, verify the pair before touching the watch.
 phone_candidate="${STARINTEL_PHONE_APK:-build/nix/phone-app-debug.apk}"
 if [[ -r "$phone_candidate" && -f scripts/verify-companion-signing.sh ]]; then
   bash scripts/verify-companion-signing.sh "$phone_candidate" "$wear_apk"
@@ -142,23 +163,34 @@ install_wear() {
   return 1
 }
 
-echo "[1/5] Installing StarIntel Wear app"
+echo "[1/8] Removing stale multiplexed StarIntel face"
+"${adb_cmd[@]}" uninstall actor.starintel.watchface >/dev/null 2>&1 || true
+
+echo "[2/8] Installing StarIntel Wear app"
 install_wear
 
-echo "[2/5] Installing StarIntel watch face"
-"${adb_cmd[@]}" install -r "$face_apk" >/dev/null
+echo "[3/8] Installing StarIntel Neon"
+"${adb_cmd[@]}" install -r "$neon_apk" >/dev/null
 
-echo "[3/5] Verifying installed packages"
-"${adb_cmd[@]}" shell pm path actor.starintel.wear | grep -q '^package:' || {
-  echo "error: actor.starintel.wear was not found after install" >&2
-  exit 1
-}
-"${adb_cmd[@]}" shell pm path actor.starintel.watchface | grep -q '^package:' || {
-  echo "error: actor.starintel.watchface was not found after install" >&2
-  exit 1
-}
+echo "[4/8] Installing StarIntel Command"
+"${adb_cmd[@]}" install -r "$command_apk" >/dev/null
 
-echo "[4/5] Smoke-testing exported Wear launchers"
+echo "[5/8] Installing StarIntel Terminal"
+"${adb_cmd[@]}" install -r "$terminal_apk" >/dev/null
+
+echo "[6/8] Verifying installed packages"
+for package in \
+  actor.starintel.wear \
+  actor.starintel.watchface.neon \
+  actor.starintel.watchface.command \
+  actor.starintel.watchface.terminal; do
+  "${adb_cmd[@]}" shell pm path "$package" | grep -q '^package:' || {
+    echo "error: $package was not found after install" >&2
+    exit 1
+  }
+done
+
+echo "[7/8] Smoke-testing exported Wear launchers"
 if [[ "${STARINTEL_SKIP_LAUNCH_SMOKE:-0}" == "1" ]]; then
   echo "Launcher smoke test explicitly skipped."
 elif [[ -f scripts/smoke-wear-launchers.sh ]]; then
@@ -172,12 +204,12 @@ else
   exit 1
 fi
 
-echo "[5/5] Install verified"
+echo "[8/8] Install verified: Neon, Command, and Terminal are separate selectable faces"
 
 if [[ "${STARINTEL_OPEN_WATCH_SETUP:-0}" == "1" ]]; then
   echo "Opening on-watch fallback setup..."
   "${adb_cmd[@]}" shell am start -n actor.starintel.wear/.ConfigActivity >/dev/null
 else
-  echo "Next: open StarIntel Companion on the paired Android phone and send configuration to the watch."
+  echo "Next: open the Wear OS watch-face picker. You should see StarIntel Neon, StarIntel Command, and StarIntel Terminal separately."
   echo "Fallback: set STARINTEL_OPEN_WATCH_SETUP=1 to open the watch setup screen after installation."
 fi
