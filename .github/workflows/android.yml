@@ -33,6 +33,8 @@ jobs:
             :watchface:assembleNeonDebug \
             :watchface:assembleCommandDebug \
             :watchface:assembleTerminalDebug
+      - name: Test update catalog generator
+        run: python3 scripts/test-update-manifest.py
       - name: Test companion signer diagnostics
         run: python3 scripts/test-companion-signing.py
       - name: Verify companion signer parity
@@ -88,6 +90,7 @@ jobs:
           bash -n scripts/verify-companion-signing.sh
           bash -n scripts/release.sh
           bash scripts/test-pair-android-qr.sh
+          python3 scripts/test-update-manifest.py
           nix run --no-update-lock-file .#pair-android -- --help
           nix run --no-update-lock-file .#pair-watch -- --help
           nix run --no-update-lock-file .#install-phone -- --help

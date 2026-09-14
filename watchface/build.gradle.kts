@@ -11,8 +11,19 @@ android {
         applicationId = "actor.starintel.watchface"
         minSdk = 33
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.1.1-alpha"
+        versionCode = 3
+        versionName = "0.2.0-alpha"
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            // Keep package-manager updates installable across CI/master builds.
+            // This repository key is public and debug-only; production uses a private signer.
+            storeFile = rootProject.file("nix/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     flavorDimensions += "face"
