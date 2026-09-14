@@ -10,8 +10,8 @@ android {
         applicationId = "actor.starintel.wear"
         minSdk = 30
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.1.1-alpha"
+        versionCode = 3
+        versionName = "0.2.0-alpha"
     }
 
     signingConfigs {
@@ -25,6 +25,8 @@ android {
             keyPassword = "android"
         }
     }
+
+    sourceSets.getByName("main").kotlin.srcDir("../shared/src/main/java")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

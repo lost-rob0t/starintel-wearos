@@ -1,0 +1,84 @@
+name: Companion master channel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: companion-master-channel
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate and build current main
+        run: |
+          set -euo pipefail
+          nix flake check --no-update-lock-file --show-trace
+          nix run --no-update-lock-file .#build-all
+          nix develop --no-update-lock-file --command bash \
+            scripts/verify-companion-signing.sh \
+            build/nix/phone-app-debug.apk \
+            build/nix/wear-app-debug.apk
+
+      - name: Stage master channel
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_name="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' phone-app/build.gradle.kts)"
+          version_code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' phone-app/build.gradle.kts)"
+          test -n "$version_name"
+          test -n "$version_code"
+          mkdir -p dist
+          cp build/nix/phone-app-debug.apk dist/starintel-phone-master.apk
+          cp build/nix/wear-app-debug.apk dist/starintel-wear-master.apk
+          cp build/nix/watchface-neon-debug.apk dist/starintel-watchface-neon-master.apk
+          cp build/nix/watchface-command-debug.apk dist/starintel-watchface-command-master.apk
+          cp build/nix/watchface-terminal-debug.apk dist/starintel-watchface-terminal-master.apk
+          python3 scripts/generate-update-manifest.py \
+            --dist dist \
+            --channel master \
+            --ref main \
+            --commit "$GITHUB_SHA" \
+            --version-code "$version_code" \
+            --version-name "$version_name" \
+            --suffix master \
+            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/master-channel"
+          (cd dist && sha256sum ./*.apk update.json > SHA256SUMS)
+          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+
+      - name: Publish rolling master channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view master-channel >/dev/null 2>&1; then
+            gh release upload master-channel dist/* --clobber
+          else
+            gh release create master-channel dist/* \
+              --target "$GITHUB_SHA" \
+              --prerelease \
+              --title "StarIntel Companion master channel" \
+              --notes "Rolling artifacts from current main. Use Update Manager → MASTER."
+          fi
+
+      - name: Preserve master bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: starintel-master-channel
+          path: dist/*
+          if-no-files-found: error
