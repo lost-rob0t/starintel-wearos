@@ -49,4 +49,13 @@ class UpdateFeedTest {
         assertEquals(header, parsed)
         assertTrue(parsed.sha256.all { it == 'b' })
     }
+
+    @Test
+    fun statusQueryRoundTripsAndStatusesRejectUnknownStates() {
+        val id = "12345678-1234-1234-1234-123456789abc"
+        assertEquals(id, PackageTransferProtocol.parseStatusQuery(PackageTransferProtocol.statusQuery(id)))
+        val invalid = """{"version":1,"transfer_id":"$id","artifact_id":"wear","state":"frozen"}"""
+        val failed = runCatching { PackageTransferProtocol.Status.parse(invalid.toByteArray()) }
+        assertTrue(failed.isFailure)
+    }
 }

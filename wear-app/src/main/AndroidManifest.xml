@@ -64,6 +64,15 @@
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
         <activity
+            android:name=".ActivityTimelineActivity"
+            android:icon="@drawable/ic_launcher_graph"
+            android:exported="true"
+            android:label="@string/activity_app_name"
+            android:launchMode="singleTask"
+            android:taskAffinity="actor.starintel.wear.activity">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+        <activity
             android:name=".GoalGaugesActivity"
             android:icon="@drawable/ic_launcher_gauges"
             android:exported="true"
@@ -82,6 +91,7 @@
         </service>
         <service android:name=".packages.PackageTransferService" android:exported="true">
             <intent-filter><action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" /><data android:scheme="wear" android:host="*" android:pathPrefix="/starintel/packages/v1" /></intent-filter>
+            <intent-filter><action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" /><data android:scheme="wear" android:host="*" android:pathPrefix="/starintel/packages/status-query/v1" /></intent-filter>
         </service>
 
         <service android:name=".tiles.OpsTileService" android:exported="true" android:label="@string/tile_ops" android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
@@ -97,6 +107,9 @@
             <intent-filter><action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" /></intent-filter><meta-data android:name="androidx.wear.tiles.PREVIEW" android:resource="@drawable/ic_starintel" />
         </service>
         <service android:name=".tiles.SearchTileService" android:exported="true" android:label="@string/tile_search" android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter><action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" /></intent-filter><meta-data android:name="androidx.wear.tiles.PREVIEW" android:resource="@drawable/ic_starintel" />
+        </service>
+        <service android:name=".tiles.StackTileService" android:exported="true" android:label="@string/tile_stack" android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
             <intent-filter><action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" /></intent-filter><meta-data android:name="androidx.wear.tiles.PREVIEW" android:resource="@drawable/ic_starintel" />
         </service>
 
@@ -130,9 +143,16 @@
         <service android:name=".complications.DocumentRateGoalComplicationService" android:exported="true" android:label="@string/complication_document_rate_goal" android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
             <intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter><meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SHORT_TEXT,RANGED_VALUE" /><meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="300" />
         </service>
-        <service android:name=".complications.ActivityGraphComplicationService" android:exported="true" android:label="@string/complication_activity_graph" android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+        <service android:name=".complications.ActivityGraphComplicationService" android:exported="true" android:label="@string/complication_activity_graph_auto" android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
             <intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter><meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SMALL_IMAGE" /><meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="300" />
         </service>
+        <service android:name=".complications.ActivityGraph1mComplicationService" android:exported="true" android:label="@string/complication_activity_graph_1m" android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER"><intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter><meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SMALL_IMAGE" /><meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="60" /></service>
+        <service android:name=".complications.ActivityGraph5mComplicationService" android:exported="true" android:label="@string/complication_activity_graph_5m" android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER"><intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter><meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SMALL_IMAGE" /><meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="60" /></service>
+        <service android:name=".complications.ActivityGraph15mComplicationService" android:exported="true" android:label="@string/complication_activity_graph_15m" android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER"><intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter><meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SMALL_IMAGE" /><meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="60" /></service>
+        <service android:name=".complications.ActivityGraph1hComplicationService" android:exported="true" android:label="@string/complication_activity_graph_1h" android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER"><intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter><meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SMALL_IMAGE" /><meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="300" /></service>
+        <service android:name=".complications.ActivityGraph6hComplicationService" android:exported="true" android:label="@string/complication_activity_graph_6h" android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER"><intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter><meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SMALL_IMAGE" /><meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="300" /></service>
+        <service android:name=".complications.ActivityGraph1dComplicationService" android:exported="true" android:label="@string/complication_activity_graph_1d" android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER"><intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter><meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SMALL_IMAGE" /><meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="900" /></service>
+        <service android:name=".complications.ActivityGraph1wComplicationService" android:exported="true" android:label="@string/complication_activity_graph_1w" android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER"><intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter><meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SMALL_IMAGE" /><meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="1800" /></service>
         <service android:name=".complications.GeoActivityComplicationService" android:exported="true" android:label="@string/complication_geo_activity" android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
             <intent-filter><action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" /></intent-filter><meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SHORT_TEXT,SMALL_IMAGE" /><meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="900" />
         </service>

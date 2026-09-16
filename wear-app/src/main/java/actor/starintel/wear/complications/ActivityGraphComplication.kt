@@ -1,15 +1,17 @@
 package actor.starintel.wear.complications
 
+import actor.starintel.wear.data.ActivityHistoryStore
+import actor.starintel.wear.data.ActivityPoint
+import actor.starintel.wear.data.ActivityRange
+import actor.starintel.wear.data.ActivitySeries
+import actor.starintel.wear.data.StarIntelRepository
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Typeface
 import android.graphics.drawable.Icon
-import actor.starintel.wear.data.ActivityHistoryStore
-import actor.starintel.wear.data.ActivityPoint
-import actor.starintel.wear.data.ActivityRange
-import actor.starintel.wear.data.StarIntelRepository
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.PlainComplicationText
@@ -19,28 +21,25 @@ import androidx.wear.watchface.complications.data.SmallImageType
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
 
-class ActivityGraphPreferences(private val context: android.content.Context) {
-    private val prefs = context.applicationContext.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
-    fun range(): ActivityRange = runCatching {
-        ActivityRange.valueOf(prefs.getString(KEY_RANGE, ActivityRange.H24.name) ?: ActivityRange.H24.name)
-    }.getOrDefault(ActivityRange.H24)
-    fun setRange(range: ActivityRange) { prefs.edit().putString(KEY_RANGE, range.name).apply() }
-    companion object { private const val PREFS = "starintel_graph"; private const val KEY_RANGE = "range" }
-}
+abstract class BaseActivityGraphComplicationService : SuspendingComplicationDataSourceService() {
+    protected abstract fun range(store: ActivityHistoryStore): ActivityRange
 
-class ActivityGraphComplicationService : SuspendingComplicationDataSourceService() {
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
         if (request.complicationType != ComplicationType.SMALL_IMAGE) return null
         StarIntelRepository.get(applicationContext).snapshot()
-        val range = ActivityGraphPreferences(applicationContext).range()
-        val images = ActivityGraphRenderer.render(ActivityHistoryStore.get(applicationContext).points(range), range)
-        return graphData(images, "StarIntel document activity ${range.label}")
+        val store = ActivityHistoryStore.get(applicationContext)
+        val selected = range(store)
+        val points = store.points(selected)
+        return graphData(
+            ActivityGraphRenderer.render(points, selected, includeTypes = true),
+            "StarIntel document activity ${selected.label}; ${points.sumOf { it.documentsAdded ?: 0L }} documents",
+        )
     }
 
     override fun getPreviewData(type: ComplicationType): ComplicationData? {
         if (type != ComplicationType.SMALL_IMAGE) return null
-        val range = ActivityRange.H24
-        return graphData(ActivityGraphRenderer.renderPreview(range), "StarIntel activity preview ${range.label}")
+        val selected = ActivityRange.H1
+        return graphData(ActivityGraphRenderer.renderPreview(selected), "StarIntel activity preview ${selected.label}")
     }
 
     private fun graphData(images: ActivityGraphImages, description: String): SmallImageComplicationData {
@@ -53,65 +52,130 @@ class ActivityGraphComplicationService : SuspendingComplicationDataSourceService
     }
 }
 
+/** Automatically rotates through ranges that have enough real samples once per minute. */
+class ActivityGraphComplicationService : BaseActivityGraphComplicationService() {
+    override fun range(store: ActivityHistoryStore): ActivityRange = store.autoRange()
+}
+
+abstract class FixedActivityGraphComplicationService(
+    private val fixed: ActivityRange,
+) : BaseActivityGraphComplicationService() {
+    override fun range(store: ActivityHistoryStore): ActivityRange = fixed
+}
+
+class ActivityGraph1mComplicationService : FixedActivityGraphComplicationService(ActivityRange.M1)
+class ActivityGraph5mComplicationService : FixedActivityGraphComplicationService(ActivityRange.M5)
+class ActivityGraph15mComplicationService : FixedActivityGraphComplicationService(ActivityRange.M15)
+class ActivityGraph1hComplicationService : FixedActivityGraphComplicationService(ActivityRange.H1)
+class ActivityGraph6hComplicationService : FixedActivityGraphComplicationService(ActivityRange.H6)
+class ActivityGraph1dComplicationService : FixedActivityGraphComplicationService(ActivityRange.D1)
+class ActivityGraph1wComplicationService : FixedActivityGraphComplicationService(ActivityRange.W1)
+
 data class ActivityGraphImages(val active: Bitmap, val ambient: Bitmap)
 
 object ActivityGraphRenderer {
-    // Matches the approved Neon HUD ingest-panel envelope in the 450-space WFF scene.
     private const val WIDTH = 274
     private const val HEIGHT = 66
     private const val PAD_X = 7f
-    private const val PAD_TOP = 12f
-    private const val PAD_BOTTOM = 7f
-
-    fun render(points: List<ActivityPoint>, range: ActivityRange) = ActivityGraphImages(
-        draw(points, range, false, false), draw(points, range, true, false),
+    private const val PAD_TOP = 13f
+    private const val PAD_BOTTOM = 8f
+    private val colors = intArrayOf(
+        Color.rgb(0, 229, 255),
+        Color.rgb(198, 91, 255),
+        Color.rgb(126, 255, 128),
+        Color.rgb(255, 190, 70),
     )
 
-    fun renderPreview(range: ActivityRange): ActivityGraphImages {
-        val values = listOf(2L, 5L, 3L, 7L, 4L, 9L, 6L, 11L, 8L, 13L, 7L, 10L)
-        val now = 1_800_000_000L
-        val points = values.mapIndexed { index, value ->
-            ActivityPoint(now - (values.lastIndex - index) * 300L, value)
-        }
-        return ActivityGraphImages(draw(points, range, false, true), draw(points, range, true, true))
+    fun render(points: List<ActivityPoint>, range: ActivityRange, includeTypes: Boolean = true): ActivityGraphImages {
+        val series = actor.starintel.wear.data.ActivityHistoryModel.series(points, includeTypes)
+        return ActivityGraphImages(
+            draw(series, range, ambient = false, preview = false),
+            draw(series.take(1), range, ambient = true, preview = false),
+        )
     }
 
-    private fun draw(points: List<ActivityPoint>, range: ActivityRange, ambient: Boolean, preview: Boolean): Bitmap {
+    fun renderPreview(range: ActivityRange): ActivityGraphImages {
+        val now = 1_800_000_000L
+        val points = listOf(2L, 5L, 3L, 7L, 4L, 9L, 6L, 11L, 8L, 13L, 7L, 10L).mapIndexed { index, value ->
+            ActivityPoint(
+                epochSeconds = now - (11 - index) * 300L,
+                documentsAdded = value,
+                documentsByTypeAdded = mapOf("target" to (value / 2), "relation" to (value / 3)),
+            )
+        }
+        val series = actor.starintel.wear.data.ActivityHistoryModel.series(points, includeTypes = true)
+        return ActivityGraphImages(
+            draw(series, range, ambient = false, preview = true),
+            draw(series.take(1), range, ambient = true, preview = true),
+        )
+    }
+
+    private fun draw(
+        series: List<ActivitySeries>,
+        range: ActivityRange,
+        ambient: Boolean,
+        preview: Boolean,
+    ): Bitmap {
         val bitmap = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (ambient) Color.WHITE else Color.rgb(0, 229, 255)
-            strokeWidth = if (ambient) 1.5f else 2.5f
-            style = Paint.Style.STROKE
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
-        }
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (ambient) Color.WHITE else Color.rgb(175, 190, 205)
+            color = if (ambient) Color.WHITE else Color.rgb(183, 194, 207)
             textSize = 9f
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
         }
-        canvas.drawText("INGEST · ${range.label}", PAD_X, 9f, textPaint)
+        canvas.drawText("DOCS · ${range.label}", PAD_X, 9f, textPaint)
         if (preview) canvas.drawText("PREVIEW", WIDTH - 48f, 9f, textPaint)
-        val valid = points.mapNotNull { it.documentsAdded }
-        if (valid.isEmpty()) {
-            if (!preview) canvas.drawText("COLLECTING", PAD_X, HEIGHT - 6f, textPaint)
+        val values = series.flatMap { it.points }.mapNotNull { it.second }
+        if (values.isEmpty()) {
+            if (!preview) canvas.drawText("COLLECTING", PAD_X, HEIGHT - 5f, textPaint)
             return bitmap
         }
-        val maxValue = valid.maxOrNull()?.coerceAtLeast(1L) ?: 1L
+
+        val allTimes = series.flatMap { it.points }.map { it.first }
+        val minTime = allTimes.minOrNull() ?: 0L
+        val maxTime = allTimes.maxOrNull()?.coerceAtLeast(minTime + 1L) ?: minTime + 1L
+        val maxValue = values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
         val graphHeight = HEIGHT - PAD_TOP - PAD_BOTTOM
         val graphWidth = WIDTH - PAD_X * 2f
-        val denominator = (points.size - 1).coerceAtLeast(1)
-        var previousX: Float? = null
-        var previousY: Float? = null
-        points.forEachIndexed { index, point ->
-            val value = point.documentsAdded
-            if (value == null) { previousX = null; previousY = null; return@forEachIndexed }
-            val x = PAD_X + graphWidth * index.toFloat() / denominator.toFloat()
-            val y = PAD_TOP + graphHeight * (1f - (value.toFloat() / maxValue.toFloat()).coerceIn(0f, 1f))
-            val px = previousX; val py = previousY
-            if (px != null && py != null) canvas.drawLine(px, py, x, y, linePaint)
-            previousX = x; previousY = y
+
+        val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = if (ambient) Color.rgb(80, 80, 80) else Color.rgb(40, 55, 66)
+            strokeWidth = 1f
+        }
+        for (line in 0..2) {
+            val y = PAD_TOP + graphHeight * line / 2f
+            canvas.drawLine(PAD_X, y, WIDTH - PAD_X, y, grid)
+        }
+
+        series.forEachIndexed { index, valuesForSeries ->
+            val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = if (ambient) Color.WHITE else colors[index % colors.size]
+                strokeWidth = if (index == 0) 2.6f else 1.7f
+                style = Paint.Style.STROKE
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+            }
+            val path = Path()
+            var open = false
+            valuesForSeries.points.forEach { (timestamp, value) ->
+                if (value == null) {
+                    open = false
+                } else {
+                    val x = PAD_X + graphWidth * (timestamp - minTime).toFloat() / (maxTime - minTime).toFloat()
+                    val y = PAD_TOP + graphHeight * (1f - (value.toFloat() / maxValue.toFloat()).coerceIn(0f, 1f))
+                    if (open) path.lineTo(x, y) else path.moveTo(x, y)
+                    open = true
+                }
+            }
+            canvas.drawPath(path, line)
+            valuesForSeries.points.forEach { (timestamp, value) ->
+                if (value != null) {
+                    val x = PAD_X + graphWidth * (timestamp - minTime).toFloat() / (maxTime - minTime).toFloat()
+                    val y = PAD_TOP + graphHeight * (1f - (value.toFloat() / maxValue.toFloat()).coerceIn(0f, 1f))
+                    canvas.drawCircle(x, y, if (index == 0) 2f else 1.4f, line.apply { style = Paint.Style.FILL })
+                    line.style = Paint.Style.STROKE
+                }
+            }
         }
         return bitmap
     }

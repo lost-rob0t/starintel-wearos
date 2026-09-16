@@ -230,8 +230,13 @@ The initial UI is designed for a round Galaxy Watch5 Pro-class display:
 - Ops Tile: online/stale/offline state, server version, and data age.
 - Targets Tile: aggregate targets plus target/investigation-target split.
 - Corpus Tile: total documents plus the two largest document-type buckets.
+- Activity app: real line graphs for 1 minute, 5 minutes, 15 minutes, 1 hour, 6 hours, 1 day, and 1 week, with total and per-type series plus an auto-rotating range.
+- Stack Tile: documents, targets, one-hour activity, and reachability in one vertically stacked glance.
+- Explorer: random document discovery and direct Open/Graph actions, so opaque document IDs do not need to be typed.
 
 All Tile and complication reads share a 60-second last-good cache. If the server is unavailable, the watch keeps showing cached values and marks them stale/offline instead of blanking the surface.
+
+The complication picker includes fixed activity-line providers for every supported range plus an Auto provider. Ultra Black keeps a true black background while retaining clearer face identity, date context, large time, and minimal operational labels.
 
 ## Private authentication
 

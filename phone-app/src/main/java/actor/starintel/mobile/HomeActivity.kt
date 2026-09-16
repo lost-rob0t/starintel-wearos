@@ -40,26 +40,33 @@ class HomeActivity : Activity() {
         }, matchWrap(top = 2))
 
         root.addView(TextView(this).apply {
-            text = "Configure, update, and deploy StarIntel to your paired Wear OS watch. Nearby transfers use the Wear OS Data Layer and normally ride the Bluetooth link."
+            text = "One guided path: connect the watch, install the surfaces you want, then choose an update channel only if you need to."
             textSize = 15f
             setTextColor(MUTED)
             setLineSpacing(0f, 1.18f)
         }, matchWrap(top = 10))
 
-        root.addView(menuButton("WATCH SETUP", "Server, API key, and watch connection") {
-            startActivity(Intent(this, MainActivity::class.java))
-        }, matchWrap(top = 28))
+        root.addView(TextView(this).apply {
+            text = "RECOMMENDED FLOW"
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(CYAN)
+        }, matchWrap(top = 26))
 
-        root.addView(menuButton("WATCH APPS", "Install Neon, Command, Terminal, and Wear updates") {
+        root.addView(menuButton("1 · CONNECT WATCH", "Find the paired watch, then send the server and private key") {
+            startActivity(Intent(this, MainActivity::class.java))
+        }, matchWrap(top = 10))
+
+        root.addView(menuButton("2 · INSTALL WATCH APPS", "Bluetooth-aware queue with progress, retry, and recovery") {
             startActivity(Intent(this, WatchPackagesActivity::class.java))
         }, matchWrap(top = 12))
 
-        root.addView(menuButton("UPDATE MANAGER", "Master, latest release, or any versioned release") {
+        root.addView(menuButton("3 · UPDATE CHANNEL", "Optional: master, latest release, or a pinned version") {
             startActivity(Intent(this, UpdateManagerActivity::class.java))
         }, matchWrap(top = 12))
 
         root.addView(TextView(this).apply {
-            text = "Normal watch deployment needs no VPN or direct ADB after the StarIntel Wear package receiver is installed once."
+            text = "After one receiver bootstrap, normal nearby installs need no VPN or direct ADB. Android/Wear OS still owns install approval."
             textSize = 12f
             setTextColor(MUTED)
             gravity = Gravity.CENTER
@@ -105,10 +112,10 @@ class HomeActivity : Activity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     companion object {
-        private val BACKGROUND = Color.rgb(5, 7, 10)
-        private val CARD = Color.rgb(15, 20, 27)
-        private val STROKE = Color.rgb(42, 54, 66)
+        private val BACKGROUND = Color.BLACK
+        private val CARD = Color.rgb(12, 16, 22)
+        private val STROKE = Color.rgb(45, 59, 72)
         private val CYAN = Color.rgb(0, 229, 255)
-        private val MUTED = Color.rgb(176, 187, 199)
+        private val MUTED = Color.rgb(183, 194, 207)
     }
 }
