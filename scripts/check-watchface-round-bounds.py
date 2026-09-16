@@ -59,13 +59,17 @@ def main() -> int:
                 )
 
         for text in slot.iter("PartText"):
-            x = f(text, "x")
-            width = f(text, "width")
-            if x < 12.0 or x + width > CANVAS - 12.0:
-                fail(
-                    f"slot {slot.attrib['slotId']} text box [{x:.0f}, {x + width:.0f}] "
-                    "does not preserve the 12px side inset"
-                )
+            x, y = f(text, "x"), f(text, "y")
+            width, height = f(text, "width"), f(text, "height")
+            angle = math.radians(f(text, "angle"))
+            cx, cy = x + width / 2, y + height / 2
+            for dx, dy in ((-width/2,-height/2), (width/2,-height/2),
+                           (-width/2,height/2), (width/2,height/2)):
+                px = cx + dx * math.cos(angle) - dy * math.sin(angle)
+                py = cy + dx * math.sin(angle) + dy * math.cos(angle)
+                extent = math.hypot(px - CENTER, py - CENTER)
+                if extent > SAFE_RADIUS:
+                    fail(f"slot {slot.attrib['slotId']} rotated text reaches radius {extent:.1f}px")
 
     if checked == 0:
         fail("edge complication geometry was not found")

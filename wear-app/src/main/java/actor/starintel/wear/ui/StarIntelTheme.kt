@@ -3,6 +3,9 @@ package actor.starintel.wear.ui
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -58,7 +61,7 @@ class StarIntelThemeStore(context: Context) {
         fun palette(id: StarIntelThemeId): StarIntelPalette = when (id) {
             StarIntelThemeId.CYAN -> StarIntelPalette(
                 id,
-                background = Color.rgb(5, 7, 10),
+                background = Color.BLACK,
                 surface = Color.rgb(10, 15, 19),
                 accent = Color.rgb(0, 229, 255),
             )
@@ -85,8 +88,20 @@ class StarIntelThemeStore(context: Context) {
 }
 
 fun Button.applyStarIntelTheme(palette: StarIntelPalette) {
-    backgroundTintList = ColorStateList.valueOf(palette.accent)
-    setTextColor(Color.BLACK)
+    val density = resources.displayMetrics.density
+    backgroundTintList = null
+    background = RippleDrawable(ColorStateList.valueOf(palette.accent and 0x40FFFFFF),
+        GradientDrawable().apply {
+            setColor(palette.surface)
+            cornerRadius = 6 * density
+            setStroke(density.toInt().coerceAtLeast(1), palette.accent)
+        }, null)
+    setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
+        intArrayOf(palette.muted, palette.accent)))
+    typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+    textSize = 12f
+    minHeight = (48 * density).toInt()
+    setPadding((10 * density).toInt(), (8 * density).toInt(), (10 * density).toInt(), (8 * density).toInt())
 }
 
 fun TextView.applyStarIntelText(palette: StarIntelPalette, muted: Boolean = false) {

@@ -35,4 +35,5 @@
     <string name="slot_status">StarIntel status</string>
     <string name="slot_targets">StarIntel targets</string>
     <string name="slot_documents">StarIntel documents</string>
+    <string name="theme_neon_hud">Neon HUD</string>
 </resources>

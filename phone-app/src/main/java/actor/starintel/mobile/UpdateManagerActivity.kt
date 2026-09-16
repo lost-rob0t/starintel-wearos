@@ -44,14 +44,14 @@ class UpdateManagerActivity : Activity() {
         root.addView(TextView(this).apply {
             text = "STARINTEL · COMPANION"
             textSize = 12f
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             letterSpacing = 0.1f
             setTextColor(CYAN)
         }, matchWrap())
         root.addView(TextView(this).apply {
             text = "Update manager"
             textSize = 30f
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             setTextColor(Color.WHITE)
         }, matchWrap(top = 3))
         root.addView(TextView(this).apply {
@@ -62,20 +62,23 @@ class UpdateManagerActivity : Activity() {
 
         sourceLabel = TextView(this).apply {
             textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             setTextColor(CYAN)
         }
         root.addView(sourceLabel, matchWrap(top = 22))
 
         root.addView(Button(this).apply {
+            terminalStyle()
             text = "USE MASTER"
             setOnClickListener { select(UpdateSources.MASTER) }
         }, matchWrap(top = 10))
         root.addView(Button(this).apply {
+            terminalStyle()
             text = "USE LATEST RELEASE"
             setOnClickListener { select(UpdateSources.LATEST) }
         }, matchWrap(top = 6))
         root.addView(Button(this).apply {
+            terminalStyle()
             text = "LIST VERSIONED RELEASES"
             setOnClickListener { loadReleases() }
         }, matchWrap(top = 6))
@@ -84,11 +87,13 @@ class UpdateManagerActivity : Activity() {
         root.addView(releases, matchWrap(top = 8))
 
         root.addView(Button(this).apply {
+            terminalStyle()
             text = "REFRESH SELECTED SOURCE"
             setOnClickListener { loadManifest() }
         }, matchWrap(top = 18))
 
         installCompanion = Button(this).apply {
+            terminalStyle()
             text = "UPDATE COMPANION"
             visibility = View.GONE
             setOnClickListener { installCompanion() }
@@ -96,6 +101,7 @@ class UpdateManagerActivity : Activity() {
         root.addView(installCompanion, matchWrap(top = 8))
 
         root.addView(Button(this).apply {
+            terminalStyle()
             text = "OPEN WATCH APPS"
             setOnClickListener { startActivity(Intent(this@UpdateManagerActivity, WatchPackagesActivity::class.java)) }
         }, matchWrap(top = 8))
@@ -161,6 +167,7 @@ class UpdateManagerActivity : Activity() {
         }
         list.forEach { release ->
             releases.addView(Button(this).apply {
+            terminalStyle()
                 text = buildString {
                     append(release.tagName)
                     if (release.prerelease) append(" · prerelease")
@@ -253,7 +260,7 @@ class UpdateManagerActivity : Activity() {
     companion object {
         const val PREFS = "starintel_updates"
         const val KEY_SOURCE = "source"
-        private val BACKGROUND = Color.rgb(5, 7, 10)
+        private val BACKGROUND = Color.BLACK
         private val CYAN = Color.rgb(0, 229, 255)
         private val MUTED = Color.rgb(176, 187, 199)
         private val WARNING = Color.rgb(255, 132, 132)

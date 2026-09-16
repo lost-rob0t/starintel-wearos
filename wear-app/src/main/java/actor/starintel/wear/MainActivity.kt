@@ -33,6 +33,7 @@ class MainActivity : StarIntelActivity() {
     private lateinit var freshness: TextView
     private lateinit var monitors: TextView
     private lateinit var refresh: Button
+    private lateinit var setup: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,10 +74,21 @@ class MainActivity : StarIntelActivity() {
         }
 
         root.addView(status, matchWrap(top = 8))
-        root.addView(label("DOCUMENTS"), matchWrap(top = 10))
-        root.addView(documents, matchWrap())
-        root.addView(label("TARGETS"), matchWrap(top = 8))
-        root.addView(targets, matchWrap())
+        setup = appButton("CONNECT TO STARINTEL") { ConfigActivity::class.java }.apply {
+            visibility = android.view.View.GONE
+        }
+        root.addView(setup, matchWrap(top = 8))
+        val summary = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        listOf("DOCUMENTS" to documents, "TARGETS" to targets).forEach { (title, value) ->
+            summary.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(4), dp(8), dp(4), dp(8))
+                addView(label(title), matchWrap())
+                addView(value, matchWrap(top = 4))
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        root.addView(summary, matchWrap(top = 8))
         root.addView(types, matchWrap(top = 6))
         root.addView(freshness, matchWrap(top = 4))
         root.addView(monitors, matchWrap(top = 3))
@@ -84,8 +96,11 @@ class MainActivity : StarIntelActivity() {
         root.addView(appButton("SEARCH") { SearchActivity::class.java }, matchWrap(top = 9))
         root.addView(appButton("EXPLORER") { ExplorerActivity::class.java }, matchWrap(top = 3))
         root.addView(appButton("TARGETS") { TargetsActivity::class.java }, matchWrap(top = 3))
-        root.addView(appButton("ACTIVITY GRAPH") { GraphActivity::class.java }, matchWrap(top = 3))
+        root.addView(appButton("INGEST TREND") { ActivityTrendActivity::class.java }, matchWrap(top = 3))
 
+        root.addView(appButton("RELATION GRAPH") { GraphActivity::class.java }, matchWrap(top = 6))
+        root.addView(appButton("DOCUMENT RADAR") { RadarActivity::class.java }, matchWrap(top = 6))
+        root.addView(appButton("GOAL GAUGES") { GoalGaugesActivity::class.java }, matchWrap(top = 6))
         refresh = Button(this).apply {
             text = "REFRESH NOW"
             applyStarIntelTheme(palette)
@@ -137,6 +152,7 @@ class MainActivity : StarIntelActivity() {
     }
 
     private fun render(snapshot: StarIntelSnapshot) {
+        setup.visibility = if (snapshot.configured) android.view.View.GONE else android.view.View.VISIBLE
         if (!snapshot.configured) {
             status.text = "SETUP REQUIRED"
             status.setTextColor(palette.warning)

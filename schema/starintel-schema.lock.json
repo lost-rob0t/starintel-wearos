@@ -1,0 +1,9 @@
+{
+  "release_version": "0.9.1",
+  "schema_version": "0.9.0",
+  "canonical_repository": "ssh://forgejo@git.starintel.actor/starintel-labs/starintel-gpt-auto-dig.git",
+  "canonical_commit": "e26d28b0d63e4e563df0cecbe730e8e1525b2607",
+  "schema_path": "schemas/starintel-doc-v0.9.0.schema.json",
+  "expansion_path": "schemas/starintel-doc-v0.9.0.expansion.json",
+  "manifest_path": "schemas/starintel-doc-v0.9.0.manifest.json"
+}

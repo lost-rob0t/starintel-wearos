@@ -58,14 +58,14 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
             text = "STARINTEL · WEAR OS"
             textSize = 12f
             setTextColor(CYAN)
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             letterSpacing = 0.12f
         }
         val title = TextView(this).apply {
             text = "Connect your watch"
             textSize = 30f
             setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
         }
         val subtitle = TextView(this).apply {
             text = "Configure StarIntel on your paired Galaxy Watch without typing credentials on the watch."
@@ -83,6 +83,7 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
         }
 
         val refreshWatch = Button(this).apply {
+            terminalStyle()
             text = "REFRESH WATCH CONNECTION"
             setOnClickListener { refreshWatchState() }
         }
@@ -121,6 +122,7 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
         }
 
         send = Button(this).apply {
+            terminalStyle()
             text = "SEND SECURELY TO WATCH"
             isEnabled = false
             filterTouchesWhenObscured = true
@@ -381,7 +383,7 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
         text = textValue
         textSize = 13f
         setTextColor(MUTED)
-        typeface = Typeface.DEFAULT_BOLD
+        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
     }
 
     private fun rounded(fill: Int, radius: Int, stroke: Int) = GradientDrawable().apply {
@@ -417,7 +419,7 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
         private const val KEY_SERVER_URL = "server_url"
         private val TIMEOUT_TOKEN = Any()
 
-        private val BACKGROUND = Color.rgb(5, 7, 10)
+        private val BACKGROUND = Color.BLACK
         private val CARD = Color.rgb(15, 20, 27)
         private val FIELD = Color.rgb(11, 15, 21)
         private val STROKE = Color.rgb(42, 54, 66)

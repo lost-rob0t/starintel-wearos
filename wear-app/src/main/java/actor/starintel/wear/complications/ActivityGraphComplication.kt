@@ -9,6 +9,7 @@ import android.graphics.drawable.Icon
 import actor.starintel.wear.data.ActivityHistoryStore
 import actor.starintel.wear.data.ActivityPoint
 import actor.starintel.wear.data.ActivityRange
+import actor.starintel.wear.data.activityTimeFraction
 import actor.starintel.wear.data.StarIntelRepository
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
@@ -101,16 +102,18 @@ object ActivityGraphRenderer {
         val maxValue = valid.maxOrNull()?.coerceAtLeast(1L) ?: 1L
         val graphHeight = HEIGHT - PAD_TOP - PAD_BOTTOM
         val graphWidth = WIDTH - PAD_X * 2f
-        val denominator = (points.size - 1).coerceAtLeast(1)
+        val end = System.currentTimeMillis() / 1000L
+        val start = if (preview) points.last().epochSeconds - range.seconds else end - range.seconds
         var previousX: Float? = null
         var previousY: Float? = null
-        points.forEachIndexed { index, point ->
+        points.forEach { point ->
             val value = point.documentsAdded
-            if (value == null) { previousX = null; previousY = null; return@forEachIndexed }
-            val x = PAD_X + graphWidth * index.toFloat() / denominator.toFloat()
+            if (value == null) { previousX = null; previousY = null; return@forEach }
+            val x = PAD_X + graphWidth * activityTimeFraction(point.epochSeconds, range, start + range.seconds)
             val y = PAD_TOP + graphHeight * (1f - (value.toFloat() / maxValue.toFloat()).coerceIn(0f, 1f))
             val px = previousX; val py = previousY
             if (px != null && py != null) canvas.drawLine(px, py, x, y, linePaint)
+            canvas.drawCircle(x, y, if (ambient) 1f else 1.5f, linePaint)
             previousX = x; previousY = y
         }
         return bitmap

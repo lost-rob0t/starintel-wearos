@@ -57,14 +57,14 @@ class WatchPackagesActivity : Activity(), MessageClient.OnMessageReceivedListene
         root.addView(TextView(this).apply {
             text = "STARINTEL · COMPANION"
             textSize = 12f
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             letterSpacing = 0.1f
             setTextColor(CYAN)
         }, matchWrap())
         root.addView(TextView(this).apply {
             text = "Watch apps"
             textSize = 30f
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             setTextColor(Color.WHITE)
         }, matchWrap(top = 3))
         root.addView(TextView(this).apply {
@@ -79,6 +79,7 @@ class WatchPackagesActivity : Activity(), MessageClient.OnMessageReceivedListene
         root.addView(sourceStatus, matchWrap(top = 8))
 
         root.addView(Button(this).apply {
+            terminalStyle()
             text = "REFRESH WATCH + CATALOG"
             setOnClickListener { refreshAll() }
         }, matchWrap(top = 12))
@@ -297,6 +298,7 @@ class WatchPackagesActivity : Activity(), MessageClient.OnMessageReceivedListene
     }
 
     private fun packageButton(textValue: String, action: () -> Unit) = Button(this).apply {
+            terminalStyle()
         text = textValue
         isEnabled = false
         setOnClickListener { action() }
@@ -315,7 +317,7 @@ class WatchPackagesActivity : Activity(), MessageClient.OnMessageReceivedListene
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     companion object {
-        private val BACKGROUND = Color.rgb(5, 7, 10)
+        private val BACKGROUND = Color.BLACK
         private val CYAN = Color.rgb(0, 229, 255)
         private val MUTED = Color.rgb(176, 187, 199)
         private val WARNING = Color.rgb(255, 132, 132)

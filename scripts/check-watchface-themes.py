@@ -13,7 +13,7 @@ FACES = {
     "command": Path("watchface/src/command/res/raw/watchface.xml"),
     "terminal": Path("watchface/src/terminal/res/raw/watchface.xml"),
 }
-EXPECTED_IDS = {"0", "1", "2", "3", "4", "5"}
+EXPECTED_IDS = {"0", "1", "2", "3", "4", "5", "6"}
 TOKEN_COUNT = 13
 QTILE_THEME_ID = "1"
 QTILE_COLORS = [
@@ -54,6 +54,8 @@ def main() -> None:
                 fail(f"{name}: invalid theme color")
             palettes[option.get("id", "")] = colors
 
+        if palettes["6"] != tuple("#2DE2E6 #F6019D #F3F4F5 #273142 #000000 #2DE2E6 #F6019D #2DE2E6 #F6019D #2DE2E6 #F6019D #F6019D #2DE2E6".split()):
+            fail(f"{name}: reference Neon HUD palette drifted")
         if palettes[QTILE_THEME_ID] != tuple(QTILE_COLORS):
             fail(f"{name}: Qtile Electric palette drifted")
         if canonical_palettes is None:
@@ -68,8 +70,10 @@ def main() -> None:
         if literals:
             fail(f"{name}: literal colors remain outside theme tokens: {literals}")
 
-    if referenced != set(range(TOKEN_COUNT)):
-        fail(f"combined referenced token indexes {sorted(referenced)} != {list(range(TOKEN_COUNT))}")
+    # Token 4 is the legacy tinted background; the reference now requires true black.
+    expected_references = set(range(TOKEN_COUNT)) - {4}
+    if referenced != expected_references:
+        fail(f"combined referenced token indexes {sorted(referenced)} != {sorted(expected_references)}")
     print("theme-contract: OK")
 
 
