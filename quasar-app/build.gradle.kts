@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "actor.starintel.mobile"
+    namespace = "actor.starintel.quasar"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "actor.starintel.wear"
+        applicationId = "actor.starintel.quasar"
         minSdk = 26
         targetSdk = 36
         versionCode = 4
@@ -16,16 +16,14 @@ android {
 
     signingConfigs {
         getByName("debug") {
-            // Must be identical to the Wear app certificate or Play Services will not
-            // deliver Data Layer messages between phone and watch. Public debug-only key.
+            // Stable repository-owned debug identity keeps catalog updates installable.
+            // Production releases must replace this public development signer.
             storeFile = rootProject.file("nix/debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
     }
-
-    sourceSets.getByName("main").kotlin.srcDir("../shared/src/main/java")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -38,7 +36,6 @@ android {
 }
 
 dependencies {
-    implementation("com.google.android.gms:play-services-wearable:20.0.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }

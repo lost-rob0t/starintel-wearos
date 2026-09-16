@@ -61,7 +61,11 @@ class HomeActivity : Activity() {
             startActivity(Intent(this, WatchPackagesActivity::class.java))
         }, matchWrap(top = 12))
 
-        root.addView(menuButton("3 · UPDATE CHANNEL", "Optional: master, latest release, or a pinned version") {
+        root.addView(menuButton("3 · INSTALL PHONE APPS", "Download, verify, install, and update Quasar") {
+            startActivity(Intent(this, PhonePackagesActivity::class.java))
+        }, matchWrap(top = 12))
+
+        root.addView(menuButton("4 · UPDATE CHANNEL", "Optional: master, latest release, or a pinned version") {
             startActivity(Intent(this, UpdateManagerActivity::class.java))
         }, matchWrap(top = 12))
 

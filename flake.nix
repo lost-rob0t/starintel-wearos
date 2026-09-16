@@ -70,6 +70,13 @@
             outputName = "phone-app-debug.apk";
           };
 
+          buildQuasar = mkBuildApp {
+            name = "build-quasar";
+            task = ":quasar-app:assembleDebug";
+            sourceApk = "quasar-app/build/outputs/apk/debug/quasar-app-debug.apk";
+            outputName = "quasar-app-debug.apk";
+          };
+
           buildWear = mkBuildApp {
             name = "build-wear";
             task = ":wear-app:assembleDebug";
@@ -101,12 +108,14 @@
             text = common + wffContractChecks + ''
               gradle --no-daemon --stacktrace \
                 :phone-app:testDebugUnitTest :phone-app:assembleDebug \
+                :quasar-app:testDebugUnitTest :quasar-app:assembleDebug \
                 :wear-app:testDebugUnitTest :wear-app:assembleDebug \
                 :watchface:assembleNeonDebug \
                 :watchface:assembleCommandDebug \
                 :watchface:assembleTerminalDebug
 
               cp -f phone-app/build/outputs/apk/debug/phone-app-debug.apk build/nix/phone-app-debug.apk
+              cp -f quasar-app/build/outputs/apk/debug/quasar-app-debug.apk build/nix/quasar-app-debug.apk
               cp -f wear-app/build/outputs/apk/debug/wear-app-debug.apk build/nix/wear-app-debug.apk
               cp -f watchface/build/outputs/apk/neon/debug/watchface-neon-debug.apk build/nix/watchface-neon-debug.apk
               cp -f watchface/build/outputs/apk/command/debug/watchface-command-debug.apk build/nix/watchface-command-debug.apk
@@ -115,6 +124,7 @@
               echo "built:"
               printf '  %s\n' \
                 build/nix/phone-app-debug.apk \
+                build/nix/quasar-app-debug.apk \
                 build/nix/wear-app-debug.apk \
                 build/nix/watchface-neon-debug.apk \
                 build/nix/watchface-command-debug.apk \
@@ -128,6 +138,7 @@
             text = common + wffContractChecks + ''
               gradle --no-daemon --stacktrace \
                 :phone-app:testDebugUnitTest \
+                :quasar-app:testDebugUnitTest \
                 :wear-app:testDebugUnitTest \
                 :watchface:assembleNeonDebug \
                 :watchface:assembleCommandDebug \
@@ -194,7 +205,7 @@
           };
         in
         {
-          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildWear buildWatchface buildAll checkAll pairAndroid pairWatch installPhone installWatch;
+          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildQuasar buildWear buildWatchface buildAll checkAll pairAndroid pairWatch installPhone installWatch;
         };
     in
     {
@@ -211,6 +222,7 @@
         let e = mkEnv system;
         in {
           build-phone = { type = "app"; program = "${e.buildPhone}/bin/starintel-build-phone"; };
+          build-quasar = { type = "app"; program = "${e.buildQuasar}/bin/starintel-build-quasar"; };
           build-wear = { type = "app"; program = "${e.buildWear}/bin/starintel-build-wear"; };
           build-watchface = { type = "app"; program = "${e.buildWatchface}/bin/starintel-build-watchface"; };
           build-all = { type = "app"; program = "${e.buildAll}/bin/starintel-build-all"; };
