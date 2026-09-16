@@ -2,9 +2,11 @@ package actor.starintel.wear.data
 
 import android.content.Context
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -42,16 +44,17 @@ class StarIntelSearchClient private constructor(context: Context) {
         val encoded = URLEncoder.encode(trimmed, StandardCharsets.UTF_8.name())
         var lastFailure: Throwable? = null
 
-        // Broad searches can legitimately match documents with large payloads. A watch
-        // should not fail just because the first requested page is too heavy: retry the
-        // exact same query with progressively smaller pages, while keeping a hard byte cap.
+        // Search latency and response size increase with the requested page size.
+        // Retry the same query with smaller pages on bounded, transient failures.
         retryLimits(requestedLimit).forEach { boundedLimit ->
             val url = "$baseUrl/api/v1/search?q=$encoded&limit=$boundedLimit"
             try {
                 return@withContext parseSearchPayload(fetch(url, apiKey), boundedLimit)
-            } catch (failure: Throwable) {
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: Exception) {
                 lastFailure = failure
-                if (failure.message != RESPONSE_TOO_LARGE) {
+                if (!shouldRetrySearch(failure)) {
                     return@withContext SearchResult(error = safeError(failure))
                 }
             }
@@ -108,6 +111,7 @@ class StarIntelSearchClient private constructor(context: Context) {
     private fun safeError(failure: Throwable): String = when {
         failure.message?.startsWith("HTTP ") == true -> failure.message!!
         failure.message == RESPONSE_TOO_LARGE -> "Search results are too large for the watch; narrow the query"
+        failure is SocketTimeoutException -> "Search timed out; try a narrower query"
         else -> "Search unavailable"
     }
 
@@ -124,6 +128,11 @@ class StarIntelSearchClient private constructor(context: Context) {
                 .distinct()
                 .forEach(::add)
         }
+
+        internal fun shouldRetrySearch(failure: Exception): Boolean =
+            failure is SocketTimeoutException ||
+                failure.message == RESPONSE_TOO_LARGE ||
+                (failure.message?.removePrefix("HTTP ")?.toIntOrNull()?.let { it in 500..599 } == true)
 
         @Volatile private var instance: StarIntelSearchClient? = null
 
