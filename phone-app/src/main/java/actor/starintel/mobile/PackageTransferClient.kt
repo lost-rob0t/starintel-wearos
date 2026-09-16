@@ -15,7 +15,10 @@ class PackageTransferClient(context: Context) {
     private val channelClient = Wearable.getChannelClient(context.applicationContext)
     private val main = Handler(Looper.getMainLooper())
 
+    fun newTransferId(): String = UUID.randomUUID().toString()
+
     fun send(
+        transferId: String,
         nodeId: String,
         artifact: UpdateArtifact,
         versionCode: Long,
@@ -23,8 +26,7 @@ class PackageTransferClient(context: Context) {
         onProgress: (Int) -> Unit,
         onReady: (String) -> Unit,
         onFailure: (String, Throwable) -> Unit,
-    ): String {
-        val transferId = UUID.randomUUID().toString()
+    ) {
         val path = PackageTransferProtocol.CHANNEL_PREFIX + transferId
         val header = PackageTransferProtocol.Header(
             transferId = transferId,
@@ -77,6 +79,5 @@ class PackageTransferClient(context: Context) {
                     }
             }
             .addOnFailureListener { error -> onFailure(transferId, error) }
-        return transferId
     }
 }

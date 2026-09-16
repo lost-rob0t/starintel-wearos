@@ -52,12 +52,15 @@
       </Compare>
       <Compare expression="ultra">
         <Group x="0" y="0" width="450" height="450">
+          <PartText x="125" y="40" width="200" height="24"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="14" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.0]">STARINTEL // OPS</Font></Text></PartText>
+          <DigitalClock x="130" y="56" width="190" height="22"><TimeText x="0" y="0" width="190" height="22" format="EEE  MMM dd" align="CENTER"><Font family="SYNC_TO_DEVICE" size="12" width="CONDENSED" weight="MEDIUM" color="[CONFIGURATION.themeColor.3]" /></TimeText></DigitalClock>
           <PartDraw x="0" y="0" width="450" height="450">
             <Rectangle x="82" y="76" width="286" height="92"><Stroke color="[CONFIGURATION.themeColor.0]" thickness="1" /></Rectangle>
             <Line startX="82" startY="92" endX="98" endY="76"><Stroke color="[CONFIGURATION.themeColor.0]" thickness="1" /></Line>
             <Line startX="352" startY="168" endX="368" endY="152"><Stroke color="[CONFIGURATION.themeColor.0]" thickness="1" /></Line>
           </PartDraw>
           <DigitalClock x="88" y="92" width="274" height="64"><TimeText x="0" y="0" width="274" height="64" format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER"><Font family="SYNC_TO_DEVICE" size="60" width="EXTRA_CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.2]" /></TimeText></DigitalClock>
+          <PartText x="145" y="386" width="160" height="22"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="10" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.3]">TERMINAL · ONLINE</Font></Text></PartText>
         </Group>
       </Compare>
     </Condition>

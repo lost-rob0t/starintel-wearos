@@ -22,6 +22,8 @@ The phone downloads and verifies an APK before transfer. APK bytes are streamed 
 
 The watch re-verifies byte count and SHA-256, inspects the APK package/version, rejects downgrades, and enforces signing-certificate continuity when updating an already installed package. Only then is the APK handed to Android `PackageInstaller`.
 
+Each transfer state is persisted on the watch. If Companion stops receiving acknowledgements, it queries that saved state before retrying. A transfer gets one bounded retry; a terminal failure is recorded and **Install all** continues to the next package instead of wedging the whole queue. The phone presents separate progress rows for download, transfer, verification, approval, installation, completion, and failure, plus an overall queue bar and cancel action.
+
 Wear OS remains authoritative for consent. StarIntel does not bypass unknown-source permission or package-install confirmation.
 
 ## Install ordering

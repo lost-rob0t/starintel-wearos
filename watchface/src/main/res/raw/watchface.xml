@@ -106,9 +106,13 @@
 
             <Compare expression="neon_ultra">
                 <Group x="0" y="0" width="450" height="450" name="neonUltra">
-                    <DigitalClock x="80" y="105" width="115" height="104"><TimeText x="0" y="0" width="115" height="104" format="hh" hourFormat="SYNC_TO_DEVICE" align="END"><Font family="SYNC_TO_DEVICE" size="76" width="EXTRA_CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.2]" /></TimeText></DigitalClock>
-                    <PartText x="195" y="113" width="28" height="88"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="58" width="CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.0]">:</Font></Text></PartText>
-                    <DigitalClock x="223" y="105" width="145" height="104"><TimeText x="0" y="0" width="145" height="104" format="mm" align="START"><Font family="SYNC_TO_DEVICE" size="76" width="EXTRA_CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.2]" /></TimeText></DigitalClock>
+                    <PartText x="130" y="43" width="190" height="28"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="15" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.0]">STARINTEL</Font></Text></PartText>
+                    <DigitalClock x="120" y="69" width="210" height="26"><TimeText x="0" y="0" width="210" height="26" format="EEE  MMM dd" align="CENTER"><Font family="SYNC_TO_DEVICE" size="14" width="CONDENSED" weight="MEDIUM" color="[CONFIGURATION.themeColor.3]" /></TimeText></DigitalClock>
+                    <DigitalClock x="70" y="98" width="125" height="104"><TimeText x="0" y="0" width="125" height="104" format="hh" hourFormat="SYNC_TO_DEVICE" align="END"><Font family="SYNC_TO_DEVICE" size="82" width="EXTRA_CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.2]" /></TimeText></DigitalClock>
+                    <PartText x="195" y="106" width="28" height="88"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="62" width="CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.0]">:</Font></Text></PartText>
+                    <DigitalClock x="223" y="98" width="155" height="104"><TimeText x="0" y="0" width="155" height="104" format="mm" align="START"><Font family="SYNC_TO_DEVICE" size="82" width="EXTRA_CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.2]" /></TimeText></DigitalClock>
+                    <DigitalClock x="356" y="154" width="50" height="24"><TimeText x="0" y="0" width="50" height="24" format="ss" align="CENTER"><Font family="SYNC_TO_DEVICE" size="13" width="CONDENSED" weight="SEMI_BOLD" color="[CONFIGURATION.themeColor.0]" /></TimeText></DigitalClock>
+                    <PartText x="140" y="386" width="170" height="24"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="11" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.3]">LIVE OPS · PURE BLACK</Font></Text></PartText>
                 </Group>
             </Compare>
 
@@ -145,9 +149,12 @@
 
             <Compare expression="command_ultra">
                 <Group x="0" y="0" width="450" height="450" name="commandUltra">
+                    <PartText x="125" y="43" width="200" height="28"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="15" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.0]">STARINTEL COMMAND</Font></Text></PartText>
+                    <DigitalClock x="120" y="70" width="210" height="26"><TimeText x="0" y="0" width="210" height="26" format="EEE  MMM dd" align="CENTER"><Font family="SYNC_TO_DEVICE" size="14" width="CONDENSED" weight="MEDIUM" color="[CONFIGURATION.themeColor.3]" /></TimeText></DigitalClock>
                     <DigitalClock x="70" y="102" width="125" height="104"><TimeText x="0" y="0" width="125" height="104" format="hh" hourFormat="SYNC_TO_DEVICE" align="END"><Font family="SYNC_TO_DEVICE" size="88" width="EXTRA_CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.2]" /></TimeText></DigitalClock>
                     <PartText x="195" y="110" width="28" height="88"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="70" width="CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.0]">:</Font></Text></PartText>
                     <DigitalClock x="223" y="102" width="150" height="104"><TimeText x="0" y="0" width="150" height="104" format="mm" align="START"><Font family="SYNC_TO_DEVICE" size="88" width="EXTRA_CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.2]" /></TimeText></DigitalClock>
+                    <PartText x="145" y="386" width="160" height="24"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="11" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.3]">MINIMAL COMMAND</Font></Text></PartText>
                 </Group>
             </Compare>
 
@@ -179,9 +186,12 @@
             </Compare>
             <Compare expression="terminal_ultra">
                 <Group x="0" y="0" width="450" height="450" name="terminalUltra">
+                    <PartText x="125" y="43" width="200" height="28"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="15" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.0]">STARINTEL // OPS</Font></Text></PartText>
+                    <DigitalClock x="120" y="70" width="210" height="26"><TimeText x="0" y="0" width="210" height="26" format="EEE  MMM dd" align="CENTER"><Font family="SYNC_TO_DEVICE" size="14" width="CONDENSED" weight="MEDIUM" color="[CONFIGURATION.themeColor.3]" /></TimeText></DigitalClock>
                     <DigitalClock x="75" y="105" width="120" height="104"><TimeText x="0" y="0" width="120" height="104" format="hh" hourFormat="SYNC_TO_DEVICE" align="END"><Font family="SYNC_TO_DEVICE" size="84" width="EXTRA_CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.2]" /></TimeText></DigitalClock>
                     <PartText x="195" y="113" width="28" height="88"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="66" width="CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.0]">:</Font></Text></PartText>
                     <DigitalClock x="223" y="105" width="150" height="104"><TimeText x="0" y="0" width="150" height="104" format="mm" align="START"><Font family="SYNC_TO_DEVICE" size="84" width="EXTRA_CONDENSED" weight="BLACK" color="[CONFIGURATION.themeColor.2]" /></TimeText></DigitalClock>
+                    <PartText x="145" y="386" width="160" height="24"><Text align="CENTER"><Font family="SYNC_TO_DEVICE" size="11" width="CONDENSED" weight="BOLD" color="[CONFIGURATION.themeColor.3]">TERMINAL · ONLINE</Font></Text></PartText>
                 </Group>
             </Compare>
         </Condition>
