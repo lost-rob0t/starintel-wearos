@@ -4,12 +4,15 @@ import android.app.Activity
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageInstaller
+import android.content.pm.PackageManager
+import android.content.pm.Signature
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import java.io.File
 import java.io.FileInputStream
+import java.security.MessageDigest
 
 object PackageUpdateInstaller {
     fun canRequestInstalls(activity: Activity): Boolean =
@@ -27,6 +30,7 @@ object PackageUpdateInstaller {
 
     fun install(activity: Activity, apk: File, expectedPackage: String) {
         require(apk.isFile && apk.canRead()) { "APK is not readable: $apk" }
+        verify(activity, apk, expectedPackage)?.let { error(it) }
         if (!canRequestInstalls(activity)) {
             openInstallPermission(activity)
             return
@@ -57,6 +61,53 @@ object PackageUpdateInstaller {
             session.commit(pending.intentSender)
         }
     }
+
+    fun verify(activity: Activity, apk: File, expectedPackage: String): String? {
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_SIGNATURES
+        }
+        @Suppress("DEPRECATION")
+        val archive = activity.packageManager.getPackageArchiveInfo(apk.absolutePath, flags)
+            ?: return "Downloaded file is not a readable APK"
+        if (archive.packageName != expectedPackage) {
+            return "Package mismatch: expected $expectedPackage, got ${archive.packageName}"
+        }
+
+        val installed = try {
+            activity.packageManager.getPackageInfo(expectedPackage, flags)
+        } catch (_: PackageManager.NameNotFoundException) {
+            null
+        }
+        if (installed != null) {
+            if (versionCode(archive) < versionCode(installed)) return "Refusing package downgrade"
+            val archiveSigners = signerDigests(archive)
+            val installedSigners = signerDigests(installed)
+            if (archiveSigners.isEmpty() || installedSigners.isEmpty() || archiveSigners != installedSigners) {
+                return "Package signing certificate does not match the installed app"
+            }
+        }
+        return null
+    }
+
+    @Suppress("DEPRECATION")
+    private fun versionCode(info: android.content.pm.PackageInfo): Long =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else info.versionCode.toLong()
+
+    @Suppress("DEPRECATION")
+    private fun signerDigests(info: android.content.pm.PackageInfo): Set<String> {
+        val signatures: Array<Signature> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val signing = info.signingInfo ?: return emptySet()
+            if (signing.hasMultipleSigners()) signing.apkContentsSigners else signing.signingCertificateHistory
+        } else {
+            info.signatures ?: return emptySet()
+        }
+        return signatures.mapTo(mutableSetOf()) { signature ->
+            MessageDigest.getInstance("SHA-256").digest(signature.toByteArray()).joinToString("") { "%02x".format(it) }
+        }
+    }
 }
 
 class UpdateInstallResultActivity : Activity() {
@@ -84,7 +135,7 @@ class UpdateInstallResultActivity : Activity() {
                 finish()
             }
             PackageInstaller.STATUS_SUCCESS -> {
-                Toast.makeText(this, "StarIntel Companion updated", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Package installed", Toast.LENGTH_SHORT).show()
                 finish()
             }
             PackageInstaller.STATUS_FAILURE,

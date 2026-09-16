@@ -65,6 +65,10 @@ data class UpdateManifest(
     fun wearArtifacts(): List<UpdateArtifact> = artifacts.values
         .filter { it.target == "wear" }
         .sortedWith(compareBy<UpdateArtifact> { it.installOrder }.thenBy { it.id })
+
+    fun phoneArtifacts(): List<UpdateArtifact> = artifacts.values
+        .filter { it.target == "phone" }
+        .sortedWith(compareBy<UpdateArtifact> { it.installOrder }.thenBy { it.id })
 }
 
 object UpdateFeed {
