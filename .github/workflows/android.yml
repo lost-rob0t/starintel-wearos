@@ -30,6 +30,7 @@ jobs:
       - name: Build and test
         run: |
           gradle --stacktrace \
+            :starintel-android:testDebugUnitTest \
             :phone-app:testDebugUnitTest :phone-app:assembleDebug \
             :quasar-app:testDebugUnitTest :quasar-app:assembleDebug \
             :wear-app:testDebugUnitTest :wear-app:assembleDebug \

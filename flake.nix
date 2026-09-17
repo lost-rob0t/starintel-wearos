@@ -24,7 +24,9 @@
             includeSources = false;
             includeSystemImages = false;
             includeEmulator = false;
-            includeNDK = false;
+            includeCmake = true;
+            cmakeVersions = [ "3.22.1" ];
+            includeNDK = true;
           };
 
           androidSdk = androidComposition.androidsdk;
@@ -107,6 +109,7 @@
             runtimeInputs = [ gradle pkgs.coreutils pkgs.python3 ];
             text = common + wffContractChecks + ''
               gradle --no-daemon --stacktrace \
+                :starintel-android:testDebugUnitTest \
                 :phone-app:testDebugUnitTest :phone-app:assembleDebug \
                 :quasar-app:testDebugUnitTest :quasar-app:assembleDebug \
                 :wear-app:testDebugUnitTest :wear-app:assembleDebug \
@@ -137,6 +140,7 @@
             runtimeInputs = [ gradle pkgs.python3 ];
             text = common + wffContractChecks + ''
               gradle --no-daemon --stacktrace \
+                :starintel-android:testDebugUnitTest \
                 :phone-app:testDebugUnitTest \
                 :quasar-app:testDebugUnitTest \
                 :wear-app:testDebugUnitTest \

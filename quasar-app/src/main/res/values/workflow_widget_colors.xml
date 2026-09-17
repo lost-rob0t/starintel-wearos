@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="quasar_widget_background">#F207070C</color>
+    <color name="quasar_widget_panel">#FF12121F</color>
+    <color name="quasar_widget_border">#FF302E4C</color>
+    <color name="quasar_widget_cyan">#FF2DE2E6</color>
+    <color name="quasar_widget_gold">#FFFBA922</color>
+    <color name="quasar_widget_text">#FFF3F4F5</color>
+    <color name="quasar_widget_muted">#FFA4A6B8</color>
+    <color name="quasar_widget_failure">#FFDD546E</color>
+</resources>

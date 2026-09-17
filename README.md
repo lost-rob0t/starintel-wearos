@@ -4,8 +4,11 @@ Wear OS surfaces for StarIntel, built around the aggregate `GET /api/v1/stats` s
 
 ## Packages
 
-This repository produces four application/package families:
+This repository produces four application/package families plus one reusable
+Android library:
 
+- `starintel-android/` — typed StarIntel client, local actor runtime, ECL/Tek9
+  bridge contract, and Prolog-RLM agent envelopes for native Android apps.
 - `phone-app/` — Android companion used to configure the paired StarIntel watch without typing credentials on the watch.
 - `quasar-app/` — separately installable native Android Quasar client for the current Star server API.
 - `wear-app/` — standalone Wear OS app, authenticated StarIntel server client/cache, complication data sources, and Tiles.
