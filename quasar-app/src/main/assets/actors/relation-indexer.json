@@ -1,0 +1,12 @@
+{
+  "id": "local.relation-indexer",
+  "name": "Relation indexer",
+  "version": "1",
+  "description": "Projects typed StarIntel relation documents into the embedded Tek9 graph.",
+  "entrypoint": "STARINTEL.MOBILE.ACTORS:INDEX-RELATION",
+  "accepts": ["relation"],
+  "capabilities": ["document.read", "relation.write"],
+  "default_config": {
+    "graph": "default"
+  }
+}

@@ -125,6 +125,7 @@ jobs:
         run: >-
           nix develop --no-update-lock-file --command
           gradle --stacktrace
+          :starintel-android:testDebugUnitTest
           :phone-app:testDebugUnitTest
           :quasar-app:testDebugUnitTest
           :wear-app:testDebugUnitTest
