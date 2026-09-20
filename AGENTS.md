@@ -1,8 +1,9 @@
 # StarIntel Wear OS agent contract
 
 This repository owns the Android phone companion, native Quasar Android app,
-StarIntel Wear app, and resource-only Watch Face Format packages. Keep them as
-independent APKs built and released from one pinned Nix/Gradle workspace.
+StarIntel Operator, Collector, Maps, StarIntel Wear app, and resource-only Watch
+Face Format packages. Keep the applications as independent APKs built and
+released from one pinned Nix/Gradle workspace.
 
 ## Persistent product decisions
 
@@ -12,6 +13,20 @@ independent APKs built and released from one pinned Nix/Gradle workspace.
 - `quasar-app` is a separately installable, native Android app with package ID
   `actor.starintel.quasar`. Do not merge it into the companion and do not replace
   it with a WebView wrapper.
+- `operator-app` is the ATAK-style command shell with package ID
+  `actor.starintel.operator`. It coordinates independently installable surfaces;
+  it must not absorb their package identities or become a second Star protocol.
+- `collector-app` is the user-visible collection surface with package ID
+  `actor.starintel.collector`. Collection sessions are explicitly started and
+  stopped. Background work must use Android-visible lifecycle mechanisms and
+  user-authorized sensor/data capabilities.
+- `maps-app` is the tactical geo projection with package ID
+  `actor.starintel.maps`. Render real supplied/query-derived geo documents only;
+  never seed production UI with fabricated markers or pretend a basemap/layer was
+  loaded when it was not.
+- `android-contracts` owns stable Android package/action/extra names only. Star
+  server, Quasar control-plane, JSON-LD document schemas, and star:// remain the
+  protocol/data authorities.
 - The companion is the package catalog for both phone and watch. Phone packages
   install locally through Android `PackageInstaller`; watch packages cross the
   Wearable Data Layer and install on the watch.
