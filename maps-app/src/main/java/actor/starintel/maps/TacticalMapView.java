@@ -94,10 +94,10 @@ public final class TacticalMapView extends View {
             canvas.drawLine(x - r * 1.7f, y, x + r * 1.7f, y, marker);
             canvas.drawLine(x, y - r * 1.7f, x, y + r * 1.7f, marker);
 
-            String label = point.label == null || point.label.isBlank()
+            String label = point.label == null || point.label.trim().isEmpty()
                     ? compact(point.documentId)
                     : point.label;
-            if (!label.isBlank()) {
+            if (!label.trim().isEmpty()) {
                 text.setTextSize(dp(10));
                 canvas.drawText(label, x + dp(10), y - dp(9), text);
             }
