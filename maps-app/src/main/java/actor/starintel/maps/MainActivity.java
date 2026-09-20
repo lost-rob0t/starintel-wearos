@@ -87,7 +87,7 @@ public final class MainActivity extends Activity {
         }
 
         String payload = intent.getStringExtra(StarIntelAndroidContract.EXTRA_GEO_JSON);
-        if (payload == null || payload.isBlank()) return points;
+        if (payload == null || payload.trim().isEmpty()) return points;
 
         try {
             JSONArray rows = new JSONArray(payload);
