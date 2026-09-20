@@ -4,12 +4,16 @@ Wear OS surfaces for StarIntel, built around the aggregate `GET /api/v1/stats` s
 
 ## Packages
 
-This repository produces four application/package families:
+This repository produces seven installable application/package families plus a shared Android IPC contract:
 
 - `phone-app/` — Android companion used to configure the paired StarIntel watch without typing credentials on the watch.
 - `quasar-app/` — separately installable native Android Quasar client for the current Star server API.
+- `operator-app/` — ATAK-style StarIntel tactical command shell.
+- `collector-app/` — user-visible foreground collection runtime and Android Share ingestion surface.
+- `maps-app/` — tactical projection for real StarIntel geo-document payloads.
 - `wear-app/` — standalone Wear OS app, authenticated StarIntel server client/cache, complication data sources, and Tiles.
-- `watchface/` — resource-only Watch Face Format package.
+- `watchface/` — resource-only Watch Face Format packages.
+- `android-contracts/` — pure-JVM package/action/extra names shared by the Android apps.
 
 The phone and Wear app deliberately share the application ID `actor.starintel.wear`. Google Play services therefore permits Wearable Data Layer communication only when both packages also have the same signing certificate. The watch-face package remains separate because executable Wear OS logic and a WFF watch face cannot live in the same bundle.
 
@@ -28,6 +32,9 @@ Build individual packages:
 ```sh
 nix run .#build-phone
 nix run .#build-quasar
+nix run .#build-operator
+nix run .#build-collector
+nix run .#build-maps
 nix run .#build-wear
 nix run .#build-watchface
 ```
@@ -43,8 +50,13 @@ Stable APK outputs are staged at:
 ```text
 build/nix/phone-app-debug.apk
 build/nix/quasar-app-debug.apk
+build/nix/operator-app-debug.apk
+build/nix/collector-app-debug.apk
+build/nix/maps-app-debug.apk
 build/nix/wear-app-debug.apk
-build/nix/watchface-debug.apk
+build/nix/watchface-neon-debug.apk
+build/nix/watchface-command-debug.apk
+build/nix/watchface-terminal-debug.apk
 ```
 
 Run checks without staging APKs:
@@ -270,9 +282,12 @@ Every successful Android workflow publishes:
 
 - `starintel-phone-app-debug` containing `phone-app-debug.apk`
 - `quasar-android-debug` containing `quasar-app-debug.apk`
+- `starintel-operator-debug` containing `operator-app-debug.apk`
+- `starintel-collector-debug` containing `collector-app-debug.apk`
+- `starintel-maps-debug` containing `maps-app-debug.apk`
 - `starintel-wear-app-debug` containing `wear-app-debug.apk`
-- `starintel-watchface-debug` containing `watchface-debug.apk`
-- `starintel-nix-apks-debug` containing all three APKs built together through the pinned Nix toolchain
+- per-face Neon, Command, and Terminal watch-face artifacts
+- `starintel-nix-apks-debug` containing the complete APK set built together through the pinned Nix toolchain
 
 ## Nix toolchain packages
 
@@ -289,8 +304,12 @@ nix build .#gradle
 The legacy CI path remains available and currently uses JDK 17, Gradle 9.6, Android API 36, Wearable Data Layer 20.0.1, Wear Tiles 1.6.2, and ProtoLayout 1.4.2.
 
 ```sh
-gradle :phone-app:testDebugUnitTest :phone-app:assembleDebug \
+gradle :android-contracts:test \
+  :phone-app:testDebugUnitTest :phone-app:assembleDebug \
   :quasar-app:testDebugUnitTest :quasar-app:assembleDebug \
+  :operator-app:testDebugUnitTest :operator-app:assembleDebug \
+  :collector-app:testDebugUnitTest :collector-app:assembleDebug \
+  :maps-app:testDebugUnitTest :maps-app:assembleDebug \
   :wear-app:testDebugUnitTest :wear-app:assembleDebug \
   :watchface:assembleNeonDebug :watchface:assembleCommandDebug :watchface:assembleTerminalDebug
 ```
