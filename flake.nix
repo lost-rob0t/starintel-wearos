@@ -77,6 +77,27 @@
             outputName = "quasar-app-debug.apk";
           };
 
+          buildOperator = mkBuildApp {
+            name = "build-operator";
+            task = ":operator-app:assembleDebug";
+            sourceApk = "operator-app/build/outputs/apk/debug/operator-app-debug.apk";
+            outputName = "operator-app-debug.apk";
+          };
+
+          buildCollector = mkBuildApp {
+            name = "build-collector";
+            task = ":collector-app:assembleDebug";
+            sourceApk = "collector-app/build/outputs/apk/debug/collector-app-debug.apk";
+            outputName = "collector-app-debug.apk";
+          };
+
+          buildMaps = mkBuildApp {
+            name = "build-maps";
+            task = ":maps-app:assembleDebug";
+            sourceApk = "maps-app/build/outputs/apk/debug/maps-app-debug.apk";
+            outputName = "maps-app-debug.apk";
+          };
+
           buildWear = mkBuildApp {
             name = "build-wear";
             task = ":wear-app:assembleDebug";
@@ -107,8 +128,12 @@
             runtimeInputs = [ gradle pkgs.coreutils pkgs.python3 ];
             text = common + wffContractChecks + ''
               gradle --no-daemon --stacktrace \
+                :android-contracts:test \
                 :phone-app:testDebugUnitTest :phone-app:assembleDebug \
                 :quasar-app:testDebugUnitTest :quasar-app:assembleDebug \
+                :operator-app:testDebugUnitTest :operator-app:assembleDebug \
+                :collector-app:testDebugUnitTest :collector-app:assembleDebug \
+                :maps-app:testDebugUnitTest :maps-app:assembleDebug \
                 :wear-app:testDebugUnitTest :wear-app:assembleDebug \
                 :watchface:assembleNeonDebug \
                 :watchface:assembleCommandDebug \
@@ -116,6 +141,9 @@
 
               cp -f phone-app/build/outputs/apk/debug/phone-app-debug.apk build/nix/phone-app-debug.apk
               cp -f quasar-app/build/outputs/apk/debug/quasar-app-debug.apk build/nix/quasar-app-debug.apk
+              cp -f operator-app/build/outputs/apk/debug/operator-app-debug.apk build/nix/operator-app-debug.apk
+              cp -f collector-app/build/outputs/apk/debug/collector-app-debug.apk build/nix/collector-app-debug.apk
+              cp -f maps-app/build/outputs/apk/debug/maps-app-debug.apk build/nix/maps-app-debug.apk
               cp -f wear-app/build/outputs/apk/debug/wear-app-debug.apk build/nix/wear-app-debug.apk
               cp -f watchface/build/outputs/apk/neon/debug/watchface-neon-debug.apk build/nix/watchface-neon-debug.apk
               cp -f watchface/build/outputs/apk/command/debug/watchface-command-debug.apk build/nix/watchface-command-debug.apk
@@ -125,6 +153,9 @@
               printf '  %s\n' \
                 build/nix/phone-app-debug.apk \
                 build/nix/quasar-app-debug.apk \
+                build/nix/operator-app-debug.apk \
+                build/nix/collector-app-debug.apk \
+                build/nix/maps-app-debug.apk \
                 build/nix/wear-app-debug.apk \
                 build/nix/watchface-neon-debug.apk \
                 build/nix/watchface-command-debug.apk \
@@ -137,8 +168,12 @@
             runtimeInputs = [ gradle pkgs.python3 ];
             text = common + wffContractChecks + ''
               gradle --no-daemon --stacktrace \
+                :android-contracts:test \
                 :phone-app:testDebugUnitTest \
                 :quasar-app:testDebugUnitTest \
+                :operator-app:testDebugUnitTest \
+                :collector-app:testDebugUnitTest \
+                :maps-app:testDebugUnitTest \
                 :wear-app:testDebugUnitTest \
                 :watchface:assembleNeonDebug \
                 :watchface:assembleCommandDebug \
@@ -205,7 +240,7 @@
           };
         in
         {
-          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildQuasar buildWear buildWatchface buildAll checkAll pairAndroid pairWatch installPhone installWatch;
+          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildQuasar buildOperator buildCollector buildMaps buildWear buildWatchface buildAll checkAll pairAndroid pairWatch installPhone installWatch;
         };
     in
     {
@@ -223,6 +258,9 @@
         in {
           build-phone = { type = "app"; program = "${e.buildPhone}/bin/starintel-build-phone"; };
           build-quasar = { type = "app"; program = "${e.buildQuasar}/bin/starintel-build-quasar"; };
+          build-operator = { type = "app"; program = "${e.buildOperator}/bin/starintel-build-operator"; };
+          build-collector = { type = "app"; program = "${e.buildCollector}/bin/starintel-build-collector"; };
+          build-maps = { type = "app"; program = "${e.buildMaps}/bin/starintel-build-maps"; };
           build-wear = { type = "app"; program = "${e.buildWear}/bin/starintel-build-wear"; };
           build-watchface = { type = "app"; program = "${e.buildWatchface}/bin/starintel-build-watchface"; };
           build-all = { type = "app"; program = "${e.buildAll}/bin/starintel-build-all"; };
