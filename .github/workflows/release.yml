@@ -95,7 +95,7 @@ jobs:
           set -euo pipefail
           expected="${VERSION#v}"
           codes=()
-          for module in phone-app quasar-app wear-app watchface; do
+          for module in phone-app quasar-app operator-app collector-app maps-app wear-app watchface; do
             file="$module/build.gradle.kts"
             actual="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' "$file")"
             code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' "$file")"
@@ -109,12 +109,12 @@ jobs:
             fi
             codes+=("$code")
           done
-          if [[ "${codes[0]}" != "${codes[1]}" || \
-                "${codes[0]}" != "${codes[2]}" || \
-                "${codes[0]}" != "${codes[3]}" ]]; then
-            echo "error: versionCode mismatch: ${codes[*]}" >&2
-            exit 1
-          fi
+          for code in "${codes[@]}"; do
+            if [[ "$code" != "${codes[0]}" ]]; then
+              echo "error: versionCode mismatch: ${codes[*]}" >&2
+              exit 1
+            fi
+          done
 
       - name: Evaluate pinned Nix flake
         if: steps.meta.outputs.publish == 'true'
@@ -125,8 +125,12 @@ jobs:
         run: >-
           nix develop --no-update-lock-file --command
           gradle --stacktrace
+          :android-contracts:test
           :phone-app:testDebugUnitTest
           :quasar-app:testDebugUnitTest
+          :operator-app:testDebugUnitTest
+          :collector-app:testDebugUnitTest
+          :maps-app:testDebugUnitTest
           :wear-app:testDebugUnitTest
 
       - name: Validate watch-face contracts
@@ -184,6 +188,9 @@ jobs:
           mkdir -p dist
           cp build/nix/phone-app-debug.apk "dist/starintel-phone-${VERSION}.apk"
           cp build/nix/quasar-app-debug.apk "dist/quasar-android-${VERSION}.apk"
+          cp build/nix/operator-app-debug.apk "dist/starintel-operator-${VERSION}.apk"
+          cp build/nix/collector-app-debug.apk "dist/starintel-collector-${VERSION}.apk"
+          cp build/nix/maps-app-debug.apk "dist/starintel-maps-${VERSION}.apk"
           cp build/nix/wear-app-debug.apk "dist/starintel-wear-${VERSION}.apk"
           cp build/nix/watchface-neon-debug.apk "dist/starintel-watchface-neon-${VERSION}.apk"
           cp build/nix/watchface-command-debug.apk "dist/starintel-watchface-command-${VERSION}.apk"
