@@ -30,8 +30,12 @@ jobs:
       - name: Build and test
         run: |
           gradle --stacktrace \
+            :android-contracts:test \
             :phone-app:testDebugUnitTest :phone-app:assembleDebug \
             :quasar-app:testDebugUnitTest :quasar-app:assembleDebug \
+            :operator-app:testDebugUnitTest :operator-app:assembleDebug \
+            :collector-app:testDebugUnitTest :collector-app:assembleDebug \
+            :maps-app:testDebugUnitTest :maps-app:assembleDebug \
             :wear-app:testDebugUnitTest :wear-app:assembleDebug \
             :watchface:assembleNeonDebug \
             :watchface:assembleCommandDebug \
@@ -53,6 +57,24 @@ jobs:
         with:
           name: starintel-wear-app-debug
           path: wear-app/build/outputs/apk/debug/wear-app-debug.apk
+          if-no-files-found: error
+      - name: Publish StarIntel Operator APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: starintel-operator-debug
+          path: operator-app/build/outputs/apk/debug/operator-app-debug.apk
+          if-no-files-found: error
+      - name: Publish StarIntel Collector APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: starintel-collector-debug
+          path: collector-app/build/outputs/apk/debug/collector-app-debug.apk
+          if-no-files-found: error
+      - name: Publish StarIntel Maps APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: starintel-maps-debug
+          path: maps-app/build/outputs/apk/debug/maps-app-debug.apk
           if-no-files-found: error
       - name: Publish native Quasar APK
         uses: actions/upload-artifact@v4
@@ -116,6 +138,9 @@ jobs:
         run: |
           test -s build/nix/phone-app-debug.apk
           test -s build/nix/quasar-app-debug.apk
+          test -s build/nix/operator-app-debug.apk
+          test -s build/nix/collector-app-debug.apk
+          test -s build/nix/maps-app-debug.apk
           test -s build/nix/wear-app-debug.apk
           test -s build/nix/watchface-neon-debug.apk
           test -s build/nix/watchface-command-debug.apk
