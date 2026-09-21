@@ -16,8 +16,9 @@ public final class StarIntelConfigProvider extends ContentProvider {
     private static final Map<String, String> DEFAULTS = new LinkedHashMap<>();
     static {
         DEFAULTS.put("server.url", "");
-        DEFAULTS.put("map.tiles.base_url", "");
-        DEFAULTS.put("map.style_url", "");
+        DEFAULTS.put("map.tiles.base_url", "https://maps.starintel.actor/tiles/{z}/{x}/{y}.png");
+        DEFAULTS.put("map.style_url", "https://maps.starintel.actor/style.json");
+        DEFAULTS.put("map.attribution", "StarIntel Maps");
         DEFAULTS.put("prolog_rlm.endpoint", "http://127.0.0.1:18765");
         DEFAULTS.put("hackmode.home", "~/hackmode");
         DEFAULTS.put("hackmode.command", "hm");
