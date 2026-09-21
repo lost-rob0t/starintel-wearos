@@ -101,6 +101,7 @@ class LocalActorSystem(
 
     fun dispatch(instanceId: String, envelope: ActorEnvelope): CompletableFuture<ActorRun> {
         check(!closed.get()) { "Actor system is closed" }
+        require(envelope.depth in 0..maxDispatchDepth) { "Invalid actor envelope depth" }
         val cell = synchronized(this) { cells[instanceId] } ?: error("Unknown actor instance: $instanceId")
         require(cell.config.enabled) { "Actor instance is disabled" }
         val dtype = envelope.document.optString("dtype")
@@ -202,6 +203,7 @@ class LocalActorSystem(
                 }
             }
             val actorDispatches = result.effects.filterIsInstance<ActorEffect.DispatchActor>()
+            actorDispatches.forEach { effect -> validateChild(effect, envelope) }
             store.transact {
                 result.effects.forEach { effect ->
                     when (effect) {
@@ -232,14 +234,22 @@ class LocalActorSystem(
             return ActorRun(actor.manifest.id, envelope.messageId, result.effects.size, result.summary)
         }
 
-        private fun dispatchChild(effect: ActorEffect.DispatchActor, parent: ActorEnvelope) {
+        private fun validateChild(effect: ActorEffect.DispatchActor, parent: ActorEnvelope) {
             require(parent.depth < maxDispatchDepth) { "Actor dispatch depth exceeded" }
             require(effect.instanceId.matches(INSTANCE_ID)) { "Invalid downstream actor instance id" }
             val target = synchronized(this@LocalActorSystem) { cells[effect.instanceId] }
                 ?: error("Unknown downstream actor instance: ${effect.instanceId}")
+            require(target.config.enabled) { "Downstream actor instance is disabled" }
             require(target.actor.manifest.tier.order >= actor.manifest.tier.order) {
                 "Actor dispatch cannot move backward from ${actor.manifest.tier.wireName} to ${target.actor.manifest.tier.wireName}"
             }
+            val dtype = effect.document.optString("dtype")
+            require(target.actor.manifest.accepts.isEmpty() || dtype in target.actor.manifest.accepts) {
+                "Actor ${target.actor.manifest.id} does not accept dtype $dtype"
+            }
+        }
+
+        private fun dispatchChild(effect: ActorEffect.DispatchActor, parent: ActorEnvelope) {
             val child = ActorEnvelope(
                 messageId = UUID.randomUUID().toString(),
                 document = JSONObject(effect.document.toString()),
