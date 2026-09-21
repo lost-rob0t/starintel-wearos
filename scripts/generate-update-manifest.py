@@ -49,6 +49,8 @@ def main() -> int:
     names = {
         "phone": (f"starintel-phone-{suffix}.apk", "actor.starintel.wear", "phone", 0),
         "quasar": (f"quasar-android-{suffix}.apk", "actor.starintel.quasar", "phone", 10),
+        "collector": (f"starintel-collector-{suffix}.apk", "actor.starintel.collector", "phone", 20),
+        "hackmode": (f"starintel-hackmode-{suffix}.apk", "actor.starintel.hackmode", "phone", 30),
         "watchface-neon": (f"starintel-watchface-neon-{suffix}.apk", "actor.starintel.watchface.neon", "wear", 10),
         "watchface-command": (f"starintel-watchface-command-{suffix}.apk", "actor.starintel.watchface.command", "wear", 20),
         "watchface-terminal": (f"starintel-watchface-terminal-{suffix}.apk", "actor.starintel.watchface.terminal", "wear", 30),
