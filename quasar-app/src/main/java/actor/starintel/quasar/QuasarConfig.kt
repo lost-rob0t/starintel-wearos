@@ -1,5 +1,6 @@
 package actor.starintel.quasar
 
+import actor.starintel.android.config.StarIntelSharedConfig
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -11,9 +12,13 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 internal class QuasarConfig(context: Context) {
-    private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private val shared = StarIntelSharedConfig(appContext)
 
-    fun serverUrl(): String = prefs.getString(KEY_SERVER, "").orEmpty().trimEnd('/')
+    fun serverUrl(): String =
+        shared.get(StarIntelSharedConfig.KEY_SERVER_URL, prefs.getString(KEY_SERVER, "").orEmpty())
+            .trimEnd('/')
 
     fun save(serverUrl: String, apiKey: String) {
         val normalized = serverUrl.trim().trimEnd('/')
@@ -31,6 +36,7 @@ internal class QuasarConfig(context: Context) {
                 .putString(KEY_IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
                 .commit(),
         ) { "Could not persist Quasar configuration" }
+        shared.put(StarIntelSharedConfig.KEY_SERVER_URL, normalized)
     }
 
     fun apiKey(): String? {
