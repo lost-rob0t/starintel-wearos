@@ -26,17 +26,19 @@ parse_mapping_rule(Text, Rule) :-
     phrase(mapping_rule(Rule), Codes).
 
 parse_mapping_rules(Text, Rules) :-
-    split_string(Text, ".", " \t\r\n", Chunks),
-    findall(
-        Rule,
-        (
-            member(Chunk, Chunks),
-            Chunk \= "",
-            string_codes(Chunk, Codes),
-            phrase(mapping_rule_without_dot(Rule), Codes)
-        ),
-        Rules
-    ).
+    string_codes(Text, Codes),
+    phrase(mapping_rules(Rules), Codes).
+
+mapping_rules([Rule|Rest]) -->
+    blanks,
+    mapping_rule_without_dot(Rule),
+    blanks,
+    ".",
+    !,
+    mapping_rules(Rest).
+mapping_rules([]) -->
+    blanks,
+    eos.
 
 mapping_rule(Rule) -->
     mapping_rule_without_dot(Rule),
@@ -111,7 +113,7 @@ timestamp(Milliseconds) -->
     quoted_string(Codes),
     {
         string_codes(Text, Codes),
-        parse_time(Text, iso_8601, Seconds),
+        parse_time(Text, Seconds),
         Milliseconds is round(Seconds * 1000)
     }.
 
