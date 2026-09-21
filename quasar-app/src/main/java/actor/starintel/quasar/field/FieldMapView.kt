@@ -1,5 +1,6 @@
 package actor.starintel.quasar.field
 
+import actor.starintel.android.config.StarIntelSharedConfig
 import actor.starintel.quasar.QuasarDesign
 import actor.starintel.quasar.dp
 import android.content.Context
@@ -24,6 +25,7 @@ internal class FieldMapView(context: Context) : View(context), AutoCloseable {
     var onViewportChanged: (GeoPoint, Int) -> Unit = { _, _ -> }
     var onBasemapChanged: (BasemapState) -> Unit = {}
 
+    private val sharedConfig = StarIntelSharedConfig(context.applicationContext)
     private val tiles = OpenMapTileRepository(context) { state ->
         basemapState = state
         onBasemapChanged(state)
@@ -222,7 +224,8 @@ internal class FieldMapView(context: Context) : View(context), AutoCloseable {
     private fun drawAttribution(canvas: Canvas) {
         labelPaint.textSize = context.dp(9).toFloat()
         labelPaint.color = Color.argb(220, 230, 230, 230)
-        val label = "${OpenMapTilePolicy.attribution}  ·  z$zoom"
+        val attribution = sharedConfig.get(StarIntelSharedConfig.KEY_MAP_ATTRIBUTION, "StarIntel Maps")
+        val label = "$attribution  ·  z$zoom"
         canvas.drawText(label, context.dp(8).toFloat(), height - context.dp(8).toFloat(), labelPaint)
     }
 
