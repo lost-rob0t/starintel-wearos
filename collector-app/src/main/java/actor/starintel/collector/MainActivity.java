@@ -1,5 +1,6 @@
 package actor.starintel.collector;
 
+import actor.starintel.android.config.StarIntelSharedConfig;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
@@ -22,10 +23,12 @@ public final class MainActivity extends Activity {
 
     private TextView runtime;
     private TextView history;
+    private StarIntelSharedConfig sharedConfig;
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        sharedConfig = new StarIntelSharedConfig(this);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -73,6 +76,10 @@ public final class MainActivity extends Activity {
                         Color.rgb(128, 145, 151),
                         false),
                 matchWrap(4));
+
+        Button hackmode = button("DISPATCH RECENT BATCH TO HACKMODE");
+        hackmode.setOnClickListener(v -> dispatchToHackmode());
+        root.addView(hackmode, matchWrap(16));
 
         Button wigle = button("IMPORT WIGLE SQLITE DATABASE");
         wigle.setOnClickListener(v -> chooseWigleDatabase());
@@ -133,6 +140,28 @@ public final class MainActivity extends Activity {
             intent = new Intent(Settings.ACTION_SETTINGS);
         }
         startActivity(intent);
+    }
+
+    private void dispatchToHackmode() {
+        try {
+            StarWirelessStore store = new StarWirelessStore(this);
+            try {
+                HackmodeOperationClient.submitRecentObservations(
+                        this,
+                        store,
+                        sharedConfig,
+                        250);
+            } finally {
+                store.close();
+            }
+            Toast.makeText(this, "Dispatched recent observations to Hackmode", Toast.LENGTH_SHORT).show();
+        } catch (RuntimeException error) {
+            Toast.makeText(
+                            this,
+                            "Hackmode dispatch failed · " + safe(error.getMessage()),
+                            Toast.LENGTH_LONG)
+                    .show();
+        }
     }
 
     private void chooseWigleDatabase() {
