@@ -15,6 +15,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -56,6 +57,11 @@ class LispLocalActor(
                     )
                     "assert_fact" -> ActorEffect.AssertFact(value.getJSONObject("fact"))
                     "dispatch_target" -> ActorEffect.DispatchTarget(value.getJSONObject("request"))
+                    "dispatch_actor" -> ActorEffect.DispatchActor(
+                        instanceId = value.getString("instance_id"),
+                        document = value.getJSONObject("document"),
+                        datasetId = value.optString("dataset_id").ifBlank { null },
+                    )
                     else -> error("Actor returned an unknown effect type")
                 },
             )
@@ -67,9 +73,11 @@ class LocalActorSystem(
     private val store: Tek9Store,
     workers: Int = 2,
     private val mailboxCapacity: Int = 128,
+    private val maxDispatchDepth: Int = 8,
 ) : Closeable {
     init {
         require(mailboxCapacity in 1..4_096) { "Mailbox capacity must be between 1 and 4096" }
+        require(maxDispatchDepth in 1..32) { "Actor dispatch depth must be between 1 and 32" }
     }
 
     private val executor: ExecutorService = Executors.newFixedThreadPool(workers.coerceIn(1, 8))
@@ -87,6 +95,9 @@ class LocalActorSystem(
 
     @Synchronized
     fun manifests(): List<ActorManifest> = cells.values.map { it.actor.manifest }
+
+    @Synchronized
+    fun topology(): Map<String, ActorManifest> = cells.mapValues { it.value.actor.manifest }
 
     fun dispatch(instanceId: String, envelope: ActorEnvelope): CompletableFuture<ActorRun> {
         check(!closed.get()) { "Actor system is closed" }
@@ -118,11 +129,19 @@ class LocalActorSystem(
         private val mailbox = ArrayDeque<Delivery>()
         private var scheduled = false
         private var accepting = true
+        private var consecutiveFailures = 0
+        private var suspendedUntilMs = 0L
 
         fun enqueue(delivery: Delivery) {
             synchronized(this) {
                 if (!accepting || closed.get()) {
                     delivery.future.completeExceptionally(IllegalStateException("Actor system is closed"))
+                    return
+                }
+                if (System.currentTimeMillis() < suspendedUntilMs) {
+                    delivery.future.completeExceptionally(
+                        IllegalStateException("Actor instance ${config.instanceId} is supervisor-suspended"),
+                    )
                     return
                 }
                 if (mailbox.size >= mailboxCapacity) {
@@ -155,8 +174,23 @@ class LocalActorSystem(
                     mailbox.pollFirst().also { if (it == null) scheduled = false }
                 } ?: return
                 runCatching { execute(delivery.envelope) }
-                    .onSuccess(delivery.future::complete)
-                    .onFailure(delivery.future::completeExceptionally)
+                    .onSuccess { run ->
+                        synchronized(this) {
+                            consecutiveFailures = 0
+                            suspendedUntilMs = 0L
+                        }
+                        delivery.future.complete(run)
+                    }
+                    .onFailure { failure ->
+                        synchronized(this) {
+                            consecutiveFailures += 1
+                            if (consecutiveFailures >= config.supervisor.maxConsecutiveFailures) {
+                                suspendedUntilMs = System.currentTimeMillis() + config.supervisor.cooldownMs
+                                consecutiveFailures = 0
+                            }
+                        }
+                        delivery.future.completeExceptionally(failure)
+                    }
             }
         }
 
@@ -167,6 +201,7 @@ class LocalActorSystem(
                     "Actor emitted ${effect.capability.wireName} without capability"
                 }
             }
+            val actorDispatches = result.effects.filterIsInstance<ActorEffect.DispatchActor>()
             store.transact {
                 result.effects.forEach { effect ->
                     when (effect) {
@@ -179,6 +214,7 @@ class LocalActorSystem(
                         )
                         is ActorEffect.AssertFact -> assertFact(effect.fact)
                         is ActorEffect.DispatchTarget -> enqueueTarget(effect.request)
+                        is ActorEffect.DispatchActor -> Unit
                     }
                 }
                 appendEvent(
@@ -186,12 +222,34 @@ class LocalActorSystem(
                         .put("type", "local_actor_run")
                         .put("actor_id", actor.manifest.id)
                         .put("actor_instance_id", config.instanceId)
+                        .put("actor_tier", actor.manifest.tier.wireName)
                         .put("message_id", envelope.messageId)
-                        .put("effect_count", result.effects.size),
+                        .put("effect_count", result.effects.size)
+                        .put("dispatch_count", actorDispatches.size),
                 )
             }
+            actorDispatches.forEach { effect -> dispatchChild(effect, envelope) }
             return ActorRun(actor.manifest.id, envelope.messageId, result.effects.size, result.summary)
         }
+
+        private fun dispatchChild(effect: ActorEffect.DispatchActor, parent: ActorEnvelope) {
+            require(parent.depth < maxDispatchDepth) { "Actor dispatch depth exceeded" }
+            require(effect.instanceId.matches(INSTANCE_ID)) { "Invalid downstream actor instance id" }
+            val target = synchronized(this@LocalActorSystem) { cells[effect.instanceId] }
+                ?: error("Unknown downstream actor instance: ${effect.instanceId}")
+            require(target.actor.manifest.tier.order >= actor.manifest.tier.order) {
+                "Actor dispatch cannot move backward from ${actor.manifest.tier.wireName} to ${target.actor.manifest.tier.wireName}"
+            }
+            val child = ActorEnvelope(
+                messageId = UUID.randomUUID().toString(),
+                document = JSONObject(effect.document.toString()),
+                datasetId = effect.datasetId ?: parent.datasetId,
+                depth = parent.depth + 1,
+                parentMessageId = parent.messageId,
+            )
+            dispatch(effect.instanceId, child)
+        }
+
     }
 
     private data class Delivery(
