@@ -20,3 +20,7 @@ include(":phone-app")
 include(":quasar-app")
 include(":wear-app")
 include(":watchface")
+
+include(":collector-app")
+
+include(":hackmode-app")
