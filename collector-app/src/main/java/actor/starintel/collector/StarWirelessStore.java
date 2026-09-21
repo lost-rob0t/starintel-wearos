@@ -5,6 +5,8 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 final class StarWirelessStore extends SQLiteOpenHelper {
     private static final String NAME = "star-wireless.db";
@@ -167,6 +169,46 @@ final class StarWirelessStore extends SQLiteOpenHelper {
 
     long routeCount() {
         return count("route");
+    }
+
+    JSONArray recentObservations(int limit) {
+        int bounded = Math.max(1, Math.min(limit, 500));
+        JSONArray rows = new JSONArray();
+        try (Cursor cursor =
+                getReadableDatabase()
+                        .rawQuery(
+                                "SELECT event_key,bssid,ssid,frequency,capabilities,network_type,"
+                                        + "level,lat,lon,altitude,accuracy,observed_at_ms,external,"
+                                        + "mfgrid,source,source_row_id "
+                                        + "FROM observation ORDER BY observed_at_ms DESC,_id DESC LIMIT ?",
+                                new String[] {Integer.toString(bounded)})) {
+            while (cursor.moveToNext()) {
+                JSONObject row = new JSONObject();
+                row.put("event_key", cursor.getString(0));
+                row.put("bssid", cursor.getString(1));
+                row.put("ssid", cursor.getString(2));
+                row.put("frequency", cursor.getInt(3));
+                row.put("capabilities", cursor.getString(4));
+                row.put("network_type", cursor.getString(5));
+                row.put("level", cursor.getInt(6));
+                putJsonNullable(row, "lat", cursor, 7);
+                putJsonNullable(row, "lon", cursor, 8);
+                putJsonNullable(row, "altitude", cursor, 9);
+                putJsonNullable(row, "accuracy", cursor, 10);
+                row.put("observed_at_ms", cursor.getLong(11));
+                row.put("external", cursor.getInt(12));
+                row.put("mfgrid", cursor.getInt(13));
+                row.put("source", cursor.getString(14));
+                if (cursor.isNull(15)) row.put("source_row_id", JSONObject.NULL); else row.put("source_row_id", cursor.getLong(15));
+                rows.put(row);
+            }
+        }
+        return rows;
+    }
+
+    private static void putJsonNullable(JSONObject target, String key, Cursor cursor, int index) {
+        if (cursor.isNull(index)) target.put(key, JSONObject.NULL);
+        else target.put(key, cursor.getDouble(index));
     }
 
     private long count(String table) {
