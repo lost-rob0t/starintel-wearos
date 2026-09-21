@@ -45,16 +45,22 @@ object OpenMapTilePolicy {
     const val maxCacheBytes = 48L * 1024L * 1024L
     const val maxTileBytes = 1L * 1024L * 1024L
     const val cacheMaxAgeMillis = 7L * 24L * 60L * 60L * 1_000L
-    const val requestUserAgent = "Quasar-Android/0.4 (+https://starintel.actor; field-map)"
-    const val attribution = "© OpenStreetMap contributors"
-    private const val template = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    const val requestUserAgent = "StarIntel-Maps-Android/0.4 (+https://starintel.actor)"
 
-    fun tileUrl(zoom: Int, x: Int, y: Int): String? {
+    fun tileUrl(template: String, zoom: Int, x: Int, y: Int, allowCleartext: Boolean = false): String? {
+        val value = template.trim()
+        if (value.isBlank()) return null
+        require(
+            value.startsWith("https://") || (allowCleartext && value.startsWith("http://"))
+        ) { "Map tile template must use HTTPS" }
+        require(value.contains("{z}") && value.contains("{x}") && value.contains("{y}")) {
+            "Map tile template must contain {z}, {x}, and {y}"
+        }
         if (zoom !in minZoom..maxZoom) return null
         val count = 1 shl zoom
         if (y !in 0 until count) return null
         val wrappedX = ((x % count) + count) % count
-        return template
+        return value
             .replace("{z}", zoom.toString())
             .replace("{x}", wrappedX.toString())
             .replace("{y}", y.toString())
