@@ -7,7 +7,9 @@
 
 namespace {
 constexpr size_t kMaxRequestBytes = 1024U * 1024U;
+#ifdef STARINTEL_HAS_ECL_ADAPTER
 constexpr size_t kMaxResponseBytes = 2U * 1024U * 1024U;
+#endif
 std::mutex runtime_mutex;
 bool runtime_started = false;
 

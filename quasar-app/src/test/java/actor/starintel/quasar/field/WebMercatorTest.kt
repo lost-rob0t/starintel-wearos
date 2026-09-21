@@ -18,12 +18,12 @@ class WebMercatorTest {
 
     @Test
     fun tilePolicyWrapsLongitudeButRejectsNonexistentRows() {
+        val template = "https://maps.starintel.actor/tiles/{z}/{x}/{y}.png"
         assertEquals(
-            "https://tile.openstreetmap.org/3/7/2.png",
-            OpenMapTilePolicy.tileUrl(zoom = 3, x = -1, y = 2),
+            "https://maps.starintel.actor/tiles/3/7/2.png",
+            OpenMapTilePolicy.tileUrl(template = template, zoom = 3, x = -1, y = 2),
         )
-        assertNull(OpenMapTilePolicy.tileUrl(zoom = 3, x = 1, y = -1))
-        assertNull(OpenMapTilePolicy.tileUrl(zoom = 3, x = 1, y = 8))
-        assertEquals("© OpenStreetMap contributors", OpenMapTilePolicy.attribution)
+        assertNull(OpenMapTilePolicy.tileUrl(template = template, zoom = 3, x = 1, y = -1))
+        assertNull(OpenMapTilePolicy.tileUrl(template = template, zoom = 3, x = 1, y = 8))
     }
 }

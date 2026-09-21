@@ -1,8 +1,9 @@
 # StarIntel Wear OS agent contract
 
 This repository owns the Android phone companion, native Quasar Android app,
-StarIntel Wear app, and resource-only Watch Face Format packages. Keep them as
-independent APKs built and released from one pinned Nix/Gradle workspace.
+Star Wireless Collector, Hackmode Android control surface, StarIntel Wear app,
+and resource-only Watch Face Format packages. Keep them as independent APKs
+built and released from one pinned Nix/Gradle workspace.
 
 ## Persistent product decisions
 
@@ -12,6 +13,17 @@ independent APKs built and released from one pinned Nix/Gradle workspace.
 - `quasar-app` is a separately installable, native Android app with package ID
   `actor.starintel.quasar`. Do not merge it into the companion and do not replace
   it with a WebView wrapper.
+- `collector-app` is Star Wireless with package ID `actor.starintel.collector`.
+  Raw Wi-Fi/location observations and WiGLE imports are append-only source
+  history; dataset mapping is a Prolog projection and must not rewrite evidence.
+- `hackmode-app` is the signed Android control surface with package ID
+  `actor.starintel.hackmode`. Full interactive Hackmode remains in Termux/Kali;
+  cross-app automation uses the bounded `HACKMODE-ANDROID/1` typed operation
+  contract and may not expose an arbitrary shell command.
+- `phone-app` owns the signature-protected inter-app permissions and the
+  `actor.starintel.config` provider. Shared config is non-secret control-plane
+  data only. API keys, passwords, bearer tokens, private keys, and session
+  credentials must remain in the owning app's Keystore-backed storage.
 - The companion is the package catalog for both phone and watch. Phone packages
   install locally through Android `PackageInstaller`; watch packages cross the
   Wearable Data Layer and install on the watch.

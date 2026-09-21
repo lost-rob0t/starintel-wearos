@@ -1,5 +1,7 @@
 package actor.starintel.quasar.field
 
+import actor.starintel.android.config.StarIntelSharedConfig
+import actor.starintel.quasar.BuildConfig
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -31,6 +33,7 @@ internal class OpenMapTileRepository(
     private val onChanged: (BasemapState) -> Unit,
 ) : AutoCloseable {
     private val applicationContext = context.applicationContext
+    private val sharedConfig = StarIntelSharedConfig(applicationContext)
     private val main = Handler(Looper.getMainLooper())
     private val executor = Executors.newFixedThreadPool(2)
     private val closed = AtomicBoolean(false)
@@ -44,7 +47,7 @@ internal class OpenMapTileRepository(
         runCatching {
             if (HttpResponseCache.getInstalled() == null) {
                 HttpResponseCache.install(
-                    applicationContext.cacheDir.resolve("open-map-http-v1"),
+                    applicationContext.cacheDir.resolve("starintel-map-http-v1"),
                     OpenMapTilePolicy.maxCacheBytes,
                 )
             }
@@ -52,7 +55,14 @@ internal class OpenMapTileRepository(
     }
 
     fun tile(zoom: Int, x: Int, y: Int): Bitmap? {
-        val url = OpenMapTilePolicy.tileUrl(zoom, x, y) ?: return null
+        val template = sharedConfig.get(StarIntelSharedConfig.KEY_MAP_TILES_BASE_URL, "")
+        val url = OpenMapTilePolicy.tileUrl(
+            template = template,
+            zoom = zoom,
+            x = x,
+            y = y,
+            allowCleartext = BuildConfig.DEBUG,
+        ) ?: return null
         memory.get(url)?.let { return it }
         synchronized(inFlight) {
             if ((failedUntil[url] ?: 0L) > System.currentTimeMillis()) return null

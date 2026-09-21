@@ -33,6 +33,8 @@ jobs:
             :starintel-android:testDebugUnitTest \
             :phone-app:testDebugUnitTest :phone-app:assembleDebug \
             :quasar-app:testDebugUnitTest :quasar-app:assembleDebug \
+            :collector-app:testDebugUnitTest :collector-app:assembleDebug \
+            :hackmode-app:testDebugUnitTest :hackmode-app:assembleDebug \
             :wear-app:testDebugUnitTest :wear-app:assembleDebug \
             :watchface:assembleNeonDebug \
             :watchface:assembleCommandDebug \
@@ -48,6 +50,18 @@ jobs:
         with:
           name: starintel-phone-app-debug
           path: phone-app/build/outputs/apk/debug/phone-app-debug.apk
+          if-no-files-found: error
+      - name: Publish Star Wireless Collector APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: starintel-collector-debug
+          path: collector-app/build/outputs/apk/debug/collector-app-debug.apk
+          if-no-files-found: error
+      - name: Publish Hackmode Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: starintel-hackmode-debug
+          path: hackmode-app/build/outputs/apk/debug/hackmode-app-debug.apk
           if-no-files-found: error
       - name: Publish Wear app APK
         uses: actions/upload-artifact@v4
@@ -117,6 +131,8 @@ jobs:
         run: |
           test -s build/nix/phone-app-debug.apk
           test -s build/nix/quasar-app-debug.apk
+          test -s build/nix/collector-app-debug.apk
+          test -s build/nix/hackmode-app-debug.apk
           test -s build/nix/wear-app-debug.apk
           test -s build/nix/watchface-neon-debug.apk
           test -s build/nix/watchface-command-debug.apk
