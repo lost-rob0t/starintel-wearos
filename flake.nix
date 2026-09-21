@@ -27,6 +27,7 @@
             includeCmake = true;
             cmakeVersions = [ "3.22.1" ];
             includeNDK = true;
+            ndkVersions = [ "28.2.13676358" ];
           };
 
           androidSdk = androidComposition.androidsdk;
