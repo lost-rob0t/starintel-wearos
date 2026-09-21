@@ -157,7 +157,7 @@
 
           checkAll = pkgs.writeShellApplication {
             name = "starintel-check";
-            runtimeInputs = [ gradle pkgs.python3 ];
+            runtimeInputs = [ gradle pkgs.python3 pkgs.swi-prolog ];
             text = common + wffContractChecks + ''
               gradle --no-daemon --stacktrace \
                 :starintel-android:testDebugUnitTest \
@@ -169,8 +169,20 @@
                 :watchface:assembleNeonDebug \
                 :watchface:assembleCommandDebug \
                 :watchface:assembleTerminalDebug
+              swipl -q -s scripts/test-field-mapping.pl
             '';
           };
+
+          fieldMappingCheck = pkgs.runCommand "starintel-field-mapping-check" {
+            nativeBuildInputs = [ pkgs.swi-prolog ];
+            src = self;
+          } ''
+            cp -R "$src" source
+            chmod -R u+w source
+            cd source
+            swipl -q -s scripts/test-field-mapping.pl
+            touch "$out"
+          '';
 
           pairAndroid = pkgs.writeShellApplication {
             name = "starintel-pair-android";
@@ -231,7 +243,7 @@
           };
         in
         {
-          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildQuasar buildCollector buildHackmode buildWear buildWatchface buildAll checkAll pairAndroid pairWatch installPhone installWatch;
+          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildQuasar buildCollector buildHackmode buildWear buildWatchface buildAll checkAll fieldMappingCheck pairAndroid pairWatch installPhone installWatch;
         };
     in
     {
@@ -266,7 +278,7 @@
         let e = mkEnv system;
         in {
           default = e.pkgs.mkShell {
-            packages = [ e.jdk e.gradle e.androidSdk e.pkgs.qrencode e.pkgs.python3 ];
+            packages = [ e.jdk e.gradle e.androidSdk e.pkgs.qrencode e.pkgs.python3 e.pkgs.swi-prolog ];
             ANDROID_HOME = "${e.androidSdk}/libexec/android-sdk";
             ANDROID_SDK_ROOT = "${e.androidSdk}/libexec/android-sdk";
             JAVA_HOME = "${e.jdk}";
@@ -284,6 +296,9 @@
 
       checks = forAllSystems (system:
         let e = mkEnv system;
-        in { toolchain = e.toolchain; });
+        in {
+          toolchain = e.toolchain;
+          field-mapping = e.fieldMappingCheck;
+        });
     };
 }
