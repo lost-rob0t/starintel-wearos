@@ -1,9 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <permission
-        android:name="actor.starintel.permission.HACKMODE_OPERATIONS"
-        android:protectionLevel="signature" />
-
     <uses-permission android:name="actor.starintel.permission.CONFIG" />
     <uses-permission android:name="actor.starintel.permission.HACKMODE_OPERATIONS" />
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
