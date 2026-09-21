@@ -8,7 +8,7 @@ import org.junit.Test;
 
 public final class HackmodeAndroidProtocolTest {
     @Test
-    public void roundTripKeepsSourceAndAddsBridge() {
+    public void roundTripKeepsSourceAndAddsBridge() throws Exception {
         JSONObject request =
                 HackmodeAndroidProtocol.newRequest(
                         "collector.observation_batch",
@@ -40,7 +40,7 @@ public final class HackmodeAndroidProtocolTest {
     }
 
     @Test
-    public void protocolDowngradeFailsClosed() {
+    public void protocolDowngradeFailsClosed() throws Exception {
         JSONObject request =
                 new JSONObject()
                         .put("protocol", "HACKMODE-ANDROID/0")
