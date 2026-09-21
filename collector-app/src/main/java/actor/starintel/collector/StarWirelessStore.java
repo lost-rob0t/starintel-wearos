@@ -6,6 +6,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 final class StarWirelessStore extends SQLiteOpenHelper {
@@ -183,30 +184,37 @@ final class StarWirelessStore extends SQLiteOpenHelper {
                                         + "FROM observation ORDER BY observed_at_ms DESC,_id DESC LIMIT ?",
                                 new String[] {Integer.toString(bounded)})) {
             while (cursor.moveToNext()) {
-                JSONObject row = new JSONObject();
-                row.put("event_key", cursor.getString(0));
-                row.put("bssid", cursor.getString(1));
-                row.put("ssid", cursor.getString(2));
-                row.put("frequency", cursor.getInt(3));
-                row.put("capabilities", cursor.getString(4));
-                row.put("network_type", cursor.getString(5));
-                row.put("level", cursor.getInt(6));
-                putJsonNullable(row, "lat", cursor, 7);
-                putJsonNullable(row, "lon", cursor, 8);
-                putJsonNullable(row, "altitude", cursor, 9);
-                putJsonNullable(row, "accuracy", cursor, 10);
-                row.put("observed_at_ms", cursor.getLong(11));
-                row.put("external", cursor.getInt(12));
-                row.put("mfgrid", cursor.getInt(13));
-                row.put("source", cursor.getString(14));
-                if (cursor.isNull(15)) row.put("source_row_id", JSONObject.NULL); else row.put("source_row_id", cursor.getLong(15));
-                rows.put(row);
+                try {
+                    JSONObject row = new JSONObject();
+                    row.put("event_key", cursor.getString(0));
+                    row.put("bssid", cursor.getString(1));
+                    row.put("ssid", cursor.getString(2));
+                    row.put("frequency", cursor.getInt(3));
+                    row.put("capabilities", cursor.getString(4));
+                    row.put("network_type", cursor.getString(5));
+                    row.put("level", cursor.getInt(6));
+                    putJsonNullable(row, "lat", cursor, 7);
+                    putJsonNullable(row, "lon", cursor, 8);
+                    putJsonNullable(row, "altitude", cursor, 9);
+                    putJsonNullable(row, "accuracy", cursor, 10);
+                    row.put("observed_at_ms", cursor.getLong(11));
+                    row.put("external", cursor.getInt(12));
+                    row.put("mfgrid", cursor.getInt(13));
+                    row.put("source", cursor.getString(14));
+                    row.put(
+                            "source_row_id",
+                            cursor.isNull(15) ? JSONObject.NULL : cursor.getLong(15));
+                    rows.put(row);
+                } catch (JSONException error) {
+                    throw new IllegalStateException("Could not encode wireless observation", error);
+                }
             }
         }
         return rows;
     }
 
-    private static void putJsonNullable(JSONObject target, String key, Cursor cursor, int index) {
+    private static void putJsonNullable(JSONObject target, String key, Cursor cursor, int index)
+            throws JSONException {
         if (cursor.isNull(index)) target.put(key, JSONObject.NULL);
         else target.put(key, cursor.getDouble(index));
     }
@@ -294,25 +302,68 @@ final class StarWirelessStore extends SQLiteOpenHelper {
             String rcois,
             int mfgrid,
             String service) {
-        ContentValues values = new ContentValues();
-        values.put("bssid", clean(bssid, 128));
-        values.put("ssid", clean(ssid, 1024));
-        values.put("frequency", frequency);
-        values.put("capabilities", clean(capabilities, 4096));
-        values.put("network_type", clean(networkType, 16));
-        values.put("first_seen_ms", lastSeenMs);
-        values.put("last_seen_ms", lastSeenMs);
-        values.put("best_level", bestLevel);
-        values.put("last_level", bestLevel);
-        putNullable(values, "last_lat", lastLat);
-        putNullable(values, "last_lon", lastLon);
-        putNullable(values, "best_lat", bestLat);
-        putNullable(values, "best_lon", bestLon);
-        values.put("rcois", clean(rcois, 4096));
-        values.put("mfgrid", mfgrid);
-        values.put("service", clean(service, 4096));
-        values.put("source", "wigle-sqlite");
-        db.insertWithOnConflict("network", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+        String key = clean(bssid, 128);
+        try (Cursor cursor =
+                db.rawQuery(
+                        "SELECT first_seen_ms,last_seen_ms,best_level,source "
+                                + "FROM network WHERE bssid=?",
+                        new String[] {key})) {
+            if (!cursor.moveToFirst()) {
+                ContentValues insert = new ContentValues();
+                insert.put("bssid", key);
+                insert.put("ssid", clean(ssid, 1024));
+                insert.put("frequency", frequency);
+                insert.put("capabilities", clean(capabilities, 4096));
+                insert.put("network_type", clean(networkType, 16));
+                insert.put("first_seen_ms", lastSeenMs);
+                insert.put("last_seen_ms", lastSeenMs);
+                insert.put("best_level", bestLevel);
+                insert.put("last_level", bestLevel);
+                putNullable(insert, "last_lat", lastLat);
+                putNullable(insert, "last_lon", lastLon);
+                putNullable(insert, "best_lat", bestLat);
+                putNullable(insert, "best_lon", bestLon);
+                insert.put("rcois", clean(rcois, 4096));
+                insert.put("mfgrid", mfgrid);
+                insert.put("service", clean(service, 4096));
+                insert.put("source", "wigle-sqlite");
+                db.insertOrThrow("network", null, insert);
+                return;
+            }
+
+            long existingFirst = cursor.getLong(0);
+            long existingLast = cursor.getLong(1);
+            int existingBest = cursor.getInt(2);
+            String existingSource = cursor.getString(3);
+
+            ContentValues update = new ContentValues();
+            update.put("first_seen_ms", Math.min(existingFirst, lastSeenMs));
+
+            if (lastSeenMs >= existingLast) {
+                update.put("ssid", clean(ssid, 1024));
+                update.put("frequency", frequency);
+                update.put("capabilities", clean(capabilities, 4096));
+                update.put("network_type", clean(networkType, 16));
+                update.put("last_seen_ms", lastSeenMs);
+                update.put("last_level", bestLevel);
+                putNullable(update, "last_lat", lastLat);
+                putNullable(update, "last_lon", lastLon);
+                update.put("rcois", clean(rcois, 4096));
+                update.put("mfgrid", mfgrid);
+                update.put("service", clean(service, 4096));
+            }
+
+            if (bestLevel > existingBest) {
+                update.put("best_level", bestLevel);
+                putNullable(update, "best_lat", bestLat);
+                putNullable(update, "best_lon", bestLon);
+            }
+
+            update.put(
+                    "source",
+                    "wigle-sqlite".equals(existingSource) ? "wigle-sqlite" : "mixed");
+            db.update("network", update, "bssid=?", new String[] {key});
+        }
     }
 
     static void insertObservation(
