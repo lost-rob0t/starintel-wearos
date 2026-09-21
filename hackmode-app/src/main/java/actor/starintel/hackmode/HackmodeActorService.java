@@ -71,7 +71,12 @@ public final class HackmodeActorService extends Service {
         if (raw == null || raw.length() == 0 || raw.length() > MAX_OPERATION_CHARS) {
             throw new IllegalArgumentException("Operation must be 1..256 KiB");
         }
-        JSONObject root = new JSONObject(raw);
+        JSONObject root;
+        try {
+            root = new JSONObject(raw);
+        } catch (JSONException error) {
+            throw new IllegalArgumentException("Operation JSON is malformed", error);
+        }
         String kind = root.optString("kind").trim();
         if (!ALLOWED_KINDS.contains(kind)) {
             throw new IllegalArgumentException("Unsupported operation kind");
