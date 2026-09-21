@@ -15,6 +15,7 @@ public final class StarIntelSharedConfig {
     public static final String KEY_SERVER_URL = "server.url";
     public static final String KEY_MAP_TILES_BASE_URL = "map.tiles.base_url";
     public static final String KEY_MAP_STYLE_URL = "map.style_url";
+    public static final String KEY_MAP_ATTRIBUTION = "map.attribution";
     public static final String KEY_PROLOG_RLM_ENDPOINT = "prolog_rlm.endpoint";
     public static final String KEY_HACKMODE_HOME = "hackmode.home";
     public static final String KEY_HACKMODE_COMMAND = "hackmode.command";
