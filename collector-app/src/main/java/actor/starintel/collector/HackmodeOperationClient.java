@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.os.Build;
 import java.util.UUID;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 final class HackmodeOperationClient {
@@ -26,23 +27,30 @@ final class HackmodeOperationClient {
             throw new IllegalStateException("No observations available");
         }
 
-        JSONObject payload = new JSONObject()
-                .put(
-                        "dataset_hint",
-                        config.get(
-                                StarIntelSharedConfig.KEY_COLLECTOR_DEFAULT_DATASET,
-                                "field-observations"))
-                .put(
-                        "ruleset",
-                        config.get(
-                                StarIntelSharedConfig.KEY_COLLECTOR_RULESET,
-                                "field-default"))
-                .put("observations", observations);
+        JSONObject envelope;
+        try {
+            JSONObject payload = new JSONObject()
+                    .put(
+                            "dataset_hint",
+                            config.get(
+                                    StarIntelSharedConfig.KEY_COLLECTOR_DEFAULT_DATASET,
+                                    "field-observations"))
+                    .put(
+                            "ruleset",
+                            config.get(
+                                    StarIntelSharedConfig.KEY_COLLECTOR_RULESET,
+                                    "field-default"))
+                    .put("observations", observations);
 
-        JSONObject envelope = new JSONObject()
-                .put("kind", "collector.observation_batch")
-                .put("request_id", "android-" + UUID.randomUUID())
-                .put("payload", payload);
+            envelope = new JSONObject()
+                    .put("kind", "collector.observation_batch")
+                    .put("request_id", "android-" + UUID.randomUUID())
+                    .put("source_package", context.getPackageName())
+                    .put("sender_authorization", "signature_permission")
+                    .put("payload", payload);
+        } catch (JSONException error) {
+            throw new IllegalStateException("Could not encode Hackmode operation", error);
+        }
 
         Intent intent = new Intent(ACTION);
         intent.setClassName(PACKAGE, SERVICE);
