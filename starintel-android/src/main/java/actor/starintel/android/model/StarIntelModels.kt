@@ -21,6 +21,20 @@ data class LoginResult(
     val mustChangePassword: Boolean,
 )
 
+enum class ActorTier(val wireName: String, val order: Int) {
+    SENSOR("sensor", 0),
+    EDGE("edge", 1),
+    ENRICHMENT("enrichment", 2),
+    COORDINATOR("coordinator", 3),
+    UPLINK("uplink", 4),
+    ;
+
+    companion object {
+        fun fromWire(value: String): ActorTier = entries.firstOrNull { it.wireName == value.trim().lowercase() }
+            ?: throw IllegalArgumentException("Unknown actor tier: $value")
+    }
+}
+
 data class ActorManifest(
     val id: String,
     val name: String,
@@ -30,6 +44,7 @@ data class ActorManifest(
     val accepts: Set<String>,
     val capabilities: Set<ActorCapability>,
     val defaultConfig: JSONObject,
+    val tier: ActorTier = ActorTier.EDGE,
 ) {
     companion object {
         fun fromJson(root: JSONObject): ActorManifest {
@@ -49,6 +64,7 @@ data class ActorManifest(
                     ActorCapability.fromWire(it)
                 },
                 defaultConfig = root.optJSONObject("default_config") ?: JSONObject(),
+                tier = ActorTier.fromWire(root.optString("tier").ifBlank { "edge" }),
             )
         }
     }
@@ -60,6 +76,9 @@ enum class ActorCapability(val wireName: String) {
     WRITE_RELATION("relation.write"),
     ASSERT_FACT("fact.assert"),
     DISPATCH_TARGET("target.dispatch"),
+    DISPATCH_ACTOR("actor.dispatch"),
+    VIDEO_STREAM("video.stream"),
+    MAP_PROJECT("map.project"),
     NETWORK("network"),
     ;
 
@@ -69,11 +88,22 @@ enum class ActorCapability(val wireName: String) {
     }
 }
 
+data class ActorSupervisorPolicy(
+    val maxConsecutiveFailures: Int = 3,
+    val cooldownMs: Long = 5_000,
+) {
+    init {
+        require(maxConsecutiveFailures in 1..32)
+        require(cooldownMs in 0..300_000)
+    }
+}
+
 data class ActorInstanceConfig(
     val instanceId: String,
     val actorId: String,
     val enabled: Boolean,
     val config: JSONObject,
+    val supervisor: ActorSupervisorPolicy = ActorSupervisorPolicy(),
 )
 
 data class ActorEnvelope(
@@ -106,6 +136,14 @@ sealed interface ActorEffect {
 
     data class DispatchTarget(val request: JSONObject) : ActorEffect {
         override val capability = ActorCapability.DISPATCH_TARGET
+    }
+
+    data class DispatchActor(
+        val instanceId: String,
+        val document: JSONObject,
+        val datasetId: String? = null,
+    ) : ActorEffect {
+        override val capability = ActorCapability.DISPATCH_ACTOR
     }
 }
 
