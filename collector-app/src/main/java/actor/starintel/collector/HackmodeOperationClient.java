@@ -1,20 +1,15 @@
 package actor.starintel.collector;
 
 import actor.starintel.android.config.StarIntelSharedConfig;
+import actor.starintel.android.hackmode.HackmodeAndroidProtocol;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import java.util.UUID;
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 
 final class HackmodeOperationClient {
-    private static final String PACKAGE = "actor.starintel.hackmode";
-    private static final String SERVICE = "actor.starintel.hackmode.HackmodeActorService";
-    private static final String ACTION = "actor.starintel.action.HACKMODE_OPERATION";
-    private static final String EXTRA = "actor.starintel.extra.HACKMODE_OPERATION_JSON";
-
     private HackmodeOperationClient() {}
 
     static void submitRecentObservations(
@@ -27,34 +22,37 @@ final class HackmodeOperationClient {
             throw new IllegalStateException("No observations available");
         }
 
-        JSONObject envelope;
+        JSONObject payload = new JSONObject();
         try {
-            JSONObject payload = new JSONObject()
-                    .put(
-                            "dataset_hint",
-                            config.get(
-                                    StarIntelSharedConfig.KEY_COLLECTOR_DEFAULT_DATASET,
-                                    "field-observations"))
-                    .put(
-                            "ruleset",
-                            config.get(
-                                    StarIntelSharedConfig.KEY_COLLECTOR_RULESET,
-                                    "field-default"))
-                    .put("observations", observations);
-
-            envelope = new JSONObject()
-                    .put("kind", "collector.observation_batch")
-                    .put("request_id", "android-" + UUID.randomUUID())
-                    .put("source_package", context.getPackageName())
-                    .put("sender_authorization", "signature_permission")
-                    .put("payload", payload);
-        } catch (JSONException error) {
-            throw new IllegalStateException("Could not encode Hackmode operation", error);
+            payload.put(
+                    "dataset_hint",
+                    config.get(
+                            StarIntelSharedConfig.KEY_COLLECTOR_DEFAULT_DATASET,
+                            "field-observations"));
+            payload.put(
+                    "ruleset",
+                    config.get(
+                            StarIntelSharedConfig.KEY_COLLECTOR_RULESET,
+                            "field-default"));
+            payload.put("observations", observations);
+        } catch (org.json.JSONException error) {
+            throw new IllegalStateException("Could not encode observation batch", error);
         }
 
-        Intent intent = new Intent(ACTION);
-        intent.setClassName(PACKAGE, SERVICE);
-        intent.putExtra(EXTRA, envelope.toString());
+        JSONObject envelope =
+                HackmodeAndroidProtocol.newRequest(
+                        "collector.observation_batch",
+                        "android-" + UUID.randomUUID(),
+                        context.getPackageName(),
+                        payload);
+
+        Intent intent = new Intent(HackmodeAndroidProtocol.ACTION_OPERATION);
+        intent.setClassName(
+                HackmodeAndroidProtocol.PACKAGE_HACKMODE,
+                HackmodeAndroidProtocol.SERVICE_HACKMODE);
+        intent.putExtra(
+                HackmodeAndroidProtocol.EXTRA_OPERATION_JSON,
+                envelope.toString());
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent);
