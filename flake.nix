@@ -79,6 +79,20 @@
             outputName = "quasar-app-debug.apk";
           };
 
+          buildCollector = mkBuildApp {
+            name = "build-collector";
+            task = ":collector-app:assembleDebug";
+            sourceApk = "collector-app/build/outputs/apk/debug/collector-app-debug.apk";
+            outputName = "collector-app-debug.apk";
+          };
+
+          buildHackmode = mkBuildApp {
+            name = "build-hackmode";
+            task = ":hackmode-app:assembleDebug";
+            sourceApk = "hackmode-app/build/outputs/apk/debug/hackmode-app-debug.apk";
+            outputName = "hackmode-app-debug.apk";
+          };
+
           buildWear = mkBuildApp {
             name = "build-wear";
             task = ":wear-app:assembleDebug";
@@ -112,6 +126,8 @@
                 :starintel-android:testDebugUnitTest \
                 :phone-app:testDebugUnitTest :phone-app:assembleDebug \
                 :quasar-app:testDebugUnitTest :quasar-app:assembleDebug \
+                :collector-app:testDebugUnitTest :collector-app:assembleDebug \
+                :hackmode-app:testDebugUnitTest :hackmode-app:assembleDebug \
                 :wear-app:testDebugUnitTest :wear-app:assembleDebug \
                 :watchface:assembleNeonDebug \
                 :watchface:assembleCommandDebug \
@@ -119,6 +135,8 @@
 
               cp -f phone-app/build/outputs/apk/debug/phone-app-debug.apk build/nix/phone-app-debug.apk
               cp -f quasar-app/build/outputs/apk/debug/quasar-app-debug.apk build/nix/quasar-app-debug.apk
+              cp -f collector-app/build/outputs/apk/debug/collector-app-debug.apk build/nix/collector-app-debug.apk
+              cp -f hackmode-app/build/outputs/apk/debug/hackmode-app-debug.apk build/nix/hackmode-app-debug.apk
               cp -f wear-app/build/outputs/apk/debug/wear-app-debug.apk build/nix/wear-app-debug.apk
               cp -f watchface/build/outputs/apk/neon/debug/watchface-neon-debug.apk build/nix/watchface-neon-debug.apk
               cp -f watchface/build/outputs/apk/command/debug/watchface-command-debug.apk build/nix/watchface-command-debug.apk
@@ -128,6 +146,8 @@
               printf '  %s\n' \
                 build/nix/phone-app-debug.apk \
                 build/nix/quasar-app-debug.apk \
+                build/nix/collector-app-debug.apk \
+                build/nix/hackmode-app-debug.apk \
                 build/nix/wear-app-debug.apk \
                 build/nix/watchface-neon-debug.apk \
                 build/nix/watchface-command-debug.apk \
@@ -143,6 +163,8 @@
                 :starintel-android:testDebugUnitTest \
                 :phone-app:testDebugUnitTest \
                 :quasar-app:testDebugUnitTest \
+                :collector-app:testDebugUnitTest \
+                :hackmode-app:testDebugUnitTest \
                 :wear-app:testDebugUnitTest \
                 :watchface:assembleNeonDebug \
                 :watchface:assembleCommandDebug \
@@ -209,7 +231,7 @@
           };
         in
         {
-          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildQuasar buildWear buildWatchface buildAll checkAll pairAndroid pairWatch installPhone installWatch;
+          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildQuasar buildCollector buildHackmode buildWear buildWatchface buildAll checkAll pairAndroid pairWatch installPhone installWatch;
         };
     in
     {
@@ -227,6 +249,8 @@
         in {
           build-phone = { type = "app"; program = "${e.buildPhone}/bin/starintel-build-phone"; };
           build-quasar = { type = "app"; program = "${e.buildQuasar}/bin/starintel-build-quasar"; };
+          build-collector = { type = "app"; program = "${e.buildCollector}/bin/starintel-build-collector"; };
+          build-hackmode = { type = "app"; program = "${e.buildHackmode}/bin/starintel-build-hackmode"; };
           build-wear = { type = "app"; program = "${e.buildWear}/bin/starintel-build-wear"; };
           build-watchface = { type = "app"; program = "${e.buildWatchface}/bin/starintel-build-watchface"; };
           build-all = { type = "app"; program = "${e.buildAll}/bin/starintel-build-all"; };
