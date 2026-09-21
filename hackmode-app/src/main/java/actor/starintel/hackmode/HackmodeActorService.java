@@ -12,6 +12,7 @@ import android.os.IBinder;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 public final class HackmodeActorService extends Service {
@@ -83,8 +84,17 @@ public final class HackmodeActorService extends Service {
         if (!(payload instanceof JSONObject)) {
             throw new IllegalArgumentException("payload must be an object");
         }
-        root.put("protocol", "HACKMODE-ANDROID/1");
-        root.put("source_package", getPackageName());
+        String sourcePackage = root.optString("source_package").trim();
+        if (sourcePackage.length() == 0 || sourcePackage.length() > 240) {
+            throw new IllegalArgumentException("source_package required");
+        }
+        try {
+            root.put("protocol", "HACKMODE-ANDROID/1");
+            root.put("bridge_package", getPackageName());
+            root.put("sender_authorization", "signature_permission");
+        } catch (JSONException error) {
+            throw new IllegalStateException("Could not encode validated operation", error);
+        }
         return root;
     }
 
