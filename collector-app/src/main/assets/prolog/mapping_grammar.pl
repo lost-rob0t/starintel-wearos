@@ -47,6 +47,8 @@ mapping_rule(Rule) -->
     blanks,
     eos.
 
+blanks1 --> blank, blanks.
+
 mapping_rule_without_dot(
     dataset_rule(Id, Dataset, StartMs, EndMs, Lat, Lon, Radius, Kinds, Priority)
 ) -->
