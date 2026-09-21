@@ -236,6 +236,43 @@ final class StarWirelessStore extends SQLiteOpenHelper {
         db.update("network", update, "bssid=?", new String[] {clean(bssid, 128)});
     }
 
+    static void importNetworkSummary(
+            SQLiteDatabase db,
+            String bssid,
+            String ssid,
+            int frequency,
+            String capabilities,
+            String networkType,
+            long lastSeenMs,
+            Double lastLat,
+            Double lastLon,
+            int bestLevel,
+            Double bestLat,
+            Double bestLon,
+            String rcois,
+            int mfgrid,
+            String service) {
+        ContentValues values = new ContentValues();
+        values.put("bssid", clean(bssid, 128));
+        values.put("ssid", clean(ssid, 1024));
+        values.put("frequency", frequency);
+        values.put("capabilities", clean(capabilities, 4096));
+        values.put("network_type", clean(networkType, 16));
+        values.put("first_seen_ms", lastSeenMs);
+        values.put("last_seen_ms", lastSeenMs);
+        values.put("best_level", bestLevel);
+        values.put("last_level", bestLevel);
+        putNullable(values, "last_lat", lastLat);
+        putNullable(values, "last_lon", lastLon);
+        putNullable(values, "best_lat", bestLat);
+        putNullable(values, "best_lon", bestLon);
+        values.put("rcois", clean(rcois, 4096));
+        values.put("mfgrid", mfgrid);
+        values.put("service", clean(service, 4096));
+        values.put("source", "wigle-sqlite");
+        db.insertWithOnConflict("network", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
     static void insertObservation(
             SQLiteDatabase db,
             String eventKey,
