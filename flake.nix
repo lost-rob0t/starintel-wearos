@@ -94,6 +94,13 @@
             outputName = "hackmode-app-debug.apk";
           };
 
+          buildOperator = mkBuildApp {
+            name = "build-operator";
+            task = ":operator-app:assembleDebug";
+            sourceApk = "operator-app/build/outputs/apk/debug/operator-app-debug.apk";
+            outputName = "operator-app-debug.apk";
+          };
+
           buildWear = mkBuildApp {
             name = "build-wear";
             task = ":wear-app:assembleDebug";
@@ -129,6 +136,7 @@
                 :quasar-app:testDebugUnitTest :quasar-app:assembleDebug \
                 :collector-app:testDebugUnitTest :collector-app:assembleDebug \
                 :hackmode-app:testDebugUnitTest :hackmode-app:assembleDebug \
+                :operator-app:testDebugUnitTest :operator-app:assembleDebug \
                 :wear-app:testDebugUnitTest :wear-app:assembleDebug \
                 :watchface:assembleNeonDebug \
                 :watchface:assembleCommandDebug \
@@ -138,6 +146,7 @@
               cp -f quasar-app/build/outputs/apk/debug/quasar-app-debug.apk build/nix/quasar-app-debug.apk
               cp -f collector-app/build/outputs/apk/debug/collector-app-debug.apk build/nix/collector-app-debug.apk
               cp -f hackmode-app/build/outputs/apk/debug/hackmode-app-debug.apk build/nix/hackmode-app-debug.apk
+              cp -f operator-app/build/outputs/apk/debug/operator-app-debug.apk build/nix/operator-app-debug.apk
               cp -f wear-app/build/outputs/apk/debug/wear-app-debug.apk build/nix/wear-app-debug.apk
               cp -f watchface/build/outputs/apk/neon/debug/watchface-neon-debug.apk build/nix/watchface-neon-debug.apk
               cp -f watchface/build/outputs/apk/command/debug/watchface-command-debug.apk build/nix/watchface-command-debug.apk
@@ -149,6 +158,7 @@
                 build/nix/quasar-app-debug.apk \
                 build/nix/collector-app-debug.apk \
                 build/nix/hackmode-app-debug.apk \
+                build/nix/operator-app-debug.apk \
                 build/nix/wear-app-debug.apk \
                 build/nix/watchface-neon-debug.apk \
                 build/nix/watchface-command-debug.apk \
@@ -166,6 +176,8 @@
                 :quasar-app:testDebugUnitTest \
                 :collector-app:testDebugUnitTest \
                 :hackmode-app:testDebugUnitTest \
+                :operator-app:testDebugUnitTest \
+                :starintel-design:testDebugUnitTest \
                 :wear-app:testDebugUnitTest \
                 :watchface:assembleNeonDebug \
                 :watchface:assembleCommandDebug \
@@ -244,7 +256,7 @@
           };
         in
         {
-          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildQuasar buildCollector buildHackmode buildWear buildWatchface buildAll checkAll fieldMappingCheck pairAndroid pairWatch installPhone installWatch;
+          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildQuasar buildCollector buildHackmode buildOperator buildWear buildWatchface buildAll checkAll fieldMappingCheck pairAndroid pairWatch installPhone installWatch;
         };
     in
     {
@@ -264,6 +276,7 @@
           build-quasar = { type = "app"; program = "${e.buildQuasar}/bin/starintel-build-quasar"; };
           build-collector = { type = "app"; program = "${e.buildCollector}/bin/starintel-build-collector"; };
           build-hackmode = { type = "app"; program = "${e.buildHackmode}/bin/starintel-build-hackmode"; };
+          build-operator = { type = "app"; program = "${e.buildOperator}/bin/starintel-build-operator"; };
           build-wear = { type = "app"; program = "${e.buildWear}/bin/starintel-build-wear"; };
           build-watchface = { type = "app"; program = "${e.buildWatchface}/bin/starintel-build-watchface"; };
           build-all = { type = "app"; program = "${e.buildAll}/bin/starintel-build-all"; };

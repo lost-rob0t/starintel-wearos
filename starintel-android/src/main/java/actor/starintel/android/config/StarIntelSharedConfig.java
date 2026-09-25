@@ -22,6 +22,7 @@ public final class StarIntelSharedConfig {
     public static final String KEY_HACKMODE_KALI_COMMAND = "hackmode.kali.command";
     public static final String KEY_COLLECTOR_DEFAULT_DATASET = "collector.dataset.default";
     public static final String KEY_COLLECTOR_RULESET = "collector.ruleset";
+    public static final String KEY_COLLECTOR_LATEST_DOC = "collector.latest_doc_id";
 
     private final ContentResolver resolver;
 

@@ -49,6 +49,34 @@ class MainActivity : Activity() {
         shell.addView(bottomNavigation(), QuasarDesign.match())
         setContentView(shell)
         showHome()
+        handleOperatorIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleOperatorIntent(intent)
+    }
+
+    /** Operator hub handoff: open one document, or the field map focused on a point. */
+    private fun handleOperatorIntent(intent: Intent?) {
+        when (intent?.action) {
+            actor.starintel.android.config.OperatorContracts.ACTION_OPEN_DOCUMENT -> {
+                val documentId = actor.starintel.android.config.OperatorContracts.normalizeDocumentId(
+                    intent.getStringExtra(actor.starintel.android.config.OperatorContracts.EXTRA_DOCUMENT_ID),
+                )
+                if (documentId.isNotEmpty()) showDocument(documentId)
+            }
+            actor.starintel.android.config.OperatorContracts.ACTION_OPEN_MAP -> {
+                val latitude = intent.getDoubleExtra(actor.starintel.android.config.OperatorContracts.EXTRA_LATITUDE, Double.NaN)
+                val longitude = intent.getDoubleExtra(actor.starintel.android.config.OperatorContracts.EXTRA_LONGITUDE, Double.NaN)
+                showFieldOps()
+                if (latitude.isFinite() && longitude.isFinite()) {
+                    val field = viewport.getChildAt(0) as? FieldOpsView
+                    field?.focusOn(latitude, longitude)
+                }
+            }
+            else -> Unit
+        }
     }
 
     override fun onDestroy() {

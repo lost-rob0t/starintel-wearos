@@ -112,6 +112,15 @@ internal class FieldMapView(context: Context) : View(context), AutoCloseable {
         invalidate()
     }
 
+    /** Recenters the viewport on an externally supplied point without touching selection. */
+    fun focus(point: GeoPoint, targetZoom: Int = 14) {
+        center = point
+        didAnchorToData = true
+        zoom = targetZoom.coerceIn(OpenMapTilePolicy.minZoom, OpenMapTilePolicy.maxZoom)
+        notifyViewport()
+        invalidate()
+    }
+
     fun select(feature: GeoFeature?) {
         selected = feature
         onSelectionChanged(feature)

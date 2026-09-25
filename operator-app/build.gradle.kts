@@ -3,19 +3,15 @@ plugins {
 }
 
 android {
-    namespace = "actor.starintel.collector"
+    namespace = "actor.starintel.operator"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "actor.starintel.collector"
+        applicationId = "actor.starintel.operator"
         minSdk = 26
         targetSdk = 36
         versionCode = 4
         versionName = "0.3.0-alpha"
-
-        ndk {
-            abiFilters += listOf("arm64-v8a")
-        }
     }
 
     signingConfigs {
@@ -35,21 +31,11 @@ android {
     buildFeatures {
         buildConfig = true
     }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
 }
 
 dependencies {
     implementation(project(":starintel-android"))
     implementation(project(":starintel-design"))
-    implementation("androidx.core:core:1.13.1")
-    implementation("androidx.exifinterface:exifinterface:1.3.7")
-    implementation("org.opencv:opencv:4.11.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }

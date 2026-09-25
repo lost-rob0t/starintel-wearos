@@ -20,6 +20,7 @@ def main() -> int:
             f"quasar-android-{suffix}.apk",
             f"starintel-collector-{suffix}.apk",
             f"starintel-hackmode-{suffix}.apk",
+            f"starintel-operator-{suffix}.apk",
             f"starintel-wear-{suffix}.apk",
             f"starintel-watchface-neon-{suffix}.apk",
             f"starintel-watchface-command-{suffix}.apk",
@@ -49,6 +50,7 @@ def main() -> int:
         assert payload["artifacts"]["quasar"]["package"] == "actor.starintel.quasar"
         assert payload["artifacts"]["collector"]["package"] == "actor.starintel.collector"
         assert payload["artifacts"]["hackmode"]["package"] == "actor.starintel.hackmode"
+        assert payload["artifacts"]["operator"]["package"] == "actor.starintel.operator"
         assert payload["artifacts"]["watchface-neon"]["package"] == "actor.starintel.watchface.neon"
         assert payload["artifacts"]["wear"]["install_order"] > payload["artifacts"]["watchface-terminal"]["install_order"]
         for value in payload["artifacts"].values():

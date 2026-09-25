@@ -1,20 +1,24 @@
 package actor.starintel.collector;
 
 import actor.starintel.android.config.StarIntelSharedConfig;
+import actor.starintel.design.Si;
+import actor.starintel.design.SiTokens;
+import actor.starintel.design.SiTokens.ThemeStore;
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
-import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.text.InputType;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.core.content.FileProvider;
@@ -22,255 +26,189 @@ import java.io.File;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * Capture tools: grouped, single-purpose sections behind the Mission screen.
+ *
+ * Sections own exactly one concern (session, capture, pipeline, server, import) and
+ * expose one primary action each. Entered via Mission quick actions; the EXTRA_ACTION
+ * extra scrolls the relevant section to the top.
+ */
 public final class MainActivity extends Activity {
     static final String EXTRA_ACTION = "actor.starintel.collector.extra.ACTION";
     static final String ACTION_AUDIO = "audio";
     static final String ACTION_PHOTO = "photo";
     static final String ACTION_WIGLE = "wigle";
+
     private static final int REQUEST_PERMISSIONS = 7;
     private static final int REQUEST_WIGLE_DB = 9;
     private static final int REQUEST_AUDIO_PERMISSIONS = 11;
     private static final int REQUEST_CAPTURE_IMAGE = 13;
 
-    private TextView runtime;
-    private TextView history;
+    private Si si;
+    private LinearLayout pipelineSection;
+    private LinearLayout serverSection;
+    private LinearLayout importSection;
     private TextView pipeline;
     private TextView asrStatus;
-    private StarIntelSharedConfig sharedConfig;
     private TranscriptionManager transcription;
+    private StarIntelSharedConfig sharedConfig;
     private final AtomicReference<File> pendingPhoto = new AtomicReference<>();
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        si = new Si(this, new ThemeStore(this).current());
         sharedConfig = new StarIntelSharedConfig(this);
         transcription = new TranscriptionManager(this);
+        getWindow().setStatusBarColor(si.background());
+        getWindow().setNavigationBarColor(si.background());
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(24), dp(20), dp(30));
-        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        LinearLayout root = si.vertical();
+        root.setPadding(si.dp(SiTokens.SPACE_XL), si.dp(SiTokens.SPACE_L),
+                si.dp(SiTokens.SPACE_XL), si.dp(SiTokens.SPACE_XXL));
+        root.setBackgroundColor(si.background());
+
+        LinearLayout brand = si.row();
+        LinearLayout titles = si.vertical();
+        titles.addView(si.eyebrow("Star Wireless // Tools"));
+        titles.addView(si.title("Capture Tools"), si.match(SiTokens.SPACE_XS));
+        brand.addView(titles, si.weight());
+        Button back = si.secondaryButton("Mission", this::finish);
+        back.setContentDescription("Back to the mission screen");
+        brand.addView(back, new LinearLayout.LayoutParams(si.dp(110), si.dp(SiTokens.TOUCH_MIN_DP)));
+        root.addView(brand, si.match());
+
+        pipelineSection = pipelineCard();
+        root.addView(pipelineSection, si.match(SiTokens.SPACE_XL));
+        serverSection = serverCard();
+        root.addView(serverSection, si.match(SiTokens.SPACE_L));
+        importSection = importCard();
+        root.addView(importSection, si.match(SiTokens.SPACE_L));
+
+        ScrollView scroll = new ScrollView(this);
         scroll.addView(root);
-        root.setBackgroundColor(Color.rgb(4, 7, 9));
-
-        TextView eyebrow = text("STARINTEL // STAR WIRELESS", 12, Color.rgb(85, 235, 255), true);
-        eyebrow.setLetterSpacing(.12f);
-        root.addView(eyebrow, matchWrap());
-
-        root.addView(text("Collector", 32, Color.WHITE, true), matchWrap(3));
-        root.addView(
-                text(
-                        "Visible collection sessions for Wi-Fi, location, audio, and photo captures. Audio transcribes on-device with whisper.cpp (pinned model) or the optional remote endpoint. Entities are heuristic candidates until confirmed.",
-                        14,
-                        Color.rgb(150, 166, 172),
-                        false),
-                matchWrap(8));
-
-        runtime = text("", 15, Color.WHITE, true);
-        root.addView(runtime, matchWrap(24));
-
-        history = text("", 13, Color.rgb(150, 166, 172), false);
-        root.addView(history, matchWrap(4));
-
-        pipeline = text("", 13, Color.rgb(150, 166, 172), false);
-        root.addView(pipeline, matchWrap(4));
-
-        asrStatus = text("", 13, Color.rgb(85, 235, 255), false);
-        root.addView(asrStatus, matchWrap(4));
-
-        Button start = button("START STAR WIRELESS");
-        start.setOnClickListener(v -> startCollector());
-        root.addView(start, matchWrap(18));
-
-        Button stop = button("STOP COLLECTION");
-        stop.setOnClickListener(v -> {
-            stopService(new Intent(this, CollectorService.class));
-            refresh();
-        });
-        root.addView(stop, matchWrap(8));
-
-        Button audio = button("START AUDIO CAPTURE");
-        audio.setOnClickListener(v -> startAudio());
-        root.addView(audio, matchWrap(18));
-
-        Button audioStop = button("STOP AUDIO CAPTURE");
-        audioStop.setOnClickListener(v -> {
-            startService(new Intent(this, CollectorService.class)
-                    .setAction(CollectorService.ACTION_STOP_AUDIO));
-            refresh();
-        });
-        root.addView(audioStop, matchWrap(8));
-
-        Button photo = button("CAPTURE PHOTO");
-        photo.setOnClickListener(v -> capturePhoto());
-        root.addView(photo, matchWrap(18));
-
-        Button model = button("DOWNLOAD VOICE MODEL · 57 MB SHA-PINNED");
-        model.setOnClickListener(v -> downloadModel());
-        root.addView(model, matchWrap(8));
-
-        Button transcribe = button("TRANSCRIBE PENDING SEGMENTS");
-        transcribe.setOnClickListener(v -> runTranscription());
-        root.addView(transcribe, matchWrap(8));
-
-        Button extract = button("EXTRACT ENTITIES (ON-DEVICE HEURISTICS)");
-        extract.setOnClickListener(v -> runHeuristicExtraction());
-        root.addView(extract, matchWrap(8));
-
-        Button interpret = button("INTERPRET LATEST TRANSCRIPT VIA AGENT");
-        interpret.setOnClickListener(v -> runAgentInterpretation());
-        root.addView(interpret, matchWrap(8));
-
-        Button sync = button("SYNC DOCUMENTS TO STAR");
-        sync.setOnClickListener(v -> runSync());
-        root.addView(sync, matchWrap(8));
-
-        Button configure = button("SERVER / TRANSCRIPTION SETTINGS");
-        configure.setOnClickListener(v -> showSettings());
-        root.addView(configure, matchWrap(8));
-
-        Button dev = button("WI-FI SCAN THROTTLING SETTINGS");
-        dev.setOnClickListener(v -> openDeveloperOptions());
-        root.addView(dev, matchWrap(8));
-
-        Button hackmode = button("DISPATCH RECENT BATCH TO HACKMODE");
-        hackmode.setOnClickListener(v -> dispatchToHackmode());
-        root.addView(hackmode, matchWrap(16));
-
-        Button wigle = button("IMPORT WIGLE SQLITE DATABASE");
-        wigle.setOnClickListener(v -> chooseWigleDatabase());
-        root.addView(wigle, matchWrap(16));
-
-        root.addView(
-                text(
-                        "Imports WiGLE network summaries, every location observation, and route history when present. Existing Star Wireless rows are preserved and imported observation IDs are de-duplicated.",
-                        12,
-                        Color.rgb(128, 145, 151),
-                        false),
-                matchWrap(4));
-
         setContentView(scroll);
-        root.post(this::runRequestedAction);
+
+        focusRequestedSection();
     }
 
-    private void runRequestedAction() {
-        String action = getIntent().getStringExtra(EXTRA_ACTION);
-        getIntent().removeExtra(EXTRA_ACTION);
-        if (ACTION_AUDIO.equals(action)) startAudio();
-        else if (ACTION_PHOTO.equals(action)) capturePhoto();
-        else if (ACTION_WIGLE.equals(action)) chooseWigleDatabase();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        refresh();
-    }
-
-    private void startCollector() {
-        if (!hasLocationPermission()) {
-            requestPermissions(
-                    new String[] {
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                    },
-                    REQUEST_PERMISSIONS);
-            return;
-        }
-        if (Build.VERSION.SDK_INT >= 33
-                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                        != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(
-                    new String[] {Manifest.permission.POST_NOTIFICATIONS},
-                    REQUEST_PERMISSIONS);
-        }
-
-        Intent intent = new Intent(this, CollectorService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent);
+    private void focusRequestedSection() {
+        String action = getIntent() == null ? null : getIntent().getStringExtra(EXTRA_ACTION);
+        LinearLayout target;
+        if (ACTION_AUDIO.equals(action)) {
+            target = pipelineSection;
+            startAudioCapture();
+        } else if (ACTION_PHOTO.equals(action)) {
+            target = pipelineSection;
+            startCapturePhoto();
+        } else if (ACTION_WIGLE.equals(action)) {
+            target = importSection;
+            chooseWigleDatabase();
         } else {
-            startService(intent);
+            target = serverSection;
         }
-        refresh();
+        target.requestFocusFromTouch();
+        target.scrollTo(0, 0);
     }
 
-    private boolean hasLocationPermission() {
-        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED;
+    // ---- pipeline: transcription, entities, upload ----
+
+    private LinearLayout pipelineCard() {
+        LinearLayout card = si.accentCard(si.accent());
+        card.addView(si.sectionHeader("Pipeline"));
+        card.addView(si.bodyStrong("Turn captures into pinned StarIntel documents."), si.match(SiTokens.SPACE_XS));
+
+        asrStatus = si.statusPill(asrState(), "", si.accent());
+        card.addView(asrStatus, si.match(SiTokens.SPACE_M));
+
+        if (!transcription.deviceModelReady()) {
+            Button model = si.primaryButton("Download voice model · 57 MB", this::downloadModel);
+            model.setContentDescription("Download the on-device whisper model, SHA-256 pinned");
+            card.addView(model, si.match(SiTokens.SPACE_M));
+        }
+
+        card.addView(row("Transcribe segments", this::runTranscription,
+                "Transcribe pending audio with the on-device model or configured remote"), si.match(SiTokens.SPACE_S));
+        card.addView(row("Extract entities", this::runHeuristicExtraction,
+                "Queue candidate people, orgs, and relations from transcripts"), si.match(SiTokens.SPACE_S));
+        card.addView(row("Interpret via agent", this::runAgentInterpretation,
+                "Ask the server prolog-rlm agent to refine the latest transcript"), si.match(SiTokens.SPACE_S));
+        card.addView(row("Sync to Star", this::runSync,
+                "Upload queued documents to the StarIntel server"), si.match(SiTokens.SPACE_S));
+
+        pipeline = si.label("", SiTokens.TYPE_LABEL, si.muted(), false);
+        card.addView(pipeline, si.match(SiTokens.SPACE_M));
+        return card;
     }
 
-    private void startAudio() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, REQUEST_AUDIO_PERMISSIONS);
-            return;
-        }
-        Intent base = new Intent(this, CollectorService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(base);
-        } else {
-            startService(base);
-        }
-        startService(new Intent(this, CollectorService.class)
-                .setAction(CollectorService.ACTION_START_AUDIO));
-        refresh();
+    private LinearLayout serverCard() {
+        LinearLayout card = si.card();
+        card.addView(si.sectionHeader("Server"));
+        card.addView(si.bodyStrong("Star server and transcription endpoints live in the phone Keystore."), si.match(SiTokens.SPACE_XS));
+        card.addView(row("Endpoints and keys", this::showSettings,
+                "Server URL, API key, remote ASR endpoint, default dataset"), si.match(SiTokens.SPACE_M));
+        return card;
     }
 
-    private void capturePhoto() {
-        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[] {Manifest.permission.CAMERA}, REQUEST_CAPTURE_IMAGE);
-            return;
-        }
-        File directory = new File(getFilesDir(), "photo-captures");
-        File raw = new File(directory, "photo-" + System.currentTimeMillis() + "-raw.jpg");
-        if (!directory.isDirectory() && !directory.mkdirs()) {
-            toast("Could not create photo directory");
-            return;
-        }
-        pendingPhoto.set(raw);
-        Uri uri = FileProvider.getUriForFile(this, "actor.starintel.collector.files", raw);
-        Intent intent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
-        intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri);
-        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        if (intent.resolveActivity(getPackageManager()) == null) {
-            toast("No camera app available");
-            return;
-        }
-        startActivityForResult(intent, REQUEST_CAPTURE_IMAGE);
+    private LinearLayout importCard() {
+        LinearLayout card = si.card();
+        card.addView(si.sectionHeader("Import"));
+        card.addView(si.bodyStrong("WiGLE databases merge without flattening observation history."), si.match(SiTokens.SPACE_XS));
+        card.addView(row("Import WiGLE database", this::chooseWigleDatabase,
+                "Pick a WiGLE SQLite export from storage"), si.match(SiTokens.SPACE_M));
+        card.addView(row("Wi-Fi scan throttling", this::openDeveloperOptions,
+                "Developer options → Networking → turn throttling off for dense scans"), si.match(SiTokens.SPACE_S));
+        return card;
+    }
+
+    private LinearLayout row(String label, Runnable action, String description) {
+        LinearLayout rowLayout = si.row();
+        Button button = si.secondaryButton(label, action);
+        button.setContentDescription(description);
+        rowLayout.addView(button, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, si.dp(SiTokens.TOUCH_MIN_DP)));
+        return rowLayout;
+    }
+
+    // ---- pipeline actions ----
+
+    private String asrState() {
+        if (transcription.deviceModelReady()) return "VOICE MODEL · READY";
+        if (transcription.remoteConfigured()) return "TRANSCRIPTION · REMOTE";
+        return "TRANSCRIPTION · NO ENGINE";
     }
 
     private void downloadModel() {
-        asrStatus.setText("VOICE MODEL · DOWNLOADING");
+        setPipelineStatus("VOICE MODEL · DOWNLOADING");
         transcription.submit(() -> {
-            String result;
+            String status;
             try {
-                WhisperModelStore store = transcription.modelStore();
-                store.download(
+                transcription.modelStore().download(
                         WhisperModelStore.DEFAULT_TAG,
                         WhisperModelStore.DEFAULT_URL,
                         WhisperModelStore.DEFAULT_SHA256,
                         WhisperModelStore.DEFAULT_SIZE_BYTES);
-                result = "VOICE MODEL · READY (on-device transcription)";
+                status = "VOICE MODEL · READY";
             } catch (Exception failure) {
-                result = "VOICE MODEL · FAILED · " + safe(failure.getMessage());
+                status = "VOICE MODEL · FAILED · " + safe(failure.getMessage());
             }
-            final String status = result;
+            final String settled = status;
             runOnUiThread(() -> {
-                asrStatus.setText(status);
-                refresh();
+                asrStatus.setText(settled);
+                refreshPipeline();
             });
         });
     }
 
     private void runTranscription() {
-        asrStatus.setText("TRANSCRIBING · RUNNING");
+        setPipelineStatus("TRANSCRIBING · RUNNING");
         transcription.submit(() -> {
             StarWirelessStore store = new StarWirelessStore(getApplicationContext());
             try {
                 String status = transcription.transcribePending(store);
                 runOnUiThread(() -> {
                     asrStatus.setText(status);
-                    refresh();
+                    refreshPipeline();
                 });
             } finally {
                 store.close();
@@ -279,22 +217,24 @@ public final class MainActivity extends Activity {
     }
 
     private void runHeuristicExtraction() {
-        asrStatus.setText("ENTITY EXTRACTION · RUNNING");
+        setPipelineStatus("ENTITY EXTRACTION · RUNNING");
         transcription.submit(() -> {
             StarWirelessStore store = new StarWirelessStore(getApplicationContext());
             try {
                 EntityExtraction.HeuristicResult result = EntityExtraction.extractHeuristic(store);
-                String status = "Extracted " + result.documents + " candidate documents from "
-                        + result.captures + " transcripts";
+                if (!result.latestAnalysisDocId.isEmpty()) {
+                    // Non-secret control-plane pointer so the Operator hub can hand the
+                    // newest document to Quasar without owning the corpus itself.
+                    new StarIntelSharedConfig(getApplicationContext()).put(
+                            StarIntelSharedConfig.KEY_COLLECTOR_LATEST_DOC, result.latestAnalysisDocId);
+                }
+                String status = result.documents + " candidate docs from " + result.captures + " transcripts";
                 runOnUiThread(() -> {
-                    asrStatus.setText(status);
-                    refresh();
+                    pipeline.setText(status);
+                    refreshPipeline();
                 });
             } catch (RuntimeException failure) {
-                runOnUiThread(() -> {
-                    asrStatus.setText("Entity extraction failed · " + safe(failure.getMessage()));
-                    refresh();
-                });
+                runOnUiThread(() -> setPipelineStatus("EXTRACTION FAILED · " + safe(failure.getMessage())));
             } finally {
                 store.close();
             }
@@ -305,30 +245,22 @@ public final class MainActivity extends Activity {
         String serverUrl = serverUrl();
         String apiKey = new CollectorSecretStore(this).read(StarDocumentSync.SLOT_API_KEY);
         if (serverUrl.isEmpty() || apiKey == null) {
-            toast("Configure the Star server URL and API key first");
+            Toast.makeText(this, "Configure the Star server first", Toast.LENGTH_SHORT).show();
             return;
         }
-        asrStatus.setText("AGENT INTERPRETATION · RUNNING");
+        setPipelineStatus("AGENT INTERPRETATION · RUNNING");
         transcription.submit(() -> {
             StarWirelessStore store = new StarWirelessStore(getApplicationContext());
             try {
-                List<StarWirelessStore.CaptureRow> transcribed =
-                        store.capturesInState("transcribed", 1);
+                List<StarWirelessStore.CaptureRow> transcribed = store.capturesInState("transcribed", 1);
                 if (transcribed.isEmpty()) {
-                    runOnUiThread(() -> asrStatus.setText("No transcribed captures to interpret"));
+                    runOnUiThread(() -> setPipelineStatus("NO TRANSCRIBED CAPTURES"));
                     return;
                 }
-                String status = EntityExtraction.interpretWithAgent(
-                        store, transcribed.get(0), serverUrl, apiKey);
-                runOnUiThread(() -> {
-                    asrStatus.setText(status);
-                    refresh();
-                });
+                String status = EntityExtraction.interpretWithAgent(store, transcribed.get(0), serverUrl, apiKey);
+                runOnUiThread(() -> setPipelineStatus(status));
             } catch (RuntimeException failure) {
-                runOnUiThread(() -> {
-                    asrStatus.setText("Agent interpretation unavailable · " + safe(failure.getMessage()));
-                    refresh();
-                });
+                runOnUiThread(() -> setPipelineStatus("AGENT UNAVAILABLE · " + safe(failure.getMessage())));
             } finally {
                 store.close();
             }
@@ -339,72 +271,106 @@ public final class MainActivity extends Activity {
         String serverUrl = serverUrl();
         String apiKey = new CollectorSecretStore(this).read(StarDocumentSync.SLOT_API_KEY);
         if (serverUrl.isEmpty() || apiKey == null) {
-            toast("Configure the Star server URL and API key first");
+            Toast.makeText(this, "Configure the Star server first", Toast.LENGTH_SHORT).show();
             return;
         }
-        asrStatus.setText("STAR SYNC · RUNNING");
+        setPipelineStatus("STAR SYNC · RUNNING");
         transcription.submit(() -> {
             StarWirelessStore store = new StarWirelessStore(getApplicationContext());
             try {
                 String status = StarDocumentSync.sync(store, serverUrl, apiKey);
-                runOnUiThread(() -> {
-                    asrStatus.setText(status);
-                    refresh();
-                });
+                runOnUiThread(() -> setPipelineStatus(status));
             } catch (RuntimeException failure) {
-                runOnUiThread(() -> {
-                    asrStatus.setText("Sync failed · " + safe(failure.getMessage()));
-                    refresh();
-                });
+                runOnUiThread(() -> setPipelineStatus("SYNC FAILED · " + safe(failure.getMessage())));
             } finally {
                 store.close();
             }
         });
     }
 
-    private void showSettings() {
-        LinearLayout panel = new LinearLayout(this);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(16), dp(8), dp(16), 0);
+    private void setPipelineStatus(String status) {
+        runOnUiThread(() -> {
+            asrStatus.setText(status);
+            refreshPipeline();
+        });
+    }
 
+    private void refreshPipeline() {
+        StarWirelessStore store = new StarWirelessStore(this);
+        try {
+            pipeline.setText("CAPTURES " + store.captureCount()
+                    + " · QUEUED " + store.queuedCount()
+                    + " · ACCEPTED " + store.acceptedCount());
+        } finally {
+            store.close();
+        }
+    }
+
+    // ---- server settings ----
+
+    private void showSettings() {
+        LinearLayout panel = si.vertical();
+        panel.setPadding(si.dp(SiTokens.SPACE_L), si.dp(SiTokens.SPACE_S), si.dp(SiTokens.SPACE_L), 0);
         CollectorSecretStore secrets = new CollectorSecretStore(this);
 
-        final EditText server = field(serverUrl(), "Star server URL (https://...)");
+        server = field(serverUrl(), "Star server URL (https://…)");
         panel.addView(server);
-        final EditText key = field(orNull(secrets.read(StarDocumentSync.SLOT_API_KEY)), "Star API key (star_sk_v1_...)");
-        key.setInputType(android.text.InputType.TYPE_CLASS_TEXT
-                | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        key = secretField(secrets.read(StarDocumentSync.SLOT_API_KEY), "Star API key (star_sk_v1_…)");
         panel.addView(key);
-        final EditText asrUrl = field(remoteUrl(), "Remote ASR endpoint (https://host/v1/audio/transcriptions)");
+        asrUrl = field(remoteUrl(), "Remote ASR endpoint (https://host/v1/audio/transcriptions)");
         panel.addView(asrUrl);
-        final EditText asrModel = field(remoteModel(), "Remote ASR model (e.g. whisper-1)");
+        asrModel = field(remoteModel(), "Remote ASR model (e.g. whisper-1)");
         panel.addView(asrModel);
-        final EditText asrKey = field(orNull(secrets.read(TranscriptionManager.SLOT_ASR_KEY)), "Remote ASR API key");
-        asrKey.setInputType(android.text.InputType.TYPE_CLASS_TEXT
-                | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        asrKey = secretField(secrets.read(TranscriptionManager.SLOT_ASR_KEY), "Remote ASR API key");
         panel.addView(asrKey);
-        final EditText dataset = field(sharedDataset(), "Default dataset for captures");
+        dataset = field(sharedDataset(), "Default dataset for captures");
         panel.addView(dataset);
 
-        new android.app.AlertDialog.Builder(this)
-                .setTitle("Star settings")
-                .setView(panel)
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(panel);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Endpoints and keys")
+                .setView(scroll)
                 .setPositiveButton("Save", (dialog, which) -> {
-                    String normalizedServer = text(server).replaceAll("/+$", "");
                     getSharedPreferences(TranscriptionManager.CONFIG_PREFS, MODE_PRIVATE)
                             .edit()
-                            .putString(StarDocumentSync.KEY_SERVER_URL, normalizedServer)
+                            .putString(StarDocumentSync.KEY_SERVER_URL, text(server).replaceAll("/+$", ""))
                             .putString(TranscriptionManager.KEY_REMOTE_ASR_URL, text(asrUrl))
                             .putString(TranscriptionManager.KEY_REMOTE_ASR_MODEL, text(asrModel))
                             .putString(StarDocumentSync.KEY_DATASET, text(dataset))
                             .apply();
                     secrets.save(StarDocumentSync.SLOT_API_KEY, text(key));
                     secrets.save(TranscriptionManager.SLOT_ASR_KEY, text(asrKey));
-                    toast("Settings saved");
-                    refresh();
+                    Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show();
+                    refreshPipeline();
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private EditText server, key, asrUrl, asrModel, asrKey, dataset;
+
+    private EditText field(String value, String hint) {
+        EditText edit = new EditText(this);
+        edit.setText(value);
+        edit.setHint(hint);
+        edit.setSingleLine(true);
+        panel_last(edit);
+        return edit;
+    }
+
+    private EditText secretField(String value, String hint) {
+        EditText edit = field(value, hint);
+        edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        return edit;
+    }
+
+    private void panel_last(EditText edit) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.topMargin = si.dp(SiTokens.SPACE_S);
+        edit.setLayoutParams(params);
     }
 
     private String serverUrl() {
@@ -434,16 +400,14 @@ public final class MainActivity extends Activity {
         return field.getText() == null ? "" : field.getText().toString().trim();
     }
 
-    private static String orNull(String value) {
-        return value == null ? "" : value;
-    }
+    // ---- import + camera ----
 
-    private EditText field(String value, String hint) {
-        EditText edit = new EditText(this);
-        edit.setText(value);
-        edit.setHint(hint);
-        edit.setSingleLine(true);
-        return edit;
+    private void chooseWigleDatabase() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        startActivityForResult(intent, REQUEST_WIGLE_DB);
     }
 
     private void openDeveloperOptions() {
@@ -454,34 +418,40 @@ public final class MainActivity extends Activity {
         startActivity(intent);
     }
 
-    private void dispatchToHackmode() {
-        try {
-            StarWirelessStore store = new StarWirelessStore(this);
-            try {
-                HackmodeOperationClient.submitRecentObservations(
-                        this,
-                        store,
-                        sharedConfig,
-                        250);
-            } finally {
-                store.close();
-            }
-            Toast.makeText(this, "Dispatched recent observations to Hackmode", Toast.LENGTH_SHORT).show();
-        } catch (RuntimeException error) {
-            Toast.makeText(
-                            this,
-                            "Hackmode dispatch failed · " + safe(error.getMessage()),
-                            Toast.LENGTH_LONG)
-                    .show();
+    void startCapturePhoto() {
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[] {Manifest.permission.CAMERA}, REQUEST_CAPTURE_IMAGE);
+            return;
         }
+        File directory = new File(getFilesDir(), "photo-captures");
+        File raw = new File(directory, "photo-" + System.currentTimeMillis() + "-raw.jpg");
+        if (!directory.isDirectory() && !directory.mkdirs()) {
+            Toast.makeText(this, "Could not create photo directory", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        pendingPhoto.set(raw);
+        Uri uri = FileProvider.getUriForFile(this, "actor.starintel.collector.files", raw);
+        Intent intent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+        intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri);
+        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        if (intent.resolveActivity(getPackageManager()) == null) {
+            Toast.makeText(this, "No camera app available", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        startActivityForResult(intent, REQUEST_CAPTURE_IMAGE);
     }
 
-    private void chooseWigleDatabase() {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("*/*");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        startActivityForResult(intent, REQUEST_WIGLE_DB);
+    void startAudioCapture() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, REQUEST_AUDIO_PERMISSIONS);
+            return;
+        }
+        Intent base = new Intent(this, CollectorService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(base);
+        else startService(base);
+        startService(new Intent(this, CollectorService.class)
+                .setAction(CollectorService.ACTION_START_AUDIO));
+        Toast.makeText(this, "Audio capture active", Toast.LENGTH_SHORT).show();
     }
 
     @Override
@@ -500,8 +470,7 @@ public final class MainActivity extends Activity {
         if (requestCode != REQUEST_WIGLE_DB || resultCode != RESULT_OK || data == null) return;
         Uri uri = data.getData();
         if (uri == null) return;
-
-        history.setText("IMPORT · RUNNING");
+        setPipelineStatus("WIGLE IMPORT · RUNNING");
         new Thread(() -> {
             try {
                 StarWirelessStore store = new StarWirelessStore(getApplicationContext());
@@ -509,34 +478,17 @@ public final class MainActivity extends Activity {
                         WigleSqliteImporter.importDatabase(getApplicationContext(), uri, store);
                 store.close();
                 runOnUiThread(() -> {
-                    Toast.makeText(
-                                    this,
-                                    "Imported "
-                                            + stats.networks
-                                            + " networks · "
-                                            + stats.observations
-                                            + " observations · "
-                                            + stats.routes
-                                            + " route points",
-                                    Toast.LENGTH_LONG)
-                            .show();
-                    refresh();
+                    setPipelineStatus("IMPORTED " + stats.networks + " networks · "
+                            + stats.observations + " observations · " + stats.routes + " route points");
                 });
             } catch (Exception error) {
-                runOnUiThread(() -> {
-                    Toast.makeText(
-                                    this,
-                                    "WiGLE import failed · " + safe(error.getMessage()),
-                                    Toast.LENGTH_LONG)
-                            .show();
-                    refresh();
-                });
+                runOnUiThread(() -> setPipelineStatus("WIGLE IMPORT FAILED · " + safe(error.getMessage())));
             }
         }, "star-wireless-wigle-import").start();
     }
 
     private void ingestPhoto(File raw) {
-        pipeline.setText("PHOTO · ANALYZING");
+        setPipelineStatus("PHOTO · ANALYZING");
         transcription.submit(() -> {
             try {
                 File normalized = new File(
@@ -563,15 +515,9 @@ public final class MainActivity extends Activity {
                 String status = String.format(java.util.Locale.US,
                         "PHOTO · %dx%d · luma %.2f · sharp %.3f · edges %.3f",
                         stats.width, stats.height, stats.meanLuma, stats.sharpness, stats.edgeDensity);
-                runOnUiThread(() -> {
-                    pipeline.setText(status);
-                    refresh();
-                });
+                runOnUiThread(() -> setPipelineStatus(status));
             } catch (Exception failure) {
-                runOnUiThread(() -> {
-                    pipeline.setText("PHOTO · FAILED · " + safe(failure.getMessage()));
-                    refresh();
-                });
+                runOnUiThread(() -> setPipelineStatus("PHOTO FAILED · " + safe(failure.getMessage())));
             }
         });
     }
@@ -580,89 +526,20 @@ public final class MainActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (grantResults.length == 0 || grantResults[0] != PackageManager.PERMISSION_GRANTED) return;
-        if (requestCode == REQUEST_AUDIO_PERMISSIONS) startAudio();
-        if (requestCode == REQUEST_CAPTURE_IMAGE) capturePhoto();
+        if (requestCode == REQUEST_AUDIO_PERMISSIONS) startAudioCapture();
+        if (requestCode == REQUEST_CAPTURE_IMAGE) startCapturePhoto();
     }
 
-    private void refresh() {
-        boolean active =
-                getSharedPreferences(CollectorService.PREFS, MODE_PRIVATE)
-                        .getBoolean(CollectorService.KEY_ACTIVE, false);
-        boolean audioActive =
-                getSharedPreferences(CollectorService.PREFS, MODE_PRIVATE)
-                        .getBoolean(CollectorService.KEY_AUDIO_ACTIVE, false);
-        runtime.setText(active
-                ? (audioActive ? "SESSION · ACTIVE + AUDIO" : "SESSION · ACTIVE")
-                : "SESSION · STOPPED");
-
-        StarWirelessStore store = new StarWirelessStore(this);
-        try {
-            history.setText(
-                    "NETWORKS · "
-                            + store.networkCount()
-                            + "    OBSERVATIONS · "
-                            + store.observationCount()
-                            + "    ROUTE POINTS · "
-                            + store.routeCount());
-            pipeline.setText(
-                    "CAPTURES · "
-                            + store.captureCount()
-                            + "    QUEUED DOCS · "
-                            + store.queuedCount()
-                            + "    ACCEPTED · "
-                            + store.acceptedCount());
-        } finally {
-            store.close();
-        }
-
-        boolean device = transcription.deviceModelReady();
-        boolean remote = transcription.remoteConfigured();
-        asrStatus.setText(device
-                ? "VOICE MODEL · READY (on-device)"
-                : remote
-                        ? "TRANSCRIPTION · remote endpoint configured"
-                        : "TRANSCRIPTION · download the device model or configure a remote endpoint");
-    }
-
-    private void toast(String message) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
-    }
-
-    private Button button(String label) {
-        Button button = new Button(this);
-        button.setText(label);
-        return button;
-    }
-
-    private TextView text(String value, float size, int color, boolean bold) {
-        TextView view = new TextView(this);
-        view.setText(value);
-        view.setTextSize(size);
-        view.setTextColor(color);
-        if (bold) view.setTypeface(Typeface.DEFAULT_BOLD);
-        return view;
-    }
-
-    private LinearLayout.LayoutParams matchWrap() {
-        return matchWrap(0);
-    }
-
-    private LinearLayout.LayoutParams matchWrap(int top) {
-        LinearLayout.LayoutParams params =
-                new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.topMargin = dp(top);
-        return params;
-    }
-
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshPipeline();
+        asrStatus.setText(asrState());
     }
 
     private static String safe(String value) {
         if (value == null || value.trim().isEmpty()) return "unknown error";
         String trimmed = value.trim();
-        return trimmed.length() <= 180 ? trimmed : trimmed.substring(0, 180);
+        return trimmed.length() <= 160 ? trimmed : trimmed.substring(0, 160);
     }
 }

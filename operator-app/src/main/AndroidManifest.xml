@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="actor.starintel.permission.CONFIG" />
+    <uses-permission android:name="actor.starintel.permission.HACKMODE_OPERATIONS" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <queries>
+        <package android:name="actor.starintel.quasar" />
+        <package android:name="actor.starintel.collector" />
+        <package android:name="actor.starintel.hackmode" />
+        <package android:name="actor.starintel.wear" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:label="StarIntel Operator"
+        android:theme="@android:style/Theme.Material.NoActionBar">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

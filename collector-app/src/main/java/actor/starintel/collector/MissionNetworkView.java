@@ -1,71 +1,109 @@
 package actor.starintel.collector;
 
+import actor.starintel.design.SiTokens;
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.view.View;
 
-final class MissionNetworkView extends View {
-    private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint node = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private CollectorMissionSnapshot snapshot =
-            new CollectorMissionSnapshot(false, false, 0, 0, 0, 0, 0);
+/**
+ * Route sparkline for the current mission: recent route points plus live radio state.
+ *
+ * Deterministic projection of route history; no fabricated motion when history is
+ * empty. Colors come from the shared design palette only.
+ */
+public final class MissionNetworkView extends View {
+    private static final int MAX_POINTS = 96;
 
-    MissionNetworkView(Context context) {
+    private final Paint track = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final int background;
+    private final int border;
+    private final int accent;
+    private final int muted;
+    private final int textColor;
+
+    private double[] latitudes = new double[0];
+    private double[] longitudes = new double[0];
+    private String statusLine = "NO ROUTE YET";
+
+    public MissionNetworkView(Context context, SiTokens.Palette palette) {
         super(context);
-        setMinimumHeight(dp(168));
-        setContentDescription("Live collection network visualization");
+        this.background = palette.raised;
+        this.border = palette.border;
+        this.accent = palette.accent;
+        this.muted = palette.muted;
+        this.textColor = palette.muted;
+        track.setColor(background);
+        track.setStyle(Paint.Style.FILL);
+        line.setColor(accent);
+        line.setStyle(Paint.Style.STROKE);
+        line.setStrokeWidth(dp(2));
+        line.setStrokeCap(Paint.Cap.ROUND);
+        line.setStrokeJoin(Paint.Join.ROUND);
+        dot.setColor(palette.accentAlt);
+        text.setColor(textColor);
+        text.setTextSize(dp(11));
+        text.setFakeBoldText(true);
     }
 
-    void setSnapshot(CollectorMissionSnapshot value) {
-        snapshot = value;
-        setContentDescription(
-                "Collection graph with " + value.networks + " networks, "
-                        + value.observations + " observations, and " + value.captures + " captures");
+    public void setSnapshot(CollectorMissionSnapshot snapshot) {
+        this.latitudes = snapshot.routeLatitudes();
+        this.longitudes = snapshot.routeLongitudes();
+        this.statusLine = snapshot.networkSummary();
         invalidate();
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        float width = getWidth();
-        float height = getHeight();
-        float centerX = width * .56f;
-        float centerY = height * .50f;
-        float radius = Math.min(width, height) * .34f;
-        int points = 8;
-        line.setStyle(Paint.Style.STROKE);
-        line.setStrokeWidth(dp(1));
-        line.setColor(Color.rgb(43, 74, 104));
-        node.setStyle(Paint.Style.FILL);
-        for (int index = 0; index < points; index++) {
-            double angle = (Math.PI * 2d * index / points) - Math.PI / 2d;
-            float x = centerX + (float) Math.cos(angle) * radius;
-            float y = centerY + (float) Math.sin(angle) * radius * .72f;
-            canvas.drawLine(centerX, centerY, x, y, line);
-            if (index > 0) {
-                double previous = (Math.PI * 2d * (index - 1) / points) - Math.PI / 2d;
-                canvas.drawLine(
-                        centerX + (float) Math.cos(previous) * radius,
-                        centerY + (float) Math.sin(previous) * radius * .72f,
-                        x,
-                        y,
-                        line);
-            }
-            node.setColor(index == points - 1 && snapshot.queued > 0
-                    ? Color.rgb(246, 1, 157)
-                    : Color.rgb(45, 226, 230));
-            canvas.drawCircle(x, y, dp(index % 3 == 0 ? 5 : 3), node);
+        float radius = dp(12);
+        canvas.drawRoundRect(0f, 0f, getWidth(), getHeight(), radius, radius, track);
+        android.graphics.Paint stroke = new android.graphics.Paint(track);
+        stroke.setStyle(android.graphics.Paint.Style.STROKE);
+        stroke.setStrokeWidth(dp(1));
+        stroke.setColor(border);
+        canvas.drawRoundRect(0f, 0f, getWidth(), getHeight(), radius, radius, stroke);
+
+        if (latitudes.length < 2) {
+            canvas.drawText(statusLine, dp(14), getHeight() / 2f - dp(4), text);
+            canvas.drawText("Points appear as the mission records movement", dp(14), getHeight() / 2f + dp(12), text);
+            return;
         }
-        node.setColor(snapshot.active ? Color.rgb(98, 255, 0) : Color.rgb(45, 226, 230));
-        canvas.drawCircle(centerX, centerY, dp(11), node);
-        line.setColor(Color.argb(105, 45, 226, 230));
-        canvas.drawCircle(centerX, centerY, radius * .48f, line);
-        canvas.drawCircle(centerX, centerY, radius * .78f, line);
+
+        double minLat = Double.POSITIVE_INFINITY;
+        double maxLat = Double.NEGATIVE_INFINITY;
+        double minLon = Double.POSITIVE_INFINITY;
+        double maxLon = Double.NEGATIVE_INFINITY;
+        for (int index = 0; index < latitudes.length; index++) {
+            minLat = Math.min(minLat, latitudes[index]);
+            maxLat = Math.max(maxLat, latitudes[index]);
+            minLon = Math.min(minLon, longitudes[index]);
+            maxLon = Math.max(maxLon, longitudes[index]);
+        }
+        double spanLat = Math.max(maxLat - minLat, 1e-5d);
+        double spanLon = Math.max(maxLon - minLon, 1e-5d);
+        float pad = dp(14);
+
+        Path path = new Path();
+        float lastX = 0f;
+        float lastY = 0f;
+        for (int index = 0; index < latitudes.length; index++) {
+            float x = (float) ((longitudes[index] - minLon) / spanLon) * (getWidth() - pad * 2) + pad;
+            float y = getHeight() - pad - (float) ((latitudes[index] - minLat) / spanLat) * (getHeight() - pad * 2);
+            if (index == 0) path.moveTo(x, y);
+            else path.lineTo(x, y);
+            lastX = x;
+            lastY = y;
+        }
+        canvas.drawPath(path, line);
+        canvas.drawCircle(lastX, lastY, dp(3), dot);
     }
 
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+    private float dp(int value) {
+        return value * getResources().getDisplayMetrics().density;
     }
 }

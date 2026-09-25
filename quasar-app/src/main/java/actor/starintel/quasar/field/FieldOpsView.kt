@@ -76,6 +76,24 @@ internal class FieldOpsView(
         applyFilter()
     }
 
+    /** Focus handed off from Operator: center the map and select the nearest loaded feature. */
+    fun focusOn(latitude: Double, longitude: Double) {
+        if (!latitude.isFinite() || !longitude.isFinite() ||
+            latitude !in -90.0..90.0 || longitude !in -180.0..180.0
+        ) {
+            return
+        }
+        val point = GeoPoint(latitude, longitude)
+        map.focus(point)
+        fieldCenter = point
+        coordinate.text = GeoMath.coordinateReadout(point)
+        allFeatures.minByOrNull { feature ->
+            val deltaLat = feature.point.latitude - latitude
+            val deltaLon = feature.point.longitude - longitude
+            deltaLat * deltaLat + deltaLon * deltaLon
+        }?.let { selectedFeature -> select(selectedFeature, fromMap = true) }
+    }
+
     fun setDataStatus(label: String, ready: Boolean) {
         dataStatus.text = label.uppercase().take(24)
         dataStatus.setTextColor(if (ready) QuasarDesign.lime else QuasarDesign.amber)

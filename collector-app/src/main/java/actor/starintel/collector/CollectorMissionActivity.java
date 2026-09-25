@@ -1,42 +1,40 @@
 package actor.starintel.collector;
 
+import actor.starintel.android.config.OperatorContracts;
+import actor.starintel.design.Si;
+import actor.starintel.design.SiTokens;
+import actor.starintel.design.SiTokens.ThemeStore;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.res.ColorStateList;
-import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.RippleDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
-import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+/**
+ * Mission screen: the one place a collection session is started, read, and stopped.
+ *
+ * Structure is fixed: identity row, mission card (status, primary action, stage rail),
+ * evidence card (metrics + pipeline state), capture quick actions, and the app rail
+ * that hands off to the Operator hub. Flows never loop back into each other.
+ */
 public final class CollectorMissionActivity extends Activity {
     private static final int REQUEST_MISSION_PERMISSIONS = 41;
-    private static final int BACKGROUND = Color.rgb(7, 7, 12);
-    private static final int PANEL = Color.rgb(18, 18, 31);
-    private static final int RAISED = Color.rgb(25, 24, 42);
-    private static final int BORDER = Color.rgb(48, 46, 76);
-    private static final int CYAN = Color.rgb(45, 226, 230);
-    private static final int PINK = Color.rgb(246, 1, 157);
-    private static final int AMBER = Color.rgb(251, 169, 34);
-    private static final int LIME = Color.rgb(98, 255, 0);
-    private static final int TEXT = Color.rgb(243, 244, 245);
-    private static final int MUTED = Color.rgb(164, 166, 184);
 
+    private Si si;
     private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private TextView status;
-    private TextView primary;
+    private TextView primaryLabel;
+    private Button primary;
     private TextView networks;
     private TextView observations;
     private TextView captures;
@@ -48,79 +46,39 @@ public final class CollectorMissionActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().setStatusBarColor(BACKGROUND);
-        getWindow().setNavigationBarColor(BACKGROUND);
+        si = new Si(this, new ThemeStore(this).current());
+        getWindow().setStatusBarColor(si.background());
+        getWindow().setNavigationBarColor(si.background());
+        handleCollectIntent(getIntent());
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(18), dp(18), dp(24));
-        root.setBackgroundColor(BACKGROUND);
+        LinearLayout root = si.vertical();
+        root.setPadding(si.dp(SiTokens.SPACE_XL), si.dp(SiTokens.SPACE_XL),
+                si.dp(SiTokens.SPACE_XL), si.dp(SiTokens.SPACE_XXL));
+        root.setBackgroundColor(si.background());
 
-        LinearLayout brand = row();
-        LinearLayout brandText = new LinearLayout(this);
-        brandText.setOrientation(LinearLayout.VERTICAL);
-        brandText.addView(eyebrow("QUASAR // STARINTEL"));
-        brandText.addView(label("STAR WIRELESS", 19, TEXT, true), match(3));
-        brand.addView(brandText, weight());
-        TextView more = action("TOOLS", false, () -> openTools(null));
-        more.setContentDescription("collector.tools");
-        brand.addView(more, new LinearLayout.LayoutParams(dp(88), dp(46)));
-        root.addView(brand, match());
+        root.addView(identityRow(), si.match());
 
-        LinearLayout mission = card(CYAN);
-        status = label("READY TO COLLECT", 12, LIME, true);
-        status.setLetterSpacing(.12f);
+        LinearLayout mission = si.accentCard(si.accent());
+        status = si.label("READY TO COLLECT", SiTokens.TYPE_LABEL, si.ok(), true);
+        status.setLetterSpacing(0.12f);
+        status.setAllCaps(true);
         mission.addView(status);
-        mission.addView(label("Start Mission", 31, TEXT, true), match(15));
-        mission.addView(label(
-                "Collect wireless, location, audio and photo evidence. Process it into pinned StarIntel documents for Quasar.",
-                14,
-                MUTED,
-                false), match(7));
-        networkView = new MissionNetworkView(this);
+        mission.addView(si.display("Start Mission"), si.match(SiTokens.SPACE_XS));
+        mission.addView(si.body(
+                "One visible session captures wireless, location, audio, and photo evidence, then pins it as StarIntel documents."), si.match(SiTokens.SPACE_S));
+        networkView = new MissionNetworkView(this, si.palette());
         mission.addView(networkView, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(176)));
-        primary = action("START MISSION", true, this::toggleMission);
-        primary.setContentDescription("collector.primary");
-        mission.addView(primary, match(5));
-        mission.addView(stageRail(), match(17));
-        root.addView(mission, match(22));
+                ViewGroup.LayoutParams.MATCH_PARENT, si.dp(176)));
+        primary = si.primaryButton("START MISSION", this::toggleMission);
+        primary.setContentDescription("Start or stop the collection mission");
+        primaryLabel = (TextView) primary;
+        mission.addView(primary, si.match(SiTokens.SPACE_L));
+        mission.addView(stageRail(), si.match(SiTokens.SPACE_XL));
+        root.addView(mission, si.match(SiTokens.SPACE_XXL));
 
-        LinearLayout evidence = card(null);
-        LinearLayout evidenceHeader = row();
-        evidenceHeader.addView(eyebrow("RECENT EVIDENCE"), weight());
-        TextView documents = link("DOCUMENTS", () -> openTools(null));
-        documents.setContentDescription("collector.documents");
-        evidenceHeader.addView(documents);
-        evidence.addView(evidenceHeader);
-        LinearLayout metrics = row();
-        networks = metric(metrics, "NETWORKS", CYAN);
-        observations = metric(metrics, "OBSERVATIONS", CYAN);
-        captures = metric(metrics, "CAPTURES", PINK);
-        evidence.addView(metrics, match(17));
-        process = pipelineLine("PROCESS", AMBER);
-        sync = pipelineLine("SYNC", LIME);
-        evidence.addView(process, match(14));
-        evidence.addView(sync, match(7));
-        root.addView(evidence, match(12));
-
-        root.addView(eyebrow("CAPTURE"), match(23));
-        LinearLayout quick = row();
-        quick.addView(quickAction("AUDIO", "collector.audio", PINK,
-                () -> openTools(MainActivity.ACTION_AUDIO)), weight());
-        quick.addView(quickAction("PHOTO", "collector.photo", AMBER,
-                () -> openTools(MainActivity.ACTION_PHOTO)), weight(8));
-        quick.addView(quickAction("WIGLE", "collector.wigle", LIME,
-                () -> openTools(MainActivity.ACTION_WIGLE)), weight(8));
-        root.addView(quick, match(10));
-
-        LinearLayout navigation = row();
-        navigation.setPadding(0, dp(16), 0, 0);
-        navigation.addView(nav("COLLECT", CYAN, () -> {}), weight());
-        navigation.addView(nav("EVIDENCE", MUTED, () -> openTools(null)), weight());
-        navigation.addView(nav("QUASAR", MUTED, this::openQuasar), weight());
-        navigation.addView(nav("SETTINGS", MUTED, () -> openTools(null)), weight());
-        root.addView(navigation, match(9));
+        root.addView(evidenceCard(), si.match(SiTokens.SPACE_L));
+        root.addView(captureRow(), si.match(SiTokens.SPACE_XL));
+        root.addView(appRail(), si.match(SiTokens.SPACE_L));
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -141,6 +99,140 @@ public final class CollectorMissionActivity extends Activity {
         refreshHandler.removeCallbacksAndMessages(null);
         super.onPause();
     }
+
+    /** Operator handoff: COLLECT opens the mission; an optional kind jumps straight into a tool. */
+    private void handleCollectIntent(Intent intent) {
+        if (intent == null || !OperatorContracts.ACTION_COLLECT.equals(intent.getAction())) return;
+        String kind = intent.getStringExtra(OperatorContracts.EXTRA_COLLECT_KIND);
+        if (OperatorContracts.KIND_AUDIO.equals(kind)) openTools(MainActivity.ACTION_AUDIO);
+        else if (OperatorContracts.KIND_PHOTO.equals(kind)) openTools(MainActivity.ACTION_PHOTO);
+    }
+
+    private LinearLayout identityRow() {
+        LinearLayout brand = si.row();
+        LinearLayout titles = si.vertical();
+        titles.addView(si.eyebrow("StarIntel // Star Wireless"));
+        titles.addView(si.title("Collector"), si.match(SiTokens.SPACE_XS));
+        brand.addView(titles, si.weight());
+        Button tools = si.secondaryButton("Tools", () -> openTools(null));
+        tools.setContentDescription("Open capture tools");
+        brand.addView(tools, new LinearLayout.LayoutParams(si.dp(96), si.dp(SiTokens.TOUCH_MIN_DP)));
+        return brand;
+    }
+
+    private LinearLayout evidenceCard() {
+        LinearLayout evidence = si.card();
+        LinearLayout header = si.row();
+        header.addView(si.sectionHeader("Recent evidence"), si.weight());
+        TextView documents = textLink("Documents in Quasar", this::openQuasarDocuments);
+        documents.setContentDescription("Open collected documents in Quasar");
+        header.addView(documents);
+        evidence.addView(header);
+
+        LinearLayout metrics = si.row();
+        LinearLayout networksColumn = si.metric("Networks", "0", si.accent());
+        LinearLayout observationsColumn = si.metric("Observations", "0", si.accent());
+        LinearLayout capturesColumn = si.metric("Captures", "0", si.accentAlt());
+        metrics.addView(networksColumn, si.weight());
+        metrics.addView(observationsColumn, si.weight());
+        metrics.addView(capturesColumn, si.weight(SiTokens.SPACE_S));
+        evidence.addView(metrics, si.match(SiTokens.SPACE_L));
+        networks = firstText(networksColumn);
+        observations = firstText(observationsColumn);
+        captures = firstText(capturesColumn);
+
+        process = pipelineLine("PROCESS");
+        sync = pipelineLine("SYNC");
+        evidence.addView(process, si.match(SiTokens.SPACE_L));
+        evidence.addView(sync, si.match(SiTokens.SPACE_S));
+        return evidence;
+    }
+
+    private LinearLayout captureRow() {
+        LinearLayout column = si.vertical();
+        column.addView(si.sectionHeader("Capture"), si.match());
+        LinearLayout quick = si.row();
+        quick.addView(quickAction("Audio", "Record a voice segment", si.accentAlt(),
+                () -> openTools(MainActivity.ACTION_AUDIO)), si.weight());
+        quick.addView(quickAction("Photo", "Capture an analyzed frame", si.warn(),
+                () -> openTools(MainActivity.ACTION_PHOTO)), si.weight(SiTokens.SPACE_S));
+        quick.addView(quickAction("WiGLE", "Import a WiGLE database", si.ok(),
+                () -> openTools(MainActivity.ACTION_WIGLE)), si.weight(SiTokens.SPACE_S));
+        column.addView(quick, si.match(SiTokens.SPACE_S));
+        return column;
+    }
+
+    /** Hands data or control to the app that owns it; never re-implements it here. */
+    private LinearLayout appRail() {
+        LinearLayout column = si.vertical();
+        column.addView(si.sectionHeader("Open in"), si.match());
+        LinearLayout rail = si.row();
+        rail.addView(railButton("Quasar", "Browse corpus, maps, graphs", this::openQuasarDocuments), si.weight());
+        rail.addView(railButton("Operator", "Mission control hub", this::openOperator), si.weight(SiTokens.SPACE_S));
+        rail.addView(railButton("Settings", "Server and engines", () -> openTools(null)), si.weight(SiTokens.SPACE_S));
+        column.addView(rail, si.match(SiTokens.SPACE_S));
+        return column;
+    }
+
+    private Button quickAction(String title, String description, int accent, Runnable click) {
+        Button view = si.secondaryButton(title, click);
+        view.setContentDescription(description);
+        view.setMinHeight(si.dp(68));
+        view.setBackground(si.ripple(si.palette().raised, accent, SiTokens.RADIUS_CONTROL));
+        return view;
+    }
+
+    private Button railButton(String title, String description, Runnable click) {
+        Button view = si.secondaryButton(title, click);
+        view.setContentDescription(description);
+        return view;
+    }
+
+    private TextView textLink(String value, Runnable click) {
+        TextView view = si.label(value, SiTokens.TYPE_LABEL, si.accent(), true);
+        view.setPadding(si.dp(SiTokens.SPACE_M), si.dp(SiTokens.SPACE_S), 0, si.dp(SiTokens.SPACE_S));
+        view.setMinHeight(si.dp(SiTokens.TOUCH_MIN_DP));
+        view.setGravity(Gravity.CENTER_VERTICAL);
+        view.setOnClickListener(ignored -> click.run());
+        return view;
+    }
+
+    private TextView pipelineLine(String title) {
+        TextView view = si.label(title, SiTokens.TYPE_LABEL, si.muted(), false);
+        view.setPadding(si.dp(SiTokens.SPACE_M), si.dp(SiTokens.SPACE_M - 1), si.dp(SiTokens.SPACE_M), si.dp(SiTokens.SPACE_M - 1));
+        view.setBackground(si.rounded(si.palette().raised, si.palette().border, SiTokens.RADIUS_PILL - 87));
+        return view;
+    }
+
+    private LinearLayout stageRail() {
+        LinearLayout rail = si.row();
+        rail.addView(stage("1", "COLLECT", "Wi-Fi · GPS\nAudio · Photos", si.accent()), si.weight());
+        rail.addView(stage("2", "PROCESS", "Transcribe · Extract\nDocuments", si.warn()), si.weight(SiTokens.SPACE_S));
+        rail.addView(stage("3", "SYNC", "Queue · Upload\nto Star", si.ok()), si.weight(SiTokens.SPACE_S));
+        return rail;
+    }
+
+    private LinearLayout stage(String number, String heading, String detail, int accent) {
+        LinearLayout column = si.vertical();
+        column.setGravity(Gravity.CENTER_HORIZONTAL);
+        TextView marker = si.label(number, 13, si.onColor(accent), true);
+        marker.setGravity(Gravity.CENTER);
+        marker.setBackground(si.rounded(accent, accent, SiTokens.RADIUS_PILL));
+        column.addView(marker, new LinearLayout.LayoutParams(si.dp(38), si.dp(38)));
+        TextView title = si.label(heading, 11, si.text(), true);
+        title.setLetterSpacing(0.12f);
+        column.addView(title, si.match(SiTokens.SPACE_S));
+        TextView body = si.label(detail, 10, si.muted(), false);
+        body.setGravity(Gravity.CENTER);
+        column.addView(body, si.match(SiTokens.SPACE_XS));
+        return column;
+    }
+
+    private TextView firstText(LinearLayout metricColumn) {
+        return (TextView) metricColumn.getChildAt(0);
+    }
+
+    // ---- mission control ----
 
     private void toggleMission() {
         boolean active = getSharedPreferences(CollectorService.PREFS, MODE_PRIVATE)
@@ -208,30 +300,26 @@ public final class CollectorMissionActivity extends Activity {
         StarWirelessStore store = new StarWirelessStore(this);
         CollectorMissionSnapshot snapshot;
         try {
-            snapshot = new CollectorMissionSnapshot(
-                    active,
-                    audio,
-                    store.networkCount(),
-                    store.observationCount(),
-                    store.captureCount(),
-                    store.queuedCount(),
-                    store.acceptedCount());
+            snapshot = CollectorMissionSnapshot.fromStore(active, audio, store);
         } finally {
             store.close();
         }
         status.setText(snapshot.headline());
-        status.setTextColor(active ? LIME : CYAN);
-        primary.setText(snapshot.primaryAction());
-        primary.setBackground(ripple(active ? PINK : CYAN, active ? PINK : CYAN, 16));
-        primary.setTextColor(active ? TEXT : BACKGROUND);
+        status.setTextColor(active ? si.ok() : si.accent());
+        primaryLabel.setText(snapshot.primaryAction());
+        int fill = active ? si.danger() : si.accent();
+        primary.setBackground(si.ripple(fill, fill, SiTokens.RADIUS_CONTROL));
+        primary.setTextColor(si.onColor(fill));
         networks.setText(compact(snapshot.networks));
         observations.setText(compact(snapshot.observations));
         captures.setText(compact(snapshot.captures));
-        process.setText("PROCESS   " + snapshot.captures + " captures · " + snapshot.queued + " queued documents");
+        process.setText("PROCESS   " + snapshot.captures + " captures · " + snapshot.queued + " queued docs");
         sync.setText("SYNC   " + snapshot.accepted + " accepted · " + snapshot.queued + " awaiting upload");
         networkView.setSnapshot(snapshot);
         if (resumed) refreshHandler.postDelayed(this::refresh, 1_500L);
     }
+
+    // ---- handoff ----
 
     private void openTools(String action) {
         Intent intent = new Intent(this, MainActivity.class);
@@ -239,166 +327,38 @@ public final class CollectorMissionActivity extends Activity {
         startActivity(intent);
     }
 
-    private void openQuasar() {
-        Intent launch = getPackageManager().getLaunchIntentForPackage("actor.starintel.quasar");
-        if (launch == null) {
-            Toast.makeText(this, "Install the Quasar Android package first", Toast.LENGTH_SHORT).show();
+    private void openQuasarDocuments() {
+        Intent launch = new Intent(OperatorContracts.ACTION_OPEN_DOCUMENT)
+                .setPackage(OperatorContracts.PACKAGE_QUASAR)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (resolve(launch) != null) {
+            startActivity(launch);
             return;
         }
-        startActivity(launch);
+        Intent fallback = getPackageManager().getLaunchIntentForPackage(OperatorContracts.PACKAGE_QUASAR);
+        if (fallback != null) {
+            startActivity(fallback);
+            return;
+        }
+        Toast.makeText(this, "Install the Quasar package to browse documents", Toast.LENGTH_SHORT).show();
     }
 
-    private LinearLayout stageRail() {
-        LinearLayout rail = row();
-        rail.addView(stage("1", "COLLECT", "Wi-Fi · GPS\nAudio · Photos", CYAN), weight());
-        rail.addView(stage("2", "PROCESS", "Transcribe · Extract\nCreate documents", AMBER), weight(6));
-        rail.addView(stage("3", "SYNC", "Queue · Upload\nto StarIntel", LIME), weight(6));
-        return rail;
+    private void openOperator() {
+        Intent launch = getPackageManager().getLaunchIntentForPackage(OperatorContracts.PACKAGE_OPERATOR);
+        if (launch != null) {
+            startActivity(launch);
+            return;
+        }
+        Toast.makeText(this, "Install the Operator hub for mission control", Toast.LENGTH_SHORT).show();
     }
 
-    private LinearLayout stage(String number, String title, String detail, int accent) {
-        LinearLayout column = new LinearLayout(this);
-        column.setOrientation(LinearLayout.VERTICAL);
-        column.setGravity(Gravity.CENTER_HORIZONTAL);
-        TextView marker = label(number, 13, accent, true);
-        marker.setGravity(Gravity.CENTER);
-        marker.setBackground(rounded(RAISED, accent, 99));
-        column.addView(marker, new LinearLayout.LayoutParams(dp(38), dp(38)));
-        TextView heading = label(title, 11, TEXT, true);
-        heading.setLetterSpacing(.12f);
-        column.addView(heading, match(8));
-        TextView body = label(detail, 10, MUTED, false);
-        body.setGravity(Gravity.CENTER);
-        column.addView(body, match(5));
-        return column;
-    }
-
-    private TextView metric(LinearLayout parent, String name, int color) {
-        LinearLayout column = new LinearLayout(this);
-        column.setOrientation(LinearLayout.VERTICAL);
-        column.setGravity(Gravity.CENTER_HORIZONTAL);
-        TextView value = label("0", 21, TEXT, true);
-        column.addView(value);
-        TextView caption = label(name, 9, color, true);
-        caption.setLetterSpacing(.08f);
-        column.addView(caption, match(4));
-        parent.addView(column, weight());
-        return value;
-    }
-
-    private TextView pipelineLine(String title, int accent) {
-        TextView view = label(title, 12, MUTED, false);
-        view.setPadding(dp(12), dp(11), dp(12), dp(11));
-        view.setBackground(rounded(RAISED, BORDER, 12));
-        view.setCompoundDrawableTintList(ColorStateList.valueOf(accent));
-        return view;
-    }
-
-    private TextView quickAction(String title, String description, int accent, Runnable click) {
-        TextView view = label(title, 12, TEXT, true);
-        view.setGravity(Gravity.CENTER);
-        view.setMinHeight(dp(68));
-        view.setContentDescription(description);
-        view.setBackground(ripple(RAISED, accent, 15));
-        view.setOnClickListener(ignored -> click.run());
-        return view;
-    }
-
-    private TextView nav(String title, int color, Runnable click) {
-        TextView view = label(title, 10, color, true);
-        view.setGravity(Gravity.CENTER);
-        view.setMinHeight(dp(52));
-        view.setOnClickListener(ignored -> click.run());
-        return view;
-    }
-
-    private TextView action(String title, boolean primaryAction, Runnable click) {
-        TextView view = label(title, 13, primaryAction ? BACKGROUND : TEXT, true);
-        view.setGravity(Gravity.CENTER);
-        view.setMinHeight(dp(52));
-        view.setPadding(dp(15), dp(13), dp(15), dp(13));
-        view.setBackground(ripple(primaryAction ? CYAN : RAISED, primaryAction ? CYAN : BORDER, 15));
-        view.setOnClickListener(ignored -> click.run());
-        return view;
-    }
-
-    private TextView link(String title, Runnable click) {
-        TextView view = label(title, 10, CYAN, true);
-        view.setPadding(dp(12), dp(8), 0, dp(8));
-        view.setOnClickListener(ignored -> click.run());
-        return view;
-    }
-
-    private LinearLayout card(Integer accent) {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(16), dp(16), dp(16), dp(16));
-        card.setBackground(rounded(PANEL, accent == null ? BORDER : accent, 20));
-        return card;
-    }
-
-    private LinearLayout row() {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        return row;
-    }
-
-    private TextView eyebrow(String value) {
-        TextView view = label(value, 10, CYAN, true);
-        view.setLetterSpacing(.16f);
-        return view;
-    }
-
-    private TextView label(String value, float size, int color, boolean bold) {
-        TextView view = new TextView(this);
-        view.setText(value);
-        view.setTextSize(size);
-        view.setTextColor(color);
-        if (bold) view.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        view.setLineSpacing(0f, 1.12f);
-        return view;
-    }
-
-    private GradientDrawable rounded(int fill, int stroke, int radiusDp) {
-        GradientDrawable background = new GradientDrawable();
-        background.setColor(fill);
-        background.setCornerRadius(dp(radiusDp));
-        background.setStroke(dp(1), stroke);
-        return background;
-    }
-
-    private RippleDrawable ripple(int fill, int stroke, int radiusDp) {
-        return new RippleDrawable(
-                ColorStateList.valueOf(Color.argb(55, 255, 255, 255)),
-                rounded(fill, stroke, radiusDp),
-                null);
-    }
-
-    private LinearLayout.LayoutParams match() { return match(0); }
-
-    private LinearLayout.LayoutParams match(int top) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.topMargin = dp(top);
-        return params;
-    }
-
-    private LinearLayout.LayoutParams weight() { return weight(0); }
-
-    private LinearLayout.LayoutParams weight(int start) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        params.leftMargin = dp(start);
-        return params;
+    private android.content.pm.ResolveInfo resolve(Intent intent) {
+        return getPackageManager().resolveActivity(intent, 0);
     }
 
     private static String compact(long value) {
         if (value >= 1_000_000) return String.format(java.util.Locale.US, "%.1fM", value / 1_000_000d);
         if (value >= 1_000) return String.format(java.util.Locale.US, "%.1fK", value / 1_000d);
         return Long.toString(value);
-    }
-
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 }

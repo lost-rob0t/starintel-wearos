@@ -78,7 +78,7 @@ fi
 
 expected="${version#v}"
 version_codes=()
-for module in phone-app quasar-app collector-app hackmode-app wear-app watchface; do
+for module in phone-app quasar-app collector-app hackmode-app operator-app wear-app watchface; do
   file="$module/build.gradle.kts"
   actual="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' "$file")"
   code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' "$file")"
@@ -111,6 +111,7 @@ if [[ "$skip_local_checks" == false ]]; then
       :quasar-app:testDebugUnitTest \
       :collector-app:testDebugUnitTest \
       :hackmode-app:testDebugUnitTest \
+      :operator-app:testDebugUnitTest \
       :wear-app:testDebugUnitTest
 
   echo "==> validating all three watch-face contracts"
@@ -125,6 +126,7 @@ if [[ "$skip_local_checks" == false ]]; then
     build/nix/quasar-app-debug.apk \
     build/nix/collector-app-debug.apk \
     build/nix/hackmode-app-debug.apk \
+    build/nix/operator-app-debug.apk \
     build/nix/wear-app-debug.apk \
     build/nix/watchface-neon-debug.apk \
     build/nix/watchface-command-debug.apk \

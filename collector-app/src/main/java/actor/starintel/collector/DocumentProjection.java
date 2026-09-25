@@ -18,10 +18,12 @@ public final class DocumentProjection {
     public static class Result {
         public final int documents;
         public final String dataset;
+        public final String analysisDocId;
 
-        Result(int documents, String dataset) {
+        Result(int documents, String dataset, String analysisDocId) {
             this.documents = documents;
             this.dataset = dataset;
+            this.analysisDocId = analysisDocId;
         }
     }
 
@@ -68,7 +70,7 @@ public final class DocumentProjection {
                 capture.sizeBytes, capture.sha256, capture.createdAtMs));
         before++;
 
-        return new Result(before, dataset);
+        return new Result(before, dataset, analysisId);
     }
 
     public static void queueObservationBatch(StarWirelessStore store, JSONArray documents) {

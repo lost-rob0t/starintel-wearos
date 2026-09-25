@@ -30,10 +30,12 @@ public final class EntityExtraction {
     public static class HeuristicResult {
         public final int captures;
         public final int documents;
+        public final String latestAnalysisDocId;
 
-        HeuristicResult(int captures, int documents) {
+        HeuristicResult(int captures, int documents, String latestAnalysisDocId) {
             this.captures = captures;
             this.documents = documents;
+            this.latestAnalysisDocId = latestAnalysisDocId;
         }
     }
 
@@ -42,6 +44,7 @@ public final class EntityExtraction {
         List<StarWirelessStore.CaptureRow> transcribed = store.capturesInState("transcribed", 64);
         int documents = 0;
         int captures = 0;
+        String latestAnalysisDocId = "";
         for (StarWirelessStore.CaptureRow capture : transcribed) {
             String[] detail = store.captureDetail(capture.id);
             if (detail.length < 3 || detail[1].isEmpty()) continue;
@@ -50,8 +53,9 @@ public final class EntityExtraction {
             store.markCaptureProjected(capture.id);
             captures++;
             documents += result.documents;
+            latestAnalysisDocId = result.analysisDocId;
         }
-        return new HeuristicResult(captures, documents);
+        return new HeuristicResult(captures, documents, latestAnalysisDocId);
     }
 
     /**

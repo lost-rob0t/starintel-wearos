@@ -212,6 +212,37 @@ final class StarWirelessStore extends SQLiteOpenHelper {
         return count("route");
     }
 
+    double[] recentRouteLatitudes(int limit) {
+        return recentRouteColumn("lat", limit);
+    }
+
+    double[] recentRouteLongitudes(int limit) {
+        return recentRouteColumn("lon", limit);
+    }
+
+    private double[] recentRouteColumn(String column, int limit) {
+        int bounded = Math.max(1, Math.min(limit, 512));
+        java.util.List<Double> values = new java.util.ArrayList<>();
+        try (Cursor cursor = getReadableDatabase().rawQuery(
+                "SELECT " + column + " FROM route WHERE " + column + " IS NOT NULL "
+                        + "ORDER BY observed_at_ms DESC LIMIT " + bounded, null)) {
+            while (cursor.moveToNext()) {
+                values.add(cursor.getDouble(0));
+            }
+        }
+        double[] result = new double[values.size()];
+        for (int index = 0; index < values.size(); index++) {
+            result[index] = values.get(index);
+        }
+        // Chronological order for sparkline rendering.
+        for (int left = 0, right = result.length - 1; left < right; left++, right--) {
+            double swap = result[left];
+            result[left] = result[right];
+            result[right] = swap;
+        }
+        return result;
+    }
+
     long captureCount() {
         return count("capture");
     }
