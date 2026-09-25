@@ -11,7 +11,7 @@ import org.json.JSONObject;
 
 final class StarWirelessStore extends SQLiteOpenHelper {
     private static final String NAME = "star-wireless.db";
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
 
     StarWirelessStore(Context context) {
         super(context.getApplicationContext(), NAME, null, VERSION);
@@ -93,10 +93,50 @@ final class StarWirelessStore extends SQLiteOpenHelper {
                         + "observation_count INTEGER NOT NULL DEFAULT 0,"
                         + "route_count INTEGER NOT NULL DEFAULT 0"
                         + ")");
+
+        createV2Tables(db);
+    }
+
+    private static void createV2Tables(SQLiteDatabase db) {
+        db.execSQL(
+                "CREATE TABLE IF NOT EXISTS capture ("
+                        + "_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                        + "event_key TEXT UNIQUE NOT NULL,"
+                        + "kind TEXT NOT NULL,"
+                        + "file_path TEXT NOT NULL,"
+                        + "media_type TEXT NOT NULL,"
+                        + "size_bytes INTEGER NOT NULL DEFAULT 0,"
+                        + "sha256 TEXT NOT NULL DEFAULT '',"
+                        + "created_at_ms INTEGER NOT NULL,"
+                        + "duration_ms INTEGER NOT NULL DEFAULT 0,"
+                        + "state TEXT NOT NULL,"
+                        + "transcript TEXT NOT NULL DEFAULT '',"
+                        + "transcript_engine TEXT NOT NULL DEFAULT '',"
+                        + "projected INTEGER NOT NULL DEFAULT 0"
+                        + ")");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_capture_state ON capture(state, created_at_ms)");
+
+        db.execSQL(
+                "CREATE TABLE IF NOT EXISTS document_queue ("
+                        + "_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                        + "doc_key TEXT UNIQUE NOT NULL,"
+                        + "dtype TEXT NOT NULL,"
+                        + "doc_json TEXT NOT NULL,"
+                        + "state TEXT NOT NULL,"
+                        + "attempts INTEGER NOT NULL DEFAULT 0,"
+                        + "last_error TEXT NOT NULL DEFAULT '',"
+                        + "created_at_ms INTEGER NOT NULL,"
+                        + "updated_at_ms INTEGER NOT NULL"
+                        + ")");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_queue_state ON document_queue(state, created_at_ms)");
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        if (oldVersion < 2 && newVersion >= 2) {
+            createV2Tables(db);
+            return;
+        }
         if (oldVersion != newVersion) {
             throw new IllegalStateException("Star Wireless DB migration missing: " + oldVersion + " -> " + newVersion);
         }
@@ -170,6 +210,189 @@ final class StarWirelessStore extends SQLiteOpenHelper {
 
     long routeCount() {
         return count("route");
+    }
+
+    long captureCount() {
+        return count("capture");
+    }
+
+    long queuedCount() {
+        SQLiteDatabase db = getReadableDatabase();
+        try (Cursor cursor = db.rawQuery(
+                "SELECT COUNT(*) FROM document_queue WHERE state IN ('queued','retry')", null)) {
+            return cursor.moveToFirst() ? cursor.getLong(0) : 0L;
+        }
+    }
+
+    long acceptedCount() {
+        SQLiteDatabase db = getReadableDatabase();
+        try (Cursor cursor = db.rawQuery(
+                "SELECT COUNT(*) FROM document_queue WHERE state='accepted'", null)) {
+            return cursor.moveToFirst() ? cursor.getLong(0) : 0L;
+        }
+    }
+
+    // ---- capture + document queue (v2) ----
+
+    void insertCapture(
+            String eventKey,
+            String kind,
+            String filePath,
+            String mediaType,
+            long sizeBytes,
+            String sha256,
+            long createdAtMs,
+            long durationMs,
+            String state) {
+        ContentValues values = new ContentValues();
+        values.put("event_key", clean(eventKey, 512));
+        values.put("kind", clean(kind, 16));
+        values.put("file_path", clean(filePath, 1_024));
+        values.put("media_type", clean(mediaType, 128));
+        values.put("size_bytes", Math.max(0L, sizeBytes));
+        values.put("sha256", clean(sha256, 64));
+        values.put("created_at_ms", createdAtMs);
+        values.put("duration_ms", Math.max(0L, durationMs));
+        values.put("state", clean(state, 32));
+        values.put("transcript", "");
+        values.put("transcript_engine", "");
+        getWritableDatabase()
+                .insertWithOnConflict("capture", null, values, SQLiteDatabase.CONFLICT_IGNORE);
+    }
+
+    java.util.List<CaptureRow> capturesInState(String state, int limit) {
+        int bounded = Math.max(1, Math.min(limit, 64));
+        java.util.List<CaptureRow> rows = new java.util.ArrayList<>();
+        try (Cursor cursor = getReadableDatabase().rawQuery(
+                "SELECT _id,event_key,file_path,media_type,size_bytes,sha256,created_at_ms,duration_ms "
+                        + "FROM capture WHERE state=? ORDER BY created_at_ms LIMIT ?",
+                new String[] {clean(state, 32), Integer.toString(bounded)})) {
+            while (cursor.moveToNext()) {
+                rows.add(new CaptureRow(
+                        cursor.getLong(0),
+                        cursor.getString(1),
+                        cursor.getString(2),
+                        cursor.getString(3),
+                        cursor.getLong(4),
+                        cursor.getString(5),
+                        cursor.getLong(6),
+                        cursor.getLong(7)));
+            }
+        }
+        return rows;
+    }
+
+    void updateCaptureTranscript(long captureId, String transcriptJson, String engine, String state) {
+        ContentValues values = new ContentValues();
+        values.put("transcript", transcriptJson == null ? "" : transcriptJson);
+        values.put("transcript_engine", clean(engine, 120));
+        values.put("state", clean(state, 32));
+        getWritableDatabase().update("capture", values, "_id=?",
+                new String[] {Long.toString(captureId)});
+    }
+
+    String[] captureDetail(long captureId) {
+        // returns {state, transcript_json, transcript_engine}
+        try (Cursor cursor = getReadableDatabase().rawQuery(
+                "SELECT state,transcript,transcript_engine FROM capture WHERE _id=?",
+                new String[] {Long.toString(captureId)})) {
+            if (!cursor.moveToFirst()) return new String[] {"", "", ""};
+            return new String[] {cursor.getString(0), cursor.getString(1), cursor.getString(2)};
+        }
+    }
+
+    boolean captureProjected(long captureId) {
+        try (Cursor cursor = getReadableDatabase().rawQuery(
+                "SELECT projected FROM capture WHERE _id=?",
+                new String[] {Long.toString(captureId)})) {
+            return cursor.moveToFirst() && cursor.getInt(0) != 0;
+        }
+    }
+
+    void markCaptureProjected(long captureId) {
+        ContentValues values = new ContentValues();
+        values.put("projected", 1);
+        getWritableDatabase().update("capture", values, "_id=?",
+                new String[] {Long.toString(captureId)});
+    }
+
+    static final class CaptureRow {
+        final long id;
+        final String eventKey;
+        final String filePath;
+        final String mediaType;
+        final long sizeBytes;
+        final String sha256;
+        final long createdAtMs;
+        final long durationMs;
+
+        CaptureRow(long id, String eventKey, String filePath, String mediaType,
+                long sizeBytes, String sha256, long createdAtMs, long durationMs) {
+            this.id = id;
+            this.eventKey = eventKey;
+            this.filePath = filePath;
+            this.mediaType = mediaType;
+            this.sizeBytes = sizeBytes;
+            this.sha256 = sha256;
+            this.createdAtMs = createdAtMs;
+            this.durationMs = durationMs;
+        }
+    }
+
+    void enqueueDocument(String docKey, String dtype, String docJson) {
+        long now = System.currentTimeMillis();
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            ContentValues values = new ContentValues();
+            values.put("doc_key", clean(docKey, 256));
+            values.put("dtype", clean(dtype, 64));
+            values.put("doc_json", docJson);
+            values.put("state", "queued");
+            values.put("attempts", 0);
+            values.put("last_error", "");
+            values.put("created_at_ms", now);
+            values.put("updated_at_ms", now);
+            db.insertWithOnConflict("document_queue", null, values, SQLiteDatabase.CONFLICT_IGNORE);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    java.util.List<QueuedDocument> queuedDocuments(int limit) {
+        int bounded = Math.max(1, Math.min(limit, 500));
+        java.util.List<QueuedDocument> rows = new java.util.ArrayList<>();
+        try (Cursor cursor = getReadableDatabase().rawQuery(
+                "SELECT doc_key,dtype,doc_json FROM document_queue "
+                        + "WHERE state IN ('queued','retry') ORDER BY created_at_ms LIMIT ?",
+                new String[] {Integer.toString(bounded)})) {
+            while (cursor.moveToNext()) {
+                rows.add(new QueuedDocument(cursor.getString(0), cursor.getString(1), cursor.getString(2)));
+            }
+        }
+        return rows;
+    }
+
+    void markDocument(String docKey, String state, String error, boolean incrementAttempts) {
+        getWritableDatabase().execSQL(
+                "UPDATE document_queue SET state=?, last_error=?, updated_at_ms=?"
+                        + (incrementAttempts ? ", attempts=attempts+1 " : " ")
+                        + "WHERE doc_key=?",
+                new Object[] {clean(state, 32), clean(error == null ? "" : error, 512),
+                        System.currentTimeMillis(), clean(docKey, 256)});
+    }
+
+    static final class QueuedDocument {
+        final String docKey;
+        final String dtype;
+        final String docJson;
+
+        QueuedDocument(String docKey, String dtype, String docJson) {
+            this.docKey = docKey;
+            this.dtype = dtype;
+            this.docJson = docJson;
+        }
     }
 
     JSONArray recentObservations(int limit) {
