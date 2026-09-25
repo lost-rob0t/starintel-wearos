@@ -1,0 +1,12 @@
+{
+  "id": "local.person-normalizer",
+  "name": "Person normalizer",
+  "version": "1",
+  "description": "Normalizes person names locally and writes the derived field back through one Tek9 transaction.",
+  "entrypoint": "STARINTEL.MOBILE.ACTORS:NORMALIZE-PERSON",
+  "accepts": ["person"],
+  "capabilities": ["document.read", "document.write"],
+  "default_config": {
+    "preserve_original": true
+  }
+}

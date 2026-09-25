@@ -78,7 +78,7 @@ fi
 
 expected="${version#v}"
 version_codes=()
-for module in phone-app quasar-app wear-app watchface; do
+for module in phone-app quasar-app collector-app hackmode-app operator-app wear-app watchface; do
   file="$module/build.gradle.kts"
   actual="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' "$file")"
   code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' "$file")"
@@ -92,12 +92,13 @@ for module in phone-app quasar-app wear-app watchface; do
   fi
   version_codes+=("$code")
 done
-if [[ "${version_codes[0]}" != "${version_codes[1]}" || \
-      "${version_codes[0]}" != "${version_codes[2]}" || \
-      "${version_codes[0]}" != "${version_codes[3]}" ]]; then
-  echo "error: application versionCode values are not synchronized: ${version_codes[*]}" >&2
-  exit 1
-fi
+expected_code="${version_codes[0]}"
+for code in "${version_codes[@]}"; do
+  if [[ "$code" != "$expected_code" ]]; then
+    echo "error: application versionCode values are not synchronized: ${version_codes[*]}" >&2
+    exit 1
+  fi
+done
 
 if [[ "$skip_local_checks" == false ]]; then
   echo "==> validating pinned Nix environment"
@@ -108,6 +109,9 @@ if [[ "$skip_local_checks" == false ]]; then
     gradle --stacktrace \
       :phone-app:testDebugUnitTest \
       :quasar-app:testDebugUnitTest \
+      :collector-app:testDebugUnitTest \
+      :hackmode-app:testDebugUnitTest \
+      :operator-app:testDebugUnitTest \
       :wear-app:testDebugUnitTest
 
   echo "==> validating all three watch-face contracts"
@@ -120,6 +124,9 @@ if [[ "$skip_local_checks" == false ]]; then
   for apk in \
     build/nix/phone-app-debug.apk \
     build/nix/quasar-app-debug.apk \
+    build/nix/collector-app-debug.apk \
+    build/nix/hackmode-app-debug.apk \
+    build/nix/operator-app-debug.apk \
     build/nix/wear-app-debug.apk \
     build/nix/watchface-neon-debug.apk \
     build/nix/watchface-command-debug.apk \

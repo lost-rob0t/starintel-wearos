@@ -1,0 +1,25 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(starwireless LANGUAGES C CXX)
+
+# Vendored whisper.cpp v1.7.6 (see whisper-cpp/LICENSE). CPU-only Android build:
+# no OpenMP, no ccache, no native-code tuning, no optional backends.
+set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+set(WHISPER_CURL OFF CACHE BOOL "" FORCE)
+set(WHISPER_SDL2 OFF CACHE BOOL "" FORCE)
+set(WHISPER_FFMPEG OFF CACHE BOOL "" FORCE)
+set(WHISPER_COREML OFF CACHE BOOL "" FORCE)
+set(WHISPER_OPENVINO OFF CACHE BOOL "" FORCE)
+set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
+set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
+set(GGML_CCACHE OFF CACHE BOOL "" FORCE)
+set(GGML_LTO OFF CACHE BOOL "" FORCE)
+set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
+add_subdirectory(whisper-cpp whisper.build)
+
+add_library(starwireless_jni SHARED starwireless_jni.cpp)
+target_compile_features(starwireless_jni PRIVATE cxx_std_17)
+target_compile_options(starwireless_jni PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(starwireless_jni PRIVATE whisper log)

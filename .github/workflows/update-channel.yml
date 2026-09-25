@@ -45,6 +45,8 @@ jobs:
           mkdir -p dist
           cp build/nix/phone-app-debug.apk dist/starintel-phone-master.apk
           cp build/nix/quasar-app-debug.apk dist/quasar-android-master.apk
+          cp build/nix/collector-app-debug.apk dist/starintel-collector-master.apk
+          cp build/nix/hackmode-app-debug.apk dist/starintel-hackmode-master.apk
           cp build/nix/wear-app-debug.apk dist/starintel-wear-master.apk
           cp build/nix/watchface-neon-debug.apk dist/starintel-watchface-neon-master.apk
           cp build/nix/watchface-command-debug.apk dist/starintel-watchface-command-master.apk

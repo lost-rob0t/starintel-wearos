@@ -1,6 +1,7 @@
 # Gradle / Android
 .gradle/
 **/build/
+.cxx/
 local.properties
 
 # Nix
@@ -11,3 +12,7 @@ result-*
 # IDE
 .idea/
 *.iml
+
+# Local agent execution state and secrets
+.prolog/
+.env

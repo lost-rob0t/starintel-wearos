@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="actor.starintel.permission.CONFIG" />
+    <uses-permission android:name="actor.starintel.permission.HACKMODE_OPERATIONS" />
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <queries>
+        <package android:name="com.termux" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:label="Hackmode"
+        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:usesCleartextTraffic="false">
+        <service
+            android:name=".HackmodeActorService"
+            android:exported="true"
+            android:foregroundServiceType="dataSync"
+            android:permission="actor.starintel.permission.HACKMODE_OPERATIONS">
+            <intent-filter>
+                <action android:name="actor.starintel.action.HACKMODE_OPERATION" />
+            </intent-filter>
+        </service>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

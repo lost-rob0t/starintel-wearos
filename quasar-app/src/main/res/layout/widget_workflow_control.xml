@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/workflow_widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/widget_workflow_background"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:id="@+id/workflow_widget_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="0.16"
+            android:text="@string/workflow_widget_title"
+            android:textAllCaps="true"
+            android:textColor="@color/quasar_widget_cyan"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/workflow_widget_connectivity"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_status_pill"
+            android:fontFamily="sans-serif-medium"
+            android:paddingStart="9dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="9dp"
+            android:paddingBottom="4dp"
+            android:text="@string/workflow_offline"
+            android:textAllCaps="true"
+            android:textColor="@color/quasar_widget_gold"
+            android:textSize="9sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/workflow_widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:layout_marginBottom="10dp"
+        android:gravity="center"
+        android:text="@string/workflow_widget_empty"
+        android:textColor="@color/quasar_widget_muted"
+        android:textSize="13sp" />
+
+    <LinearLayout
+        android:id="@+id/workflow_widget_active"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="13dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/workflow_widget_active_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:textColor="@color/quasar_widget_text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/workflow_widget_active_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="@color/quasar_widget_gold"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/workflow_widget_last_run"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/quasar_widget_muted"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/workflow_widget_failure"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/quasar_widget_failure"
+            android:textSize="11sp"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="9dp"
+            android:gravity="end|center_vertical"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/workflow_widget_run"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/widget_action_background"
+                android:contentDescription="@string/workflow_action_run"
+                android:padding="10dp"
+                android:src="@drawable/ic_workflow_run"
+                android:tint="@color/quasar_widget_cyan" />
+
+            <ImageButton
+                android:id="@+id/workflow_widget_pause"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/widget_action_background"
+                android:contentDescription="@string/workflow_action_pause"
+                android:padding="10dp"
+                android:src="@drawable/ic_workflow_pause"
+                android:tint="@color/quasar_widget_gold" />
+
+            <ImageButton
+                android:id="@+id/workflow_widget_resume"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/widget_action_background"
+                android:contentDescription="@string/workflow_action_resume"
+                android:padding="10dp"
+                android:src="@drawable/ic_workflow_resume"
+                android:tint="@color/quasar_widget_cyan" />
+
+            <ImageButton
+                android:id="@+id/workflow_widget_stop"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/widget_action_background"
+                android:contentDescription="@string/workflow_action_stop"
+                android:padding="11dp"
+                android:src="@drawable/ic_workflow_stop"
+                android:tint="@color/quasar_widget_failure" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/workflow_widget_row_one"
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/widget_list_row_background"
+        android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:maxLines="1"
+        android:paddingStart="11dp"
+        android:paddingEnd="11dp"
+        android:textColor="@color/quasar_widget_text"
+        android:textSize="11sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/workflow_widget_row_two"
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:layout_marginTop="5dp"
+        android:background="@drawable/widget_list_row_background"
+        android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:maxLines="1"
+        android:paddingStart="11dp"
+        android:paddingEnd="11dp"
+        android:textColor="@color/quasar_widget_text"
+        android:textSize="11sp"
+        android:visibility="gone" />
+</LinearLayout>
