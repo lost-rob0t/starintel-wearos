@@ -69,6 +69,20 @@ wait_for_connect_service() {
 require_tool adb
 require_tool qrencode
 require_tool awk
+
+# Open a PNG QR in the user's image viewer. Returns nonzero if no opener works.
+show_qr_png() {
+  local png="$1"
+  local opener
+  for opener in xdg-open gio open; do
+    if command -v "$opener" >/dev/null 2>&1; then
+      if "$opener" "$png" >/dev/null 2>&1; then
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
 validate_positive_integer STARINTEL_ADB_QR_TIMEOUT "$qr_timeout"
 validate_positive_integer STARINTEL_ADB_CONNECT_TIMEOUT "$connect_discovery_timeout"
 
@@ -82,10 +96,25 @@ cat <<'INSTRUCTIONS'
 On the Android device:
   Developer options -> Wireless debugging -> Pair device with QR code
 
-Scan this terminal QR. The generated pairing secret is fresh for this attempt.
+Scan this QR with the scanner that opens from that screen (NOT the camera app).
+
+Note: if the QR does not render in your terminal, a PNG copy is opened in your
+image viewer automatically -- scan from there instead.
 INSTRUCTIONS
+
+# Terminal QRs render as white blocks on a dark background, which many phone
+# scanners reject. Prefer a high-contrast PNG in the image viewer, and fall
+# back to an inverted terminal render (dark modules on light background).
+png_tmp="$(mktemp /tmp/starintel-adb-qr.XXXXXX.png)"
+trap 'rm -f "$png_tmp"' EXIT
+qrencode -o "$png_tmp" -t PNG -s 10 -m 4 "$payload" 2>/dev/null || png_ok=0
+if [[ -s "$png_tmp" ]] && show_qr_png "$png_tmp"; then
+  echo "PNG QR opened in image viewer; scan it with the Wireless debugging scanner."
+fi
 echo
-qrencode -t ANSIUTF8 -m 1 "$payload"
+if ! qrencode -t ANSIUTF8i -m 4 "$payload"; then
+  qrencode -t ANSIUTF8 -m 4 "$payload"
+fi
 echo
 echo "Waiting up to ${qr_timeout}s for the device to advertise ${service_name}..."
 
