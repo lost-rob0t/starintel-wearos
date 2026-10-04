@@ -88,10 +88,12 @@ class FlowStudioActivity : Activity() {
             },
             QuasarDesign.match(top = dp(14)),
         )
-        setContentView(ScrollView(this).apply {
+        val shell = ScrollView(this).apply {
             isFillViewport = true
             addView(body, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        })
+        }
+        QuasarDesign.applySystemBarInsets(shell)
+        setContentView(shell)
     }
 
     private fun runtimeCard(): LinearLayout {

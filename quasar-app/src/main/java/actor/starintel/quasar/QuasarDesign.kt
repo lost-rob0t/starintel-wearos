@@ -6,10 +6,12 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import android.os.Build
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -26,6 +28,40 @@ internal object QuasarDesign {
     val coral = Color.rgb(221, 84, 110)
     val text = Color.rgb(243, 244, 245)
     val muted = Color.rgb(164, 166, 184)
+
+    @Suppress("DEPRECATION")
+    fun applySystemBarInsets(view: View) {
+        val left = view.paddingLeft
+        val top = view.paddingTop
+        val right = view.paddingRight
+        val bottom = view.paddingBottom
+        view.setOnApplyWindowInsetsListener { target, insets ->
+            val barLeft: Int
+            val barTop: Int
+            val barRight: Int
+            val barBottom: Int
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val systemBars = insets.getInsets(WindowInsets.Type.systemBars())
+                barLeft = systemBars.left
+                barTop = systemBars.top
+                barRight = systemBars.right
+                barBottom = systemBars.bottom
+            } else {
+                barLeft = insets.systemWindowInsetLeft
+                barTop = insets.systemWindowInsetTop
+                barRight = insets.systemWindowInsetRight
+                barBottom = insets.systemWindowInsetBottom
+            }
+            target.setPadding(
+                left + barLeft,
+                top + barTop,
+                right + barRight,
+                bottom + barBottom,
+            )
+            insets
+        }
+        view.requestApplyInsets()
+    }
 
     fun title(context: Context, value: String, size: Float = 30f) = TextView(context).apply {
         this.text = value

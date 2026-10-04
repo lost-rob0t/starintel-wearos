@@ -114,6 +114,8 @@ class EclLispRuntime internal constructor(
         val EXPOSED_OPERATIONS: Set<String> = setOf(
             "runtime.ping",
             "actor.roundtrip",
+            "actor.list",
+            "actor.dispatch",
             "status",
             "start",
             "suspend",

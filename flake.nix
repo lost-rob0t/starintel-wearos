@@ -2,7 +2,7 @@
   description = "Nix build environment for StarIntel Android + Wear OS apps";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  inputs.starintel-edge.url = "github:lost-rob0t/starintel-edge/f801b024965488c21f93c52a1a9fd2aecd224700";
+  inputs.starintel-edge.url = "github:lost-rob0t/starintel-edge/d658c0ad7130cab3fa8d99d7d3476c9353d87eeb";
 
   outputs = { self, nixpkgs, starintel-edge }:
     let
@@ -58,7 +58,7 @@
           edgeX86_64 = if system == "x86_64-linux"
             then starintel-edge.packages.${system}.android-runtime-x86_64
             else null;
-          edgeRuntimeBundle = pkgs.runCommand "starintel-edge-android-runtime-f801b02" { } ''
+          edgeRuntimeBundle = pkgs.runCommand "starintel-edge-android-runtime-bundle" { } ''
             mkdir -p "$out/jni" "$out/kotlin" "$out/assets"
             cp -R ${edgeArm64}/jni/. "$out/jni/"
             cp -R ${edgeArm64}/kotlin/. "$out/kotlin/"
@@ -367,13 +367,26 @@
             '';
           };
 
+          emulatorSmoke = pkgs.writeShellApplication {
+            name = "starintel-quasar-mobile-smoke";
+            runtimeInputs = [ androidSdk pkgs.bash pkgs.coreutils pkgs.gnugrep pkgs.gnused ];
+            text = ''
+              if [[ ! -f scripts/smoke-quasar-mobile.sh ]]; then
+                echo "error: run this from the starintel-wearos repository root" >&2
+                exit 2
+              fi
+              export STARINTEL_EMULATOR_ADB="${androidHome}/platform-tools/adb"
+              exec bash scripts/smoke-quasar-mobile.sh "$@"
+            '';
+          };
+
           toolchain = pkgs.buildEnv {
             name = "starintel-wearos-android-toolchain";
             paths = [ jdk gradle androidSdk pkgs.python3 ];
           };
         in
         {
-          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildQuasar buildCollector buildHackmode buildOperator buildWear buildWatchface buildAll checkAll fieldMappingCheck pairAndroid pairWatch installPhone installWatch emulatorSdk emulatorRun emulatorShot emulatorStop emulatorQemu emulatorTest edgeRuntimeBundle;
+          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildQuasar buildCollector buildHackmode buildOperator buildWear buildWatchface buildAll checkAll fieldMappingCheck pairAndroid pairWatch installPhone installWatch emulatorSdk emulatorRun emulatorShot emulatorStop emulatorQemu emulatorTest emulatorSmoke edgeRuntimeBundle;
         };
     in
     {
@@ -408,6 +421,7 @@
           emulator-stop = { type = "app"; program = "${e.emulatorStop}/bin/starintel-emulator-stop"; };
           emulator-qemu = { type = "app"; program = "${e.emulatorQemu}/bin/starintel-emulator-qemu"; };
           emulator-test = { type = "app"; program = "${e.emulatorTest}/bin/starintel-emulator-test"; };
+          emulator-smoke = { type = "app"; program = "${e.emulatorSmoke}/bin/starintel-quasar-mobile-smoke"; };
           default = { type = "app"; program = "${e.buildAll}/bin/starintel-build-all"; };
         });
 

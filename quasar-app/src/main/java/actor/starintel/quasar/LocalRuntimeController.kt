@@ -10,7 +10,6 @@ import actor.starintel.android.fbp.FlowRuntime
 import actor.starintel.android.fbp.registerTek9ExpertComponents
 import actor.starintel.android.fbp.registerWebSocketDocumentComponent
 import actor.starintel.android.api.StarWebSocketDocumentStream
-import actor.starintel.android.model.ActorManifest
 import actor.starintel.android.store.LispTek9Store
 import actor.starintel.android.store.Tek9Status
 import android.content.Context
@@ -19,7 +18,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 internal class LocalRuntimeController(private val context: Context) : AutoCloseable {
-    private val runtimeDirectory = File(context.filesDir, "starintel-edge-runtime-f801b02")
+    private val runtimeDirectory = File(context.filesDir, "starintel-edge-runtime-abi1-v2")
     private val workspaceDirectory = File(context.filesDir, "quasar-lisp-workspace-v1")
     private val initStore = InitLispStore(workspaceDirectory) { context.assets.open("lisp/init.lisp") }
     private val lispRuntime by lazy {
@@ -68,6 +67,24 @@ internal class LocalRuntimeController(private val context: Context) : AutoClosea
         Tek9Status(false, File(context.filesDir, "tek9").absolutePath, "Waiting for the ECL bridge")
     }
 
+    fun actorCatalog(): List<EdgeActorDescriptor> {
+        if (!lispRuntime.status.available) return emptyList()
+        val actors = lispRuntime.request("actor.list").optJSONArray("actors") ?: JSONArray()
+        return buildList {
+            for (index in 0 until actors.length().coerceAtMost(64)) {
+                val actor = actors.optJSONObject(index) ?: continue
+                val id = actor.optString("id").takeIf { it.isNotBlank() } ?: continue
+                add(
+                    EdgeActorDescriptor(
+                        id = id,
+                        name = actor.optString("name").ifBlank { id },
+                        description = actor.optString("description").take(800),
+                    ),
+                )
+            }
+        }
+    }
+
     fun validateFlow(graph: FlowGraph): List<String> = graph.validate(flowRegistry)
 
     @Synchronized
@@ -111,53 +128,8 @@ internal class LocalRuntimeController(private val context: Context) : AutoClosea
     }
 }
 
-internal class ActorDefinitionStore(private val context: Context) {
-    private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-
-    fun manifests(): List<ActorManifest> = buildList {
-        ASSET_MANIFESTS.forEach { path ->
-            context.assets.open(path).bufferedReader().use { add(ActorManifest.fromJson(JSONObject(it.readText()))) }
-        }
-        val custom = JSONArray(prefs.getString(KEY_CUSTOM, "[]").orEmpty().ifBlank { "[]" })
-        for (index in 0 until custom.length().coerceAtMost(MAX_CUSTOM)) {
-            custom.optJSONObject(index)?.let { add(ActorManifest.fromJson(it)) }
-        }
-    }.distinctBy(ActorManifest::id)
-
-    fun saveCustom(raw: String): ActorManifest {
-        require(raw.length <= MAX_MANIFEST_CHARS) { "Actor manifest exceeds 64 KiB" }
-        val root = JSONObject(raw)
-        val manifest = ActorManifest.fromJson(root)
-        val custom = JSONArray(prefs.getString(KEY_CUSTOM, "[]").orEmpty().ifBlank { "[]" })
-        val updated = JSONArray()
-        var replaced = false
-        for (index in 0 until custom.length().coerceAtMost(MAX_CUSTOM)) {
-            val current = custom.optJSONObject(index) ?: continue
-            if (current.optString("id") == manifest.id) {
-                updated.put(root)
-                replaced = true
-            } else {
-                updated.put(current)
-            }
-        }
-        if (!replaced) {
-            require(updated.length() < MAX_CUSTOM) { "Local actor limit reached" }
-            updated.put(root)
-        }
-        check(prefs.edit().putString(KEY_CUSTOM, updated.toString()).commit()) {
-            "Could not save local actor definition"
-        }
-        return manifest
-    }
-
-    companion object {
-        private const val PREFS = "quasar_local_actor_definitions_v1"
-        private const val KEY_CUSTOM = "custom_manifests"
-        private const val MAX_CUSTOM = 64
-        private const val MAX_MANIFEST_CHARS = 64 * 1024
-        private val ASSET_MANIFESTS = listOf(
-            "actors/person-normalizer.json",
-            "actors/relation-indexer.json",
-        )
-    }
-}
+internal data class EdgeActorDescriptor(
+    val id: String,
+    val name: String,
+    val description: String,
+)

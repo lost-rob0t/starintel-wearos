@@ -95,13 +95,15 @@ class WorkflowStatusActivity : Activity() {
             }
         }
 
-        setContentView(ScrollView(this).apply {
+        val shell = ScrollView(this).apply {
             isFillViewport = true
             addView(
                 content,
                 ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
             )
-        })
+        }
+        QuasarDesign.applySystemBarInsets(shell)
+        setContentView(shell)
     }
 
     private fun detailCard(summary: WorkflowWidgetSummary): LinearLayout =

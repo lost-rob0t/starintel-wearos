@@ -33,6 +33,21 @@ class EclLispRuntimeTest {
     }
 
     @Test
+    fun `allows only the Edge actor catalog and dispatch operations`() {
+        val bridge = RecordingBridge()
+        val runtime = EclLispRuntime("/runtime", bridge)
+
+        runtime.request("actor.list")
+        runtime.request("actor.dispatch", JSONObject().put("actor_id", "runtime.echo"))
+        expectFailure("not exposed") { runtime.request("tek9.open") }
+
+        assertEquals(2, bridge.requests.size)
+        assertTrue(bridge.requests[0].contains("\"op\":\"actor.list\""))
+        val dispatch = JSONObject(JSONObject(bridge.requests[1]).getString("payload"))
+        assertEquals("runtime.echo", dispatch.getString("actor_id"))
+    }
+
+    @Test
     fun `projects structured errors and truncates untrusted detail`() {
         val bridge = RecordingBridge(response = JSONObject()
             .put("ok", false)

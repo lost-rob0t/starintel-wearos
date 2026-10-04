@@ -51,6 +51,7 @@ class LogicStudioActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(QuasarDesign.background)
         }
+        QuasarDesign.applySystemBarInsets(shell)
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(18), dp(18), dp(14))

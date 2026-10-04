@@ -29,7 +29,6 @@ class MainActivity : Activity() {
     private val client by lazy { StarServerClient(this) }
     private val config by lazy { QuasarConfig(this) }
     private val localRuntime by lazy { LocalRuntimeController(this) }
-    private val actorDefinitions by lazy { ActorDefinitionStore(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +40,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(QuasarDesign.background)
         }
+        QuasarDesign.applySystemBarInsets(shell)
         viewport = FrameLayout(this)
         shell.addView(
             viewport,
@@ -94,14 +94,14 @@ class MainActivity : Activity() {
         val lisp = localRuntime.lispStatus()
         val runtimeCard = QuasarDesign.card(this, if (lisp.available) QuasarDesign.lime else QuasarDesign.amber)
         runtimeCard.addView(sectionHeader("LOCAL CORE", if (lisp.available) "READY" else "BOOTSTRAP"))
-        runtimeCard.addView(QuasarDesign.title(this, "Common Lisp → Tek9 → actors", 20f), QuasarDesign.match(top = dp(12)))
+        runtimeCard.addView(QuasarDesign.title(this, "Common Lisp → Sento actors", 20f), QuasarDesign.match(top = dp(12)))
         runtimeCard.addView(
             QuasarDesign.body(
                 this,
                 if (lisp.available) {
-                    "ECL is embedded for this ABI. Actor mailboxes can commit documents, relations, facts, and outbox intents atomically."
+                    "The pinned StarIntel Edge image is running locally with a process-owned actor system and closed typed operations."
                 } else {
-                    "The Android library and closed ECL/Tek9 protocol are installed. This APK still needs the ABI-specific native ECL bridge."
+                    "The Android library is installed, but the ABI-specific StarIntel Edge runtime is unavailable."
                 },
             ),
             QuasarDesign.match(top = dp(8)),
@@ -129,22 +129,25 @@ class MainActivity : Activity() {
 
         body.addView(QuasarDesign.eyebrow(this, "Workspace"), QuasarDesign.match(top = dp(28)))
         val routes = listOf(
-            Route("Field map", "Map geo documents and traverse their links", QuasarDesign.amber) { showFieldOps() },
-            Route("Documents", "Search and inspect structured records", QuasarDesign.pink) { showSearch("Documents", "*") },
-            Route("Datasets", "Move between investigation scopes", QuasarDesign.amber) { showSearch("Datasets", "dtype:dataset") },
-            Route("Targets", "Dispatch actor work with provenance", QuasarDesign.lime) { showTarget() },
-            Route("Import", "Bring in bounded StarIntel JSON batches", QuasarDesign.coral) { showImport() },
-            Route("Add record", "Create a schema-checked document", QuasarDesign.cyan) { showCreateDocument() },
+            Route(MobileSurface.STATS.label, "Live workspace and runtime state", QuasarDesign.cyan) { showHome() },
+            Route(MobileSurface.GRAPHS.label, "Map geo documents and traverse their links", QuasarDesign.amber) { showFieldOps() },
+            Route(MobileSurface.DATASETS.label, "Move between investigation scopes", QuasarDesign.amber) { showSearch("Datasets", "dtype:dataset") },
+            Route(MobileSurface.DOCUMENTS.label, "Search and inspect structured records", QuasarDesign.pink) { showSearch("Documents", "*") },
+            Route(MobileSurface.ADD_DOCUMENT.label, "Create a schema-checked document", QuasarDesign.cyan) { showCreateDocument() },
+            Route(MobileSurface.AGENTS.label, "Run a bounded Prolog-RLM investigation turn", QuasarDesign.pink) { showAgent() },
+            Route(MobileSurface.ACTORS.label, "Inspect actors compiled into the trusted Edge image", QuasarDesign.amber) { showActors() },
+            Route(MobileSurface.IMPORT.label, "Bring in bounded StarIntel JSON batches", QuasarDesign.coral) { showImport() },
+            Route(MobileSurface.TARGETS.label, "Dispatch actor work with provenance", QuasarDesign.lime) { showTarget() },
+            Route(MobileSurface.SETTINGS.label, "Connect to a Star server without exposing credentials", QuasarDesign.cyan) { showSettings() },
             Route("Flow studio", "Build and run bounded Morrison-style workflows", QuasarDesign.cyan) {
                 startActivity(Intent(this, actor.starintel.quasar.workflows.FlowStudioActivity::class.java))
             },
             Route("Logic studio", "Edit private Lisp, Prolog, and expert nodes", QuasarDesign.lime) {
                 startActivity(Intent(this, actor.starintel.quasar.ide.LogicStudioActivity::class.java))
             },
-            Route("Reasoning agent", "Run a bounded Prolog-RLM investigation turn", QuasarDesign.pink) { showAgent() },
-            Route("Actor mesh", "Inspect local manifests and actor capabilities", QuasarDesign.amber) { showActors() },
         )
-        routes.chunked(2).forEach { pair ->
+        val columns = routeColumnCount(resources.configuration.screenWidthDp)
+        routes.chunked(columns).forEach { pair ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             pair.forEachIndexed { index, route ->
                 row.addView(
@@ -152,7 +155,7 @@ class MainActivity : Activity() {
                     weighted(start = if (index == 0) 0 else dp(8)),
                 )
             }
-            if (pair.size == 1) row.addView(View(this), weighted(start = dp(8)))
+            repeat(columns - pair.size) { row.addView(View(this), weighted(start = dp(8))) }
             body.addView(row, QuasarDesign.match(top = dp(8)))
         }
     }
@@ -310,57 +313,29 @@ class MainActivity : Activity() {
     }
 
     private fun showActors() {
-        val body = screen("Local runtime", "Actor mesh", "Every actor is manifest-driven, serialized through a bounded mailbox, and restricted to declared effects.")
+        val body = screen("Local runtime", "Actor mesh", "Only actors compiled into the pinned StarIntel Edge image are executable. Client-provided entrypoint text is never invoked.")
         val lisp = localRuntime.lispStatus()
-        val tek9 = localRuntime.tek9Status()
-        val status = QuasarDesign.card(this, if (lisp.available && tek9.available) QuasarDesign.lime else QuasarDesign.amber).apply {
-            addView(sectionHeader("RUNTIME", if (lisp.available && tek9.available) "READY" else "PARTIAL"))
+        val actors = runCatching { localRuntime.actorCatalog() }.getOrDefault(emptyList())
+        val status = QuasarDesign.card(this, if (lisp.available) QuasarDesign.lime else QuasarDesign.amber).apply {
+            addView(sectionHeader("RUNTIME", if (lisp.available) "READY" else "UNAVAILABLE"))
             addView(runtimeLine("COMMON LISP", lisp.implementation, lisp.available), QuasarDesign.match(top = dp(12)))
-            addView(runtimeLine("TEK9", tek9.detail, tek9.available), QuasarDesign.match(top = dp(9)))
-            addView(runtimeLine("MAILBOXES", "Bounded + serial per actor", true), QuasarDesign.match(top = dp(9)))
+            addView(runtimeLine("SENTO", "${actors.size} trusted actor(s) discovered", lisp.available), QuasarDesign.match(top = dp(9)))
+            addView(runtimeLine("ENTRYPOINTS", "Closed registry; request data is never evaluated", lisp.available), QuasarDesign.match(top = dp(9)))
         }
         body.addView(status, QuasarDesign.match(top = dp(18)))
         body.addView(QuasarDesign.eyebrow(this, "Definitions"), QuasarDesign.match(top = dp(26)))
-        runCatching { actorDefinitions.manifests() }
-            .onSuccess { manifests ->
-                manifests.forEach { manifest ->
-                    val card = QuasarDesign.card(this).apply {
-                        addView(sectionHeader(manifest.name, "v${manifest.version}"))
-                        addView(QuasarDesign.body(this@MainActivity, manifest.description), QuasarDesign.match(top = dp(8)))
-                        addView(QuasarDesign.body(this@MainActivity, manifest.accepts.joinToString(prefix = "Accepts · ").ifBlank { "Accepts · any dtype" }, QuasarDesign.cyan, 11f), QuasarDesign.match(top = dp(10)))
-                        addView(QuasarDesign.body(this@MainActivity, manifest.capabilities.joinToString { it.wireName }, QuasarDesign.muted, 11f), QuasarDesign.match(top = dp(5)))
-                    }
-                    body.addView(card, QuasarDesign.match(top = dp(8)))
+        if (actors.isEmpty()) {
+            body.addView(emptyState("No trusted actors", "The current Edge image did not advertise an actor catalog."), QuasarDesign.match(top = dp(8)))
+        } else {
+            actors.forEach { actor ->
+                val card = QuasarDesign.card(this).apply {
+                    addView(sectionHeader(actor.name, "TRUSTED"))
+                    addView(QuasarDesign.body(this@MainActivity, actor.description), QuasarDesign.match(top = dp(8)))
+                    addView(QuasarDesign.body(this@MainActivity, actor.id, QuasarDesign.cyan, 11f), QuasarDesign.match(top = dp(10)))
                 }
+                body.addView(card, QuasarDesign.match(top = dp(8)))
             }
-            .onFailure { body.addView(emptyState("Manifest error", it.message ?: "Could not load actors"), QuasarDesign.match(top = dp(8))) }
-
-        body.addView(QuasarDesign.action(this, "Define local actor") { showActorEditor() }, QuasarDesign.match(top = dp(14)))
-    }
-
-    private fun showActorEditor() {
-        val body = screen("Actor config", "Define local actor", "The manifest describes input types and capabilities. Executable Lisp must already exist in the trusted mobile image.")
-        val template = """
-            {
-              "id": "local.my-actor",
-              "name": "My actor",
-              "version": "1",
-              "description": "Explain its bounded local job.",
-              "entrypoint": "MY.ACTORS:HANDLE",
-              "accepts": ["person"],
-              "capabilities": ["document.read"],
-              "default_config": {}
-            }
-        """.trimIndent()
-        val editor = QuasarDesign.field(this, template, lines = 17)
-        val status = QuasarDesign.body(this, "Manifest not saved.")
-        body.addView(editor, QuasarDesign.match(top = dp(18)))
-        body.addView(QuasarDesign.action(this, "Validate and save", primary = true) {
-            runCatching { actorDefinitions.saveCustom(editor.text.toString()) }
-                .onSuccess { status.text = "Saved ${it.id}. Restarting the trusted Lisp image is required before first execution." }
-                .onFailure { status.text = it.message ?: "Manifest validation failed" }
-        }, QuasarDesign.match(top = dp(10)))
-        body.addView(status, QuasarDesign.match(top = dp(10)))
+        }
     }
 
     private fun showSettings() {
@@ -440,7 +415,7 @@ class MainActivity : Activity() {
         }
         listOf(
             "Home" to ::showHome,
-            "Field" to ::showFieldOps,
+            MobileSurface.GRAPHS.label to ::showFieldOps,
             "Flows" to { startActivity(Intent(this, actor.starintel.quasar.workflows.FlowStudioActivity::class.java)) },
             "Logic" to { startActivity(Intent(this, actor.starintel.quasar.ide.LogicStudioActivity::class.java)) },
             "Settings" to ::showSettings,
