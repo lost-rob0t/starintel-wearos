@@ -21,7 +21,7 @@ jobs:
       - name: Build and test
         run: |
           nix develop --no-update-lock-file --command gradle --stacktrace \
-            :starintel-android:testDebugUnitTest \
+            :starintel-android:testDebugUnitTest :starintel-design:testDebugUnitTest \
             :phone-app:testDebugUnitTest :phone-app:assembleDebug \
             :quasar-app:testDebugUnitTest :quasar-app:assembleDebug \
             :collector-app:testDebugUnitTest :collector-app:assembleDebug \
@@ -31,6 +31,17 @@ jobs:
             :watchface:assembleNeonDebug \
             :watchface:assembleCommandDebug \
             :watchface:assembleTerminalDebug
+      - name: Build native journey test APKs
+        run: nix develop --no-update-lock-file --command gradle :operator-app:assembleDebugAndroidTest :quasar-app:assembleDebugAndroidTest :phone-app:assembleDebugAndroidTest
+      - name: Publish native journey test APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-journey-tests
+          path: |
+            operator-app/build/outputs/apk/androidTest/debug/*.apk
+            quasar-app/build/outputs/apk/androidTest/debug/*.apk
+            phone-app/build/outputs/apk/androidTest/debug/*.apk
+          if-no-files-found: error
       - name: Test update catalog generator
         run: python3 scripts/test-update-manifest.py
       - name: Test CI and release asset contract
@@ -178,3 +189,43 @@ jobs:
             printf '%s\n' "$output"
             ! grep -q 'FAILED' <<<"$output"
           done
+
+  native-journeys:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*debug'
+          path: apks
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-journey-tests
+          path: journey-tests
+      - name: Enable emulator acceleration
+        run: |
+          sudo chmod 666 /dev/kvm
+      - name: Run native HTTP, Keystore and UI journeys
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash scripts/test-native-journeys.sh
+      - name: Preserve screenshots, view hierarchy and instrumentation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-journey-evidence
+          path: build/native-journeys
+          if-no-files-found: error

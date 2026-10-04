@@ -23,6 +23,14 @@ class StarIntelClient(
 
     fun stats(): JSONObject = request("GET", "/api/v1/stats")
 
+    /** Registry projection is authorized by the server; private implementations stay there. */
+    fun actors(): JSONArray {
+        val data = request("GET", "/v1/actors").getJSONObject("data")
+        val actors = data.getJSONArray("actors")
+        require(actors.length() <= 1_024) { "Actor registry exceeded its bound" }
+        return actors
+    }
+
     fun login(serverUrl: String, username: String, password: String): LoginResult {
         require(username.trim().isNotBlank()) { "Username required" }
         require(password.isNotEmpty()) { "Password required" }
@@ -97,18 +105,20 @@ class StarIntelClient(
         require(cleanActor.isNotBlank()) { "Actor required" }
         require(cleanTarget.isNotBlank()) { "Target required" }
         require(cleanDataset.isNotBlank()) { "Dataset required" }
-        return request(
-            "POST",
-            "/api/v1/targets",
-            JSONObject()
+        val body = JSONObject()
                 .put("actor", cleanActor)
                 .put("target", cleanTarget)
                 .put("dataset", cleanDataset)
                 .put("delay", 1)
                 .put("recurring", false)
                 .put("options", JSONArray())
-                .put("idempotency_key", "quasar-android-${UUID.randomUUID()}"),
-        )
+                .put("idempotency_key", "android-${UUID.randomUUID()}")
+        return runCatching { request("POST", "/api/v1/targets", body) }
+            .recoverCatching { failure ->
+                if (failure !is StarHttpFailure || failure.status !in listOf(404, 405)) throw failure
+                val encoded = URLEncoder.encode(cleanActor, StandardCharsets.UTF_8.name()).replace("+", "%20")
+                request("POST", "/new/target/$encoded", body)
+            }.getOrThrow()
     }
 
     fun prologRlmTurn(request: AgentTurnRequest): AgentTurnResult = AgentTurnResult.fromJson(
@@ -136,6 +146,7 @@ class StarIntelClient(
         require(path.startsWith('/') && !path.startsWith("//")) { "Invalid API path" }
         val connection = URL("$server$path").openConnection() as HttpURLConnection
         return try {
+            connection.instanceFollowRedirects = false
             connection.requestMethod = method
             connection.connectTimeout = 8_000
             connection.readTimeout = 30_000
@@ -179,7 +190,12 @@ class StarIntelClient(
 
     private fun normalizeServer(value: String): String {
         val server = value.trim().trimEnd('/')
-        require(server.startsWith("https://") || (allowCleartext && server.startsWith("http://"))) {
+        val origin = java.net.URI(server)
+        require(origin.host != null && origin.rawUserInfo == null && origin.rawQuery == null &&
+            origin.rawFragment == null && (origin.rawPath.isNullOrEmpty() || origin.rawPath == "/")) {
+            "Use a server origin without credentials, path, query, or fragment"
+        }
+        require(origin.scheme == "https" || (allowCleartext && origin.scheme == "http")) {
             if (allowCleartext) "Use an HTTP or HTTPS server URL" else "Release clients require HTTPS"
         }
         return server
