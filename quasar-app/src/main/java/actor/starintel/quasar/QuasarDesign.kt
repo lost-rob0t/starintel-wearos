@@ -22,7 +22,8 @@ internal object QuasarDesign {
     val panelRaised = palette.raised
     val border = palette.border
     val cyan = palette.accent
-    val pink = palette.accentAlt
+    // Small labels, syntax keywords and map markers need the brighter text accent.
+    val pink = SiTokens.ELECTRIC.accentAlt
     val amber = palette.warn
     val lime = palette.ok
     val coral = palette.danger
