@@ -13,10 +13,10 @@ class OperatorJourneyTest {
     @Test fun pairingAndCatalogNavigationRemainReachable() {
         ActivityScenario.launch(HomeActivity::class.java).use {
             Ui.waitText("Your field kit"); Ui.capture("companion-home")
-            Ui.click("Connect watch"); Ui.waitText("STARINTEL"); Ui.capture("companion-connection")
+            Ui.click("Connect watch"); Ui.waitText("Connect your watch"); Ui.capture("companion-connection")
             Ui.device.pressBack(); Ui.waitText("Your field kit")
             UiScrollable(UiSelector().scrollable(true)).scrollTextIntoView("Phone packages")
-            Ui.click("Phone packages"); Ui.waitText("Phone"); Ui.capture("companion-packages")
+            Ui.click("Phone packages"); Ui.waitText("Phone apps"); Ui.capture("companion-packages")
         }
     }
 }
