@@ -317,7 +317,10 @@ class MainActivity : Activity() {
         body.addView(remote, QuasarDesign.match(top = dp(8)))
         if (config.isConfigured()) {
             remote.addView(QuasarDesign.body(this, "Loading authorized registry…"))
-            runApi({ client.actors() }) { rows ->
+            runApi({ client.actors() }, onFailure = {
+                remote.removeAllViews()
+                remote.addView(emptyState("Registry unavailable", "Check your connection and actors:read permission, then refresh."))
+            }) { rows ->
                 remote.removeAllViews()
                 for (index in 0 until rows.length()) {
                     val actor = rows.optJSONObject(index)?.let { RemoteActor.fromJson(it) } ?: continue
@@ -395,12 +398,15 @@ class MainActivity : Activity() {
         }
         val status = QuasarDesign.body(this, if (config.isConfigured()) "Encrypted credential available." else "Not configured.")
         body.addView(QuasarDesign.action(this, "Login", primary = true) {
+            val origin = server.text.toString()
+            val name = username.text.toString()
+            val presentedPassword = password.text.toString()
             runApi({
-                val login = client.login(server.text.toString(), username.text.toString(), password.text.toString())
-                client.authContext(server.text.toString(), login.apiKey)
+                val login = client.login(origin, name, presentedPassword)
+                client.authContext(origin, login.apiKey)
                 login
             }) { login ->
-                runCatching { config.save(server.text.toString(), login.apiKey) }
+                runCatching { config.save(origin, login.apiKey) }
                     .onSuccess {
                         password.text.clear()
                         status.text = "Connected${login.username.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()}"
@@ -417,9 +423,10 @@ class MainActivity : Activity() {
         }
         body.addView(key, QuasarDesign.match(top = dp(8)))
         body.addView(QuasarDesign.action(this, "Authenticate key") {
+            val origin = server.text.toString()
             val presented = key.text.toString().trim()
-            runApi({ client.authContext(server.text.toString(), presented) }) {
-                runCatching { config.save(server.text.toString(), presented) }
+            runApi({ client.authContext(origin, presented) }) {
+                runCatching { config.save(origin, presented) }
                     .onSuccess { key.text.clear(); status.text = "Connected · API key authenticated" }
                     .onFailure { status.text = it.message ?: "Could not save API key" }
             }
@@ -441,7 +448,7 @@ class MainActivity : Activity() {
         }
         header.addView(heading, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         header.addView(
-            QuasarDesign.pill(this, if (config.isConfigured()) "CONNECTED" else "LOCAL", if (config.isConfigured()) QuasarDesign.lime else QuasarDesign.amber),
+            QuasarDesign.pill(this, if (config.isConfigured()) "KEY SAVED" else "LOCAL", if (config.isConfigured()) QuasarDesign.lime else QuasarDesign.amber),
         )
         body.addView(header, QuasarDesign.match())
         body.addView(QuasarDesign.body(this, description), QuasarDesign.match(top = dp(9)))
@@ -552,7 +559,11 @@ class MainActivity : Activity() {
         else -> QuasarDesign.amber
     }
 
-    private fun <T> runApi(operation: () -> T, result: (T) -> Unit) {
+    private fun <T> runApi(
+        operation: () -> T,
+        onFailure: (Throwable) -> Unit = { Toast.makeText(this, "Request failed. Check connection, permissions, and server capability.", Toast.LENGTH_LONG).show() },
+        result: (T) -> Unit,
+    ) {
         val requestedProgress = progress
         val generation = viewport.getChildAt(0)
         requestedProgress.visibility = View.VISIBLE
@@ -561,9 +572,7 @@ class MainActivity : Activity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed || viewport.getChildAt(0) !== generation) return@runOnUiThread
                 requestedProgress.visibility = View.GONE
-                value.onSuccess(result).onFailure { error ->
-                    Toast.makeText(this, error.message ?: "Request failed", Toast.LENGTH_LONG).show()
-                }
+                value.onSuccess(result).onFailure(onFailure)
             }
         }.start()
     }

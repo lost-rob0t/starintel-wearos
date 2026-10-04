@@ -20,9 +20,9 @@ class OperatorJourneyTest {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 scenario.onActivity { it.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
                 Ui.waitText("Mission control"); Ui.capture("operator-overview")
-                Ui.click("Settings"); Ui.field(0, backend.origin); Ui.field(3, "star_sk_v1_fixture")
+                Ui.click("Settings"); Ui.fieldName("Star server URL", backend.origin); Ui.fieldName("API key", "star_sk_v1_fixture")
                 Ui.click("Authenticate key"); Ui.waitText("Connected · key validated")
-                Ui.field(3, "star_sk_v1_rejected"); Ui.click("Authenticate key"); Ui.waitText("HTTP 403")
+                Ui.fieldName("API key", "star_sk_v1_rejected"); Ui.click("Authenticate key"); Ui.waitText("HTTP 403")
                 assertEquals("star_sk_v1_fixture", OperatorSecretStore(context).read("star_api_key"))
                 Ui.click("Actors"); Ui.waitText("fixture"); Ui.waitText("ready"); Ui.capture("operator-actors")
                 Ui.click("Fleet"); Ui.waitText("Quasar"); Ui.capture("operator-fleet")

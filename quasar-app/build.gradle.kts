@@ -26,7 +26,7 @@ android {
         }
     }
 
-    sourceSets.getByName("androidTest").java.srcDir("../tests/android/src")
+    sourceSets.getByName("androidTest").kotlin.srcDir("../tests/android/src")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

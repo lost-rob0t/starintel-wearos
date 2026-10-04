@@ -173,12 +173,14 @@ public final class MainActivity extends Activity {
 
     private void save(String origin, String key) {
         // A Keystore failure must not switch the origin beneath the previous credential.
-        new OperatorSecretStore(this).save("star_api_key", key);
         String normalized = origin.trim().replaceAll("/+$", "");
+        new OperatorSecretStore(this).saveConnection(normalized, key);
         getSharedPreferences("operator_config", MODE_PRIVATE).edit().putString("server_url", normalized).apply();
         new StarIntelSharedConfig(this).put(StarIntelSharedConfig.KEY_SERVER_URL, normalized);
     }
     private String serverUrl() {
+        String boundOrigin = new OperatorSecretStore(this).connectionOrigin();
+        if (boundOrigin != null) return boundOrigin;
         return getSharedPreferences("operator_config", MODE_PRIVATE).getString("server_url",
                 new StarIntelSharedConfig(this).get(StarIntelSharedConfig.KEY_SERVER_URL, ""));
     }
