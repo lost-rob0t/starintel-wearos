@@ -4,8 +4,11 @@ Wear OS surfaces for StarIntel, built around the aggregate `GET /api/v1/stats` s
 
 ## Packages
 
-This repository produces four application/package families:
+This repository produces four application/package families plus one reusable
+Android library:
 
+- `starintel-android/` — typed StarIntel client, local actor runtime, ECL/Tek9
+  bridge contract, and Prolog-RLM agent envelopes for native Android apps.
 - `phone-app/` — Android companion used to configure the paired StarIntel watch without typing credentials on the watch.
 - `quasar-app/` — separately installable native Android Quasar client for the current Star server API.
 - `wear-app/` — standalone Wear OS app, authenticated StarIntel server client/cache, complication data sources, and Tiles.
@@ -43,8 +46,13 @@ Stable APK outputs are staged at:
 ```text
 build/nix/phone-app-debug.apk
 build/nix/quasar-app-debug.apk
+build/nix/collector-app-debug.apk
+build/nix/hackmode-app-debug.apk
+build/nix/operator-app-debug.apk
 build/nix/wear-app-debug.apk
-build/nix/watchface-debug.apk
+build/nix/watchface-neon-debug.apk
+build/nix/watchface-command-debug.apk
+build/nix/watchface-terminal-debug.apk
 ```
 
 Run checks without staging APKs:
@@ -155,9 +163,9 @@ nix run .#install-phone -- PHONE_IP:ADB_PORT
 `install-phone` prefers `build/nix/phone-app-debug.apk`, supports the normal Gradle/CI artifact layouts as fallbacks, verifies the target is reachable before installing, and verifies package `actor.starintel.wear` exists afterward.
 
 After the companion is installed, open **Phone apps** to download, verify, and
-install/update the separate Quasar APK from the selected master or versioned
-release channel. Android displays the final installation confirmation; the
-companion never performs a silent install.
+install/update Quasar, Star Wireless Collector, Hackmode, and Operator from the
+selected master or versioned release channel. Android displays the final
+installation confirmation; the companion never performs a silent install.
 
 For reconnects after the first pairing:
 
@@ -270,9 +278,12 @@ Every successful Android workflow publishes:
 
 - `starintel-phone-app-debug` containing `phone-app-debug.apk`
 - `quasar-android-debug` containing `quasar-app-debug.apk`
+- `starintel-collector-debug` containing `collector-app-debug.apk`
+- `starintel-hackmode-debug` containing `hackmode-app-debug.apk`
+- `starintel-operator-debug` containing `operator-app-debug.apk`
 - `starintel-wear-app-debug` containing `wear-app-debug.apk`
-- `starintel-watchface-debug` containing `watchface-debug.apk`
-- `starintel-nix-apks-debug` containing all three APKs built together through the pinned Nix toolchain
+- one artifact for each Neon, Command, and Terminal watch-face APK
+- `starintel-nix-apks-debug` containing all nine APKs built together through the pinned Nix toolchain
 
 ## Nix toolchain packages
 

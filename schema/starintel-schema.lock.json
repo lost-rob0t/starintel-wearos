@@ -9,7 +9,6 @@
   "release_lock_path": "specs/starintel/0.10.1/release-lock.json",
   "authority_library": "org.starintel/core@1",
   "canonical_key_style": "lowerCamelCase",
-  "vendored_root": "schema/star-lang/0.10.1",
   "required_dtypes": [
     "file",
     "picture",
@@ -18,6 +17,9 @@
     "transcript",
     "person-identifier",
     "geo-point",
-    "location"
+    "location",
+    "wireless-network",
+    "wireless-station",
+    "relation"
   ]
 }

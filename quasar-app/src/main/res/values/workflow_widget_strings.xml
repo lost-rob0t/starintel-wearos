@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="workflow_widget_title">Quasar // workflows</string>
+    <string name="workflow_widget_description">See and safely control native Quasar workflows</string>
+    <string name="workflow_widget_empty">No workflows published by the local control plane</string>
+    <string name="workflow_online">● online</string>
+    <string name="workflow_offline">○ offline</string>
+    <string name="workflow_action_run">Run workflow</string>
+    <string name="workflow_action_pause">Pause workflow</string>
+    <string name="workflow_action_resume">Resume workflow</string>
+    <string name="workflow_action_stop">Stop workflow</string>
+    <string name="workflow_status_title">Workflow control</string>
+</resources>

@@ -10,8 +10,8 @@ android {
         applicationId = "actor.starintel.quasar"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.4.0-alpha"
+        versionCode = 6
+        versionName = "0.4.1-alpha"
     }
 
     signingConfigs {
@@ -36,6 +36,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":starintel-android"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }

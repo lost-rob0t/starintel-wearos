@@ -27,6 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           nix flake check --no-update-lock-file --show-trace
+          python3 scripts/test-release-contract.py
           nix run --no-update-lock-file .#build-all
           nix develop --no-update-lock-file --command bash \
             scripts/verify-companion-signing.sh \
@@ -45,6 +46,9 @@ jobs:
           mkdir -p dist
           cp build/nix/phone-app-debug.apk dist/starintel-phone-master.apk
           cp build/nix/quasar-app-debug.apk dist/quasar-android-master.apk
+          cp build/nix/collector-app-debug.apk dist/starintel-collector-master.apk
+          cp build/nix/hackmode-app-debug.apk dist/starintel-hackmode-master.apk
+          cp build/nix/operator-app-debug.apk dist/starintel-operator-master.apk
           cp build/nix/wear-app-debug.apk dist/starintel-wear-master.apk
           cp build/nix/watchface-neon-debug.apk dist/starintel-watchface-neon-master.apk
           cp build/nix/watchface-command-debug.apk dist/starintel-watchface-command-master.apk
