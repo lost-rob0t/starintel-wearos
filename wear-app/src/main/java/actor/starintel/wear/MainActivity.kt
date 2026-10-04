@@ -96,9 +96,8 @@ class MainActivity : StarIntelActivity() {
         root.addView(appButton("SEARCH") { SearchActivity::class.java }, matchWrap(top = 9))
         root.addView(appButton("EXPLORER") { ExplorerActivity::class.java }, matchWrap(top = 3))
         root.addView(appButton("TARGETS") { TargetsActivity::class.java }, matchWrap(top = 3))
-        root.addView(appButton("INGEST TREND") { ActivityTrendActivity::class.java }, matchWrap(top = 3))
-
-        root.addView(appButton("RELATION GRAPH") { GraphActivity::class.java }, matchWrap(top = 6))
+        root.addView(appButton("ACTIVITY LINES") { ActivityTimelineActivity::class.java }, matchWrap(top = 3))
+        root.addView(appButton("RELATION GRAPH") { GraphActivity::class.java }, matchWrap(top = 3))
         root.addView(appButton("DOCUMENT RADAR") { RadarActivity::class.java }, matchWrap(top = 6))
         root.addView(appButton("GOAL GAUGES") { GoalGaugesActivity::class.java }, matchWrap(top = 6))
         refresh = Button(this).apply {

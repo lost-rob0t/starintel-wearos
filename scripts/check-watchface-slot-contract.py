@@ -12,7 +12,7 @@ FACES = {
     "command": (Path("watchface/src/command/res/raw/watchface.xml"), {1, 2, 3, 6, 7, 8}),
     "terminal": (Path("watchface/src/terminal/res/raw/watchface.xml"), {1, 2, 3, 6}),
 }
-TOKEN = {1: 5, 2: 6, 3: 7, 4: 8, 5: 9, 6: 10, 7: 11, 8: 12}
+TOKEN = {1: 0, 2: 1, 3: 2, 4: 0, 5: 1, 6: 3, 7: 1, 8: 0}
 RANGED_SOURCES = (
     "[COMPLICATION.RANGED_VALUE_VALUE]",
     "[COMPLICATION.RANGED_VALUE_MIN]",
@@ -69,7 +69,7 @@ def check_face(name: str, path: Path, expected_ids: set[int]) -> None:
         text = serialized(slot)
         accent = f"[CONFIGURATION.themeColor.{TOKEN[slot_id]}]"
         if accent not in text:
-            fail(f"{name} slot {slot_id}: missing dedicated accent {accent}")
+            fail(f"{name} slot {slot_id}: missing semantic accent {accent}")
 
         for renderer in slot.findall("Complication"):
             kind = renderer.get("type", "")

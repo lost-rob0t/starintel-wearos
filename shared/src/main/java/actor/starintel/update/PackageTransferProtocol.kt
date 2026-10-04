@@ -7,6 +7,7 @@ object PackageTransferProtocol {
     const val CAPABILITY = "starintel_package_receiver_v1"
     const val CHANNEL_PREFIX = "/starintel/packages/v1/"
     const val STATUS_PATH = "/starintel/packages/status/v1"
+    const val STATUS_QUERY_PATH = "/starintel/packages/status-query/v1"
     const val MAX_HEADER_BYTES = 16 * 1024
 
     data class Header(
@@ -73,16 +74,35 @@ object PackageTransferProtocol {
             const val SUCCESS = "success"
             const val FAILURE = "failure"
 
+            val ACTIVE_STATES = setOf(RECEIVING, VERIFYING, WAITING_USER, INSTALLING)
+            val TERMINAL_STATES = setOf(SUCCESS, FAILURE)
+            val ALL_STATES = ACTIVE_STATES + TERMINAL_STATES
+
             fun parse(bytes: ByteArray): Status {
                 val root = JSONObject(bytes.toString(Charsets.UTF_8))
                 require(root.getInt("version") == VERSION) { "Unsupported status protocol" }
-                return Status(
+                val status = Status(
                     transferId = root.getString("transfer_id"),
                     artifactId = root.getString("artifact_id"),
                     state = root.getString("state"),
                     detail = root.optString("detail").takeIf { it.isNotBlank() },
                 )
+                require(status.transferId.matches(Regex("[0-9a-fA-F-]{16,64}"))) { "Invalid transfer id" }
+                require(status.state in ALL_STATES) { "Invalid transfer state" }
+                return status
             }
         }
+    }
+
+    fun statusQuery(transferId: String): ByteArray {
+        require(transferId.matches(Regex("[0-9a-fA-F-]{16,64}"))) { "Invalid transfer id" }
+        return transferId.toByteArray(Charsets.UTF_8)
+    }
+
+    fun parseStatusQuery(bytes: ByteArray): String {
+        require(bytes.size in 16..64) { "Invalid status query" }
+        val transferId = bytes.toString(Charsets.UTF_8)
+        require(transferId.matches(Regex("[0-9a-fA-F-]{16,64}"))) { "Invalid transfer id" }
+        return transferId
     }
 }

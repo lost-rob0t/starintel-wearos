@@ -7,6 +7,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import com.google.android.gms.wearable.ChannelClient
+import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
 import java.io.BufferedInputStream
@@ -16,6 +17,15 @@ import java.io.FileOutputStream
 import java.security.MessageDigest
 
 class PackageTransferService : WearableListenerService() {
+    override fun onMessageReceived(messageEvent: MessageEvent) {
+        if (messageEvent.path != PackageTransferProtocol.STATUS_QUERY_PATH) return
+        val transferId = runCatching {
+            PackageTransferProtocol.parseStatusQuery(messageEvent.data)
+        }.getOrNull() ?: return
+        val stored = PackageStatusMessenger.read(this, transferId) ?: return
+        sendStatus(messageEvent.sourceNodeId, stored)
+    }
+
     override fun onChannelOpened(channel: ChannelClient.Channel) {
         if (!channel.path.startsWith(PackageTransferProtocol.CHANNEL_PREFIX)) return
         val channelClient = Wearable.getChannelClient(this)
@@ -175,7 +185,6 @@ class PackageTransferService : WearableListenerService() {
     }
 
     private fun sendStatus(nodeId: String, status: PackageTransferProtocol.Status) {
-        Wearable.getMessageClient(this)
-            .sendMessage(nodeId, PackageTransferProtocol.STATUS_PATH, status.toBytes())
+        PackageStatusMessenger.send(this, nodeId, status)
     }
 }

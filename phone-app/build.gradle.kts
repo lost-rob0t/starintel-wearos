@@ -10,8 +10,8 @@ android {
         applicationId = "actor.starintel.wear"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.2.0-alpha"
+        versionCode = 5
+        versionName = "0.4.0-alpha"
     }
 
     signingConfigs {

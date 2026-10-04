@@ -4,9 +4,10 @@ Wear OS surfaces for StarIntel, built around the aggregate `GET /api/v1/stats` s
 
 ## Packages
 
-This repository produces three installable packages:
+This repository produces four application/package families:
 
 - `phone-app/` — Android companion used to configure the paired StarIntel watch without typing credentials on the watch.
+- `quasar-app/` — separately installable native Android Quasar client for the current Star server API.
 - `wear-app/` — standalone Wear OS app, authenticated StarIntel server client/cache, complication data sources, and Tiles.
 - `watchface/` — resource-only Watch Face Format package.
 
@@ -26,6 +27,7 @@ Build individual packages:
 
 ```sh
 nix run .#build-phone
+nix run .#build-quasar
 nix run .#build-wear
 nix run .#build-watchface
 ```
@@ -40,6 +42,7 @@ Stable APK outputs are staged at:
 
 ```text
 build/nix/phone-app-debug.apk
+build/nix/quasar-app-debug.apk
 build/nix/wear-app-debug.apk
 build/nix/watchface-debug.apk
 ```
@@ -151,6 +154,11 @@ nix run .#install-phone -- PHONE_IP:ADB_PORT
 
 `install-phone` prefers `build/nix/phone-app-debug.apk`, supports the normal Gradle/CI artifact layouts as fallbacks, verifies the target is reachable before installing, and verifies package `actor.starintel.wear` exists afterward.
 
+After the companion is installed, open **Phone apps** to download, verify, and
+install/update the separate Quasar APK from the selected master or versioned
+release channel. Android displays the final installation confirmation; the
+companion never performs a silent install.
+
 For reconnects after the first pairing:
 
 ```sh
@@ -230,8 +238,13 @@ The initial UI is designed for a round Galaxy Watch5 Pro-class display:
 - Ops Tile: online/stale/offline state, server version, and data age.
 - Targets Tile: aggregate targets plus target/investigation-target split.
 - Corpus Tile: total documents plus the two largest document-type buckets.
+- Activity app: real line graphs for 1 minute, 5 minutes, 15 minutes, 1 hour, 6 hours, 1 day, and 1 week, with total and per-type series plus an auto-rotating range.
+- Stack Tile: documents, targets, one-hour activity, and reachability in one vertically stacked glance.
+- Explorer: random document discovery and direct Open/Graph actions, so opaque document IDs do not need to be typed.
 
 All Tile and complication reads share a 60-second last-good cache. If the server is unavailable, the watch keeps showing cached values and marks them stale/offline instead of blanking the surface.
+
+The complication picker includes fixed activity-line providers for every supported range plus an Auto provider. Ultra Black keeps a true black background while retaining clearer face identity, date context, large time, and minimal operational labels.
 
 ## Private authentication
 
@@ -256,6 +269,7 @@ Release companion/Wear builds accept HTTPS server origins only. Debug builds all
 Every successful Android workflow publishes:
 
 - `starintel-phone-app-debug` containing `phone-app-debug.apk`
+- `quasar-android-debug` containing `quasar-app-debug.apk`
 - `starintel-wear-app-debug` containing `wear-app-debug.apk`
 - `starintel-watchface-debug` containing `watchface-debug.apk`
 - `starintel-nix-apks-debug` containing all three APKs built together through the pinned Nix toolchain
@@ -275,7 +289,10 @@ nix build .#gradle
 The legacy CI path remains available and currently uses JDK 17, Gradle 9.6, Android API 36, Wearable Data Layer 20.0.1, Wear Tiles 1.6.2, and ProtoLayout 1.4.2.
 
 ```sh
-gradle :phone-app:testDebugUnitTest :phone-app:assembleDebug :wear-app:testDebugUnitTest :wear-app:assembleDebug :watchface:assembleDebug
+gradle :phone-app:testDebugUnitTest :phone-app:assembleDebug \
+  :quasar-app:testDebugUnitTest :quasar-app:assembleDebug \
+  :wear-app:testDebugUnitTest :wear-app:assembleDebug \
+  :watchface:assembleNeonDebug :watchface:assembleCommandDebug :watchface:assembleTerminalDebug
 ```
 
 The watch face is WFF v1 to retain Wear OS 4 / API 33 compatibility. CI also validates `watchface.xml` with Google's WFF validator.

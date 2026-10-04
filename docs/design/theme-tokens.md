@@ -6,7 +6,7 @@ Issue: #32
 
 `watchface/src/main/res/raw/watchface.xml` owns the canonical WFF v1 `ColorConfiguration` named `themeColor`.
 
-Every palette provides the same thirteen semantic token positions:
+Every palette uses the five semantic positions allowed by WFF v1:
 
 | Index | Meaning |
 | ---: | --- |
@@ -15,14 +15,6 @@ Every palette provides the same thirteen semantic token positions:
 | `2` | primary readable text/data |
 | `3` | muted structure / unfilled progress track |
 | `4` | normal-mode background |
-| `5` | complication slot 1 accent |
-| `6` | complication slot 2 accent |
-| `7` | complication slot 3 accent |
-| `8` | complication slot 4 / left curved bar accent |
-| `9` | complication slot 5 / right curved bar accent |
-| `10` | complication slot 6 accent |
-| `11` | complication slot 7 / activity graph accent |
-| `12` | complication slot 8 / weather-geo accent |
 
 Face-owned elements reference `[CONFIGURATION.themeColor.N]`; they do not scatter literal palette colors through face geometry.
 
@@ -39,7 +31,7 @@ The Scene keeps a literal black safety fallback. Token 4 is drawn only in Normal
 
 ## Complication rendering rule
 
-Each complication has a dedicated accent token. A slot must not borrow the neighboring slot's accent.
+Complications choose one of the primary, secondary, readable-data, or muted tokens. Adjacent slots alternate semantic accents so gauges remain distinct within WFF v1's five-color limit.
 
 `RANGED_VALUE` is rendered as an actual progress visualization driven by provider `MIN`, `MAX`, and `VALUE`:
 
@@ -52,7 +44,7 @@ Theme tokens style the StarIntel face's own presentation layer. They do not rein
 
 ## Face styles and picker behavior
 
-WFF v1 exposes one installed StarIntel face entry. `faceStyle` provides the three selectable styles inside the Wear OS face editor: Neon Geometric HUD, Command Data / Geo, and Terminal Ops. `MultipleInstancesAllowed=true` lets the user keep multiple StarIntel favorites with different face-style configurations while retaining Watch5 Pro-compatible WFF v1 packaging.
+WFF v1 exposes three installed StarIntel faces: Neon Geometric HUD, Command Data / Geo, and Terminal Ops. Each face supports Normal and Ultra Black presentation modes.
 
 ## Ambient/AOD
 
@@ -63,9 +55,9 @@ Ambient mode removes decorative accents and progress graphics. Ultra Black suppr
 `scripts/check-watchface-themes.py` verifies:
 
 - exactly six palette options;
-- exactly thirteen tokens per palette;
-- all thirteen token indexes are referenced;
-- the Qtile Electric palette is locked to the real Qtile values, including `#202146` for token 4;
+- exactly five tokens per palette;
+- the four rendered semantic token indexes are referenced;
+- the Qtile Electric palette is locked to its primary, secondary, text, structure, and background values;
 - no face-owned literal colors remain outside palette declarations, except the Scene's black fallback.
 
 `scripts/check-watchface-slot-contract.py` verifies all three face-style options, multiple-instance/editability metadata, per-slot accent assignment, and value-driven ranged progress tracks/fills.

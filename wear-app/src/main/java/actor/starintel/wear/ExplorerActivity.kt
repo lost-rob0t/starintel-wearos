@@ -69,6 +69,11 @@ class ExplorerActivity : StarIntelActivity() {
             setOnClickListener { search(query.text.toString()) }
         }
         root.addView(run, matchWrap(top = 3))
+        root.addView(Button(this).apply {
+            text = "SURPRISE ME · RANDOM DOCS"
+            applyStarIntelTheme(palette)
+            setOnClickListener { randomDocuments() }
+        }, matchWrap(top = 3))
 
         status = TextView(this).apply {
             text = "Pick a document type or enter a query"
@@ -148,7 +153,7 @@ class ExplorerActivity : StarIntelActivity() {
         status.setTextColor(palette.muted)
         results.removeAllViews()
         scope.launch {
-            val response = StarIntelSearchClient.get(this@ExplorerActivity).search(q, limit = 50)
+            val response = StarIntelSearchClient.get(this@ExplorerActivity).search(q, limit = 20)
             run.isEnabled = true
             if (response.error != null) {
                 status.text = response.error
@@ -171,18 +176,30 @@ class ExplorerActivity : StarIntelActivity() {
         }
     }
 
+    private fun randomDocuments() {
+        run.isEnabled = false
+        status.text = "Picking documents…"
+        status.setTextColor(palette.muted)
+        results.removeAllViews()
+        scope.launch {
+            val response = StarIntelSearchClient.get(this@ExplorerActivity).search("*:*", limit = 50)
+            run.isEnabled = true
+            if (response.error != null) {
+                status.text = "Random browse unavailable · ${response.error}"
+                status.setTextColor(palette.warning)
+                return@launch
+            }
+            val picked = response.hits.shuffled().take(8)
+            status.text = "${picked.size} random documents · tap OPEN or GRAPH"
+            status.setTextColor(palette.accent)
+            picked.forEach { hit -> results.addView(documentCard(hit), matchWrap(top = 4)) }
+        }
+    }
+
     private fun documentCard(hit: SearchHit): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(8), dp(7), dp(8), dp(7))
         setBackgroundColor(palette.surface)
-        isClickable = true
-        isFocusable = true
-        setOnClickListener {
-            startActivity(
-                Intent(this@ExplorerActivity, DocumentViewerActivity::class.java)
-                    .putExtra(DocumentViewerActivity.EXTRA_DOCUMENT_ID, hit.id),
-            )
-        }
         addView(TextView(this@ExplorerActivity).apply {
             text = hit.title
             textSize = 12f
@@ -197,6 +214,31 @@ class ExplorerActivity : StarIntelActivity() {
             textSize = 9f
             setTextColor(palette.muted)
         })
+        addView(LinearLayout(this@ExplorerActivity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(Button(this@ExplorerActivity).apply {
+                text = "OPEN"
+                textSize = 9f
+                applyStarIntelTheme(palette)
+                setOnClickListener {
+                    startActivity(
+                        Intent(this@ExplorerActivity, DocumentViewerActivity::class.java)
+                            .putExtra(DocumentViewerActivity.EXTRA_DOCUMENT_ID, hit.id),
+                    )
+                }
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(Button(this@ExplorerActivity).apply {
+                text = "GRAPH"
+                textSize = 9f
+                applyStarIntelTheme(palette)
+                setOnClickListener {
+                    startActivity(
+                        Intent(this@ExplorerActivity, GraphActivity::class.java)
+                            .putExtra(GraphActivity.EXTRA_DOCUMENT_ID, hit.id),
+                    )
+                }
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(4) })
+        }, matchWrap(top = 4))
     }
 
     private fun matchWrap(top: Int = 0) = LinearLayout.LayoutParams(

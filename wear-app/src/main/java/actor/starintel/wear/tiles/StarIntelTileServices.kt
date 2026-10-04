@@ -14,6 +14,7 @@ import androidx.wear.tiles.RequestBuilders.TileRequest
 import androidx.wear.tiles.TileBuilders.Tile
 import actor.starintel.wear.ExplorerActivity
 import actor.starintel.wear.GraphActivity
+import actor.starintel.wear.ActivityTimelineActivity
 import actor.starintel.wear.MainActivity
 import actor.starintel.wear.SearchActivity
 import actor.starintel.wear.TargetsActivity
@@ -25,7 +26,7 @@ import actor.starintel.wear.data.StarIntelSnapshot
 import actor.starintel.wear.data.ageLabel
 import actor.starintel.wear.data.compactCount
 
-enum class TileKind { OPS, TARGETS, CORPUS, ACTIVITY, SEARCH }
+enum class TileKind { OPS, TARGETS, CORPUS, ACTIVITY, SEARCH, STACK }
 
 data class TileCopy(
     val title: String,
@@ -39,7 +40,7 @@ abstract class StarIntelTileService(
 ) : Material3TileService() {
     override suspend fun MaterialScope.tileResponse(requestParams: TileRequest): Tile {
         val snapshot = StarIntelRepository.get(applicationContext).snapshot()
-        val activityLastHour = if (kind == TileKind.ACTIVITY) {
+        val activityLastHour = if (kind == TileKind.ACTIVITY || kind == TileKind.STACK) {
             ActivityHistoryStore.get(applicationContext)
                 .points(ActivityRange.H1)
                 .sumOf { it.documentsAdded ?: 0L }
@@ -58,7 +59,7 @@ abstract class StarIntelTileService(
             !snapshot.configured -> MainActivity::class.java
             kind == TileKind.TARGETS -> TargetsActivity::class.java
             kind == TileKind.CORPUS -> ExplorerActivity::class.java
-            kind == TileKind.ACTIVITY -> GraphActivity::class.java
+            kind == TileKind.ACTIVITY -> ActivityTimelineActivity::class.java
             kind == TileKind.SEARCH -> SearchActivity::class.java
             else -> MainActivity::class.java
         }
@@ -151,6 +152,20 @@ abstract class StarIntelTileService(
                 secondary = if (newSearchMatches > 0) "new matches" else "$activeSearches active monitors",
                 footer = "tap to search / configure",
             )
+
+            TileKind.STACK -> TileCopy(
+                title = "StarIntel · Stack",
+                primary = data.documentsTotal.compactCount() + " docs",
+                secondary = buildString {
+                    append(data.targetsTotal.compactCount()).append(" targets")
+                    append(" · +").append(activityLastHour.compactCount()).append(" / 1h")
+                },
+                footer = when {
+                    data.reachable && !data.stale -> "ONLINE · ${data.ageLabel()}"
+                    data.reachable -> "STALE · ${data.ageLabel()}"
+                    else -> "OFFLINE · cached"
+                },
+            )
         }
     }
 
@@ -164,3 +179,4 @@ class TargetsTileService : StarIntelTileService(TileKind.TARGETS)
 class CorpusTileService : StarIntelTileService(TileKind.CORPUS)
 class ActivityTileService : StarIntelTileService(TileKind.ACTIVITY)
 class SearchTileService : StarIntelTileService(TileKind.SEARCH)
+class StackTileService : StarIntelTileService(TileKind.STACK)

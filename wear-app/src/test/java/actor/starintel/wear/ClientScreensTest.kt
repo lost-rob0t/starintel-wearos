@@ -66,7 +66,6 @@ class ClientScreensTest {
 
     @Test fun dashboardLaunchAndDispose()=checkScreen(MainActivity::class.java)
     @Test fun radarLaunchAndDispose()=checkScreen(RadarActivity::class.java)
-    @Test fun trendLaunchAndDispose()=checkScreen(ActivityTrendActivity::class.java)
     @Test fun graphLaunchAndDispose()=checkScreen(GraphActivity::class.java)
     @Test fun searchLaunchAndDispose()=checkScreen(SearchActivity::class.java)
     @Test fun explorerLaunchAndDispose()=checkScreen(ExplorerActivity::class.java)

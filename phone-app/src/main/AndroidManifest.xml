@@ -8,6 +8,7 @@
         android:label="StarIntel Companion"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity android:name="actor.starintel.update.UpdateInstallResultActivity" android:exported="false" />
+        <activity android:name=".PhonePackagesActivity" android:exported="false" />
         <activity android:name=".UpdateManagerActivity" android:exported="false" />
         <activity android:name=".WatchPackagesActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="false" />

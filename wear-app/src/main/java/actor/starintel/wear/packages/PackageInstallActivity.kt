@@ -10,7 +10,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
-import com.google.android.gms.wearable.Wearable
 import java.io.File
 import java.io.FileInputStream
 
@@ -162,10 +161,10 @@ class PackageInstallActivity : Activity() {
     }
 
     private fun sendStatus(nodeId: String, transferId: String, artifactId: String, state: String, detail: String?) {
-        Wearable.getMessageClient(this).sendMessage(
+        PackageStatusMessenger.send(
+            this,
             nodeId,
-            PackageTransferProtocol.STATUS_PATH,
-            PackageTransferProtocol.Status(transferId, artifactId, state, detail).toBytes(),
+            PackageTransferProtocol.Status(transferId, artifactId, state, detail),
         )
     }
 

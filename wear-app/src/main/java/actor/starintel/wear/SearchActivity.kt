@@ -29,6 +29,8 @@ class SearchActivity : StarIntelActivity() {
     private lateinit var status: TextView
     private lateinit var results: LinearLayout
     private lateinit var search: Button
+    private lateinit var graphResults: Button
+    private var lastHits: List<SearchHit> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,6 +67,21 @@ class SearchActivity : StarIntelActivity() {
             setOnClickListener { runSearch() }
         }
         root.addView(search, matchWrap(top = 3))
+
+        graphResults = Button(this).apply {
+            text = "GRAPH TOP RESULT"
+            visibility = android.view.View.GONE
+            applyStarIntelTheme(palette)
+            setOnClickListener {
+                lastHits.firstOrNull()?.let { hit ->
+                    startActivity(
+                        Intent(this@SearchActivity, GraphActivity::class.java)
+                            .putExtra(GraphActivity.EXTRA_DOCUMENT_ID, hit.id),
+                    )
+                }
+            }
+        }
+        root.addView(graphResults, matchWrap(top = 3))
 
         root.addView(Button(this).apply {
             text = "SEARCH ALERTS"
@@ -111,6 +128,8 @@ class SearchActivity : StarIntelActivity() {
         search.isEnabled = false
         showStatus("Searching…")
         results.removeAllViews()
+        lastHits = emptyList()
+        graphResults.visibility = android.view.View.GONE
 
         scope.launch {
             val response = client.search(q, limit = WATCH_RESULT_LIMIT)
@@ -122,6 +141,8 @@ class SearchActivity : StarIntelActivity() {
 
             val total = response.totalRows?.let { "${response.hits.size} of $it" } ?: response.hits.size.toString()
             showStatus("$total result${if (response.hits.size == 1) "" else "s"} · tap to open", accent = true)
+            lastHits = response.hits
+            graphResults.visibility = if (response.hits.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
             if (response.hits.isEmpty()) {
                 results.addView(resultCard(null, "NO MATCHES", "Try another term"), matchWrap(top = 5))
             } else {

@@ -33,8 +33,8 @@ data class StarIntelPalette(
     val surface: Int,
     val accent: Int,
     val text: Int = Color.WHITE,
-    val muted: Int = Color.rgb(176, 187, 199),
-    val warning: Int = Color.rgb(255, 132, 132),
+    val muted: Int = Color.rgb(188, 198, 210),
+    val warning: Int = Color.rgb(255, 112, 120),
 )
 
 class StarIntelThemeStore(context: Context) {
@@ -67,20 +67,20 @@ class StarIntelThemeStore(context: Context) {
             )
             StarIntelThemeId.PURPLE -> StarIntelPalette(
                 id,
-                background = Color.rgb(5, 5, 9),
-                surface = Color.rgb(16, 10, 23),
+                background = Color.BLACK,
+                surface = Color.rgb(18, 10, 25),
                 accent = Color.rgb(198, 91, 255),
             )
             StarIntelThemeId.LIME -> StarIntelPalette(
                 id,
-                background = Color.rgb(4, 7, 5),
-                surface = Color.rgb(9, 17, 12),
+                background = Color.BLACK,
+                surface = Color.rgb(9, 18, 12),
                 accent = Color.rgb(126, 255, 128),
             )
             StarIntelThemeId.AMBER -> StarIntelPalette(
                 id,
-                background = Color.rgb(8, 6, 3),
-                surface = Color.rgb(20, 14, 6),
+                background = Color.BLACK,
+                surface = Color.rgb(22, 15, 6),
                 accent = Color.rgb(255, 190, 70),
             )
         }
@@ -90,18 +90,26 @@ class StarIntelThemeStore(context: Context) {
 fun Button.applyStarIntelTheme(palette: StarIntelPalette) {
     val density = resources.displayMetrics.density
     backgroundTintList = null
-    background = RippleDrawable(ColorStateList.valueOf(palette.accent and 0x40FFFFFF),
+    background = RippleDrawable(
+        ColorStateList.valueOf(palette.accent and 0x40FFFFFF),
         GradientDrawable().apply {
             setColor(palette.surface)
             cornerRadius = 6 * density
             setStroke(density.toInt().coerceAtLeast(1), palette.accent)
-        }, null)
-    setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
-        intArrayOf(palette.muted, palette.accent)))
+        },
+        null,
+    )
+    setTextColor(
+        ColorStateList(
+            arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
+            intArrayOf(palette.muted, palette.accent),
+        ),
+    )
     typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
     textSize = 12f
     minHeight = (48 * density).toInt()
     setPadding((10 * density).toInt(), (8 * density).toInt(), (10 * density).toInt(), (8 * density).toInt())
+    isAllCaps = true
 }
 
 fun TextView.applyStarIntelText(palette: StarIntelPalette, muted: Boolean = false) {
@@ -111,5 +119,17 @@ fun TextView.applyStarIntelText(palette: StarIntelPalette, muted: Boolean = fals
 fun EditText.applyStarIntelInput(palette: StarIntelPalette) {
     setTextColor(palette.text)
     setHintTextColor(palette.muted)
-    backgroundTintList = ColorStateList.valueOf(palette.accent)
+    backgroundTintList = null
+    background = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        setColor(palette.surface)
+        cornerRadius = 14f * resources.displayMetrics.density
+        setStroke(resources.displayMetrics.density.toInt().coerceAtLeast(1), palette.accent)
+    }
+    setPadding(
+        (12f * resources.displayMetrics.density).toInt(),
+        (9f * resources.displayMetrics.density).toInt(),
+        (12f * resources.displayMetrics.density).toInt(),
+        (9f * resources.displayMetrics.density).toInt(),
+    )
 }
