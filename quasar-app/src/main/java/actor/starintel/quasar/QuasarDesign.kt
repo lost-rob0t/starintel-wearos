@@ -13,19 +13,22 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import actor.starintel.design.SiTokens
 
 internal object QuasarDesign {
-    val background = Color.rgb(7, 7, 12)
-    val panel = Color.rgb(18, 18, 31)
-    val panelRaised = Color.rgb(25, 24, 42)
-    val border = Color.rgb(48, 46, 76)
-    val cyan = Color.rgb(45, 226, 230)
-    val pink = Color.rgb(246, 1, 157)
-    val amber = Color.rgb(251, 169, 34)
-    val lime = Color.rgb(98, 255, 0)
-    val coral = Color.rgb(221, 84, 110)
-    val text = Color.rgb(243, 244, 245)
-    val muted = Color.rgb(164, 166, 184)
+    private val palette = SiTokens.CYAN
+    val background = palette.background
+    val panel = palette.surface
+    val panelRaised = palette.raised
+    val border = palette.border
+    val cyan = palette.accent
+    // Small labels, syntax keywords and map markers need the brighter text accent.
+    val pink = SiTokens.ELECTRIC.accentAlt
+    val amber = palette.warn
+    val lime = palette.ok
+    val coral = palette.danger
+    val text = palette.text
+    val muted = palette.muted
 
     fun title(context: Context, value: String, size: Float = 30f) = TextView(context).apply {
         this.text = value
@@ -93,7 +96,7 @@ internal object QuasarDesign {
         accent: Int,
         onClick: () -> Unit,
     ) = card(context, border).apply {
-        minimumHeight = context.dp(126)
+        minimumHeight = context.dp(112)
         isClickable = true
         isFocusable = true
         background = ripple(context, panel, border, context.dp(18).toFloat())

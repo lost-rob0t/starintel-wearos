@@ -1,6 +1,7 @@
 package actor.starintel.quasar
 
 import actor.starintel.android.model.AgentTurnRequest
+import actor.starintel.android.model.RemoteActor
 import actor.starintel.quasar.field.FieldOpsView
 import actor.starintel.quasar.field.GeoDocumentParser
 import android.app.Activity
@@ -47,7 +48,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f),
         )
         shell.addView(bottomNavigation(), QuasarDesign.match())
-        setContentView(shell)
+        actor.starintel.design.Si.install(this, shell)
         showHome()
         handleOperatorIntent(intent)
     }
@@ -86,22 +87,22 @@ class MainActivity : Activity() {
 
     private fun showHome() {
         val body = screen(
-            eyebrow = "Local-first intelligence",
-            title = "Command deck",
-            description = "Investigate locally, project the truth, and sync only through typed StarIntel operations.",
+            eyebrow = "StarIntel // Quasar",
+            title = "Investigation desk",
+            description = "Your corpus, field evidence, and actor work in one workspace.",
         )
 
         val lisp = localRuntime.lispStatus()
         val runtimeCard = QuasarDesign.card(this, if (lisp.available) QuasarDesign.lime else QuasarDesign.amber)
         runtimeCard.addView(sectionHeader("LOCAL CORE", if (lisp.available) "READY" else "BOOTSTRAP"))
-        runtimeCard.addView(QuasarDesign.title(this, "Common Lisp → Tek9 → actors", 20f), QuasarDesign.match(top = dp(12)))
+        runtimeCard.addView(QuasarDesign.title(this, "On-device workspace", 20f), QuasarDesign.match(top = dp(12)))
         runtimeCard.addView(
             QuasarDesign.body(
                 this,
                 if (lisp.available) {
-                    "ECL is embedded for this ABI. Actor mailboxes can commit documents, relations, facts, and outbox intents atomically."
+                    "Local tools are available. Connected work uses your server account and its permissions."
                 } else {
-                    "The Android library and closed ECL/Tek9 protocol are installed. This APK still needs the ABI-specific native ECL bridge."
+                    "Local tools are unavailable on this device. Connect a server to browse records and dispatch work."
                 },
             ),
             QuasarDesign.match(top = dp(8)),
@@ -142,7 +143,7 @@ class MainActivity : Activity() {
                 startActivity(Intent(this, actor.starintel.quasar.ide.LogicStudioActivity::class.java))
             },
             Route("Reasoning agent", "Run a bounded Prolog-RLM investigation turn", QuasarDesign.pink) { showAgent() },
-            Route("Actor mesh", "Inspect local manifests and actor capabilities", QuasarDesign.amber) { showActors() },
+            Route("Actors", "Live server fleet and local definitions", QuasarDesign.amber) { showActors() },
         )
         routes.chunked(2).forEach { pair ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -261,9 +262,9 @@ class MainActivity : Activity() {
         body.addView(status, QuasarDesign.match(top = dp(10)))
     }
 
-    private fun showTarget() {
+    private fun showTarget(initialActor: String = "") {
         val body = screen("Orchestration", "Dispatch target", "Create one idempotent actor request against a named dataset.")
-        val actor = labeledField(body, "ACTOR", "user-hunt")
+        val actor = labeledField(body, "ACTOR", initialActor)
         val target = labeledField(body, "TARGET", "")
         val dataset = labeledField(body, "DATASET", "investigation")
         val status = QuasarDesign.body(this, "Ready.")
@@ -310,7 +311,31 @@ class MainActivity : Activity() {
     }
 
     private fun showActors() {
-        val body = screen("Local runtime", "Actor mesh", "Every actor is manifest-driven, serialized through a bounded mailbox, and restricted to declared effects.")
+        val body = screen("StarIntel // Fleet", "Actors", "Server actors remain private. This view shows the registry your account can read; execution is authorized on the server.")
+        val remote = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        body.addView(QuasarDesign.eyebrow(this, "Server fleet"), QuasarDesign.match(top = dp(18)))
+        body.addView(remote, QuasarDesign.match(top = dp(8)))
+        if (config.isConfigured()) {
+            remote.addView(QuasarDesign.body(this, "Loading authorized registry…"))
+            runApi({ client.actors() }, onFailure = {
+                remote.removeAllViews()
+                remote.addView(emptyState("Registry unavailable", "Check your connection and actors:read permission, then refresh."))
+            }) { rows ->
+                remote.removeAllViews()
+                for (index in 0 until rows.length()) {
+                    val actor = rows.optJSONObject(index)?.let { RemoteActor.fromJson(it) } ?: continue
+                    remote.addView(QuasarDesign.card(this).apply {
+                        addView(sectionHeader(actor.name, actor.status))
+                        addView(QuasarDesign.body(this@MainActivity, actor.uri, size = 12f), QuasarDesign.match(top = dp(8)))
+                        addView(QuasarDesign.body(this@MainActivity, actor.accepts.joinToString(prefix = "Targets · ").ifBlank { "No target contract declared" }, size = 12f), QuasarDesign.match(top = dp(8)))
+                    }, QuasarDesign.match(top = dp(8)))
+                }
+                if (remote.childCount == 0) remote.addView(emptyState("No visible actors", "Your server has no operator-visible actor deployments."))
+            }
+        } else remote.addView(emptyState("Connect your server", "Authenticate in Settings to load the private fleet."))
+        body.addView(QuasarDesign.action(this, "Refresh actors") { showActors() }, QuasarDesign.match(top = dp(8)))
+        body.addView(QuasarDesign.action(this, "Dispatch a target") { showTarget() }, QuasarDesign.match(top = dp(8)))
+        body.addView(QuasarDesign.eyebrow(this, "On-device tools"), QuasarDesign.match(top = dp(24)))
         val lisp = localRuntime.lispStatus()
         val tek9 = localRuntime.tek9Status()
         val status = QuasarDesign.card(this, if (lisp.available && tek9.available) QuasarDesign.lime else QuasarDesign.amber).apply {
@@ -369,15 +394,19 @@ class MainActivity : Activity() {
         val username = labeledField(body, "USERNAME", "", "username")
         val password = labeledField(body, "PASSWORD", "", "password").apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            isSaveEnabled = false
         }
         val status = QuasarDesign.body(this, if (config.isConfigured()) "Encrypted credential available." else "Not configured.")
         body.addView(QuasarDesign.action(this, "Login", primary = true) {
+            val origin = server.text.toString()
+            val name = username.text.toString()
+            val presentedPassword = password.text.toString()
             runApi({
-                val login = client.login(server.text.toString(), username.text.toString(), password.text.toString())
-                client.authContext(server.text.toString(), login.apiKey)
+                val login = client.login(origin, name, presentedPassword)
+                client.authContext(origin, login.apiKey)
                 login
             }) { login ->
-                runCatching { config.save(server.text.toString(), login.apiKey) }
+                runCatching { config.save(origin, login.apiKey) }
                     .onSuccess {
                         password.text.clear()
                         status.text = "Connected${login.username.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()}"
@@ -388,13 +417,16 @@ class MainActivity : Activity() {
 
         body.addView(QuasarDesign.eyebrow(this, "Or use an API key"), QuasarDesign.match(top = dp(24)))
         val key = QuasarDesign.field(this, hint = "star_sk_v1_…").apply {
+            contentDescription = "API key"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            isSaveEnabled = false
         }
         body.addView(key, QuasarDesign.match(top = dp(8)))
         body.addView(QuasarDesign.action(this, "Authenticate key") {
+            val origin = server.text.toString()
             val presented = key.text.toString().trim()
-            runApi({ client.authContext(server.text.toString(), presented) }) {
-                runCatching { config.save(server.text.toString(), presented) }
+            runApi({ client.authContext(origin, presented) }) {
+                runCatching { config.save(origin, presented) }
                     .onSuccess { key.text.clear(); status.text = "Connected · API key authenticated" }
                     .onFailure { status.text = it.message ?: "Could not save API key" }
             }
@@ -416,7 +448,7 @@ class MainActivity : Activity() {
         }
         header.addView(heading, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         header.addView(
-            QuasarDesign.pill(this, if (config.isConfigured()) "CONNECTED" else "LOCAL", if (config.isConfigured()) QuasarDesign.lime else QuasarDesign.amber),
+            QuasarDesign.pill(this, if (config.isConfigured()) "KEY SAVED" else "LOCAL", if (config.isConfigured()) QuasarDesign.lime else QuasarDesign.amber),
         )
         body.addView(header, QuasarDesign.match())
         body.addView(QuasarDesign.body(this, description), QuasarDesign.match(top = dp(9)))
@@ -441,7 +473,7 @@ class MainActivity : Activity() {
         listOf(
             "Home" to ::showHome,
             "Field" to ::showFieldOps,
-            "Flows" to { startActivity(Intent(this, actor.starintel.quasar.workflows.FlowStudioActivity::class.java)) },
+            "Actors" to ::showActors,
             "Logic" to { startActivity(Intent(this, actor.starintel.quasar.ide.LogicStudioActivity::class.java)) },
             "Settings" to ::showSettings,
         ).forEach { (label, action) ->
@@ -500,7 +532,10 @@ class MainActivity : Activity() {
         hint: String = "",
     ): EditText {
         body.addView(QuasarDesign.eyebrow(this, label), QuasarDesign.match(top = dp(18)))
-        return QuasarDesign.field(this, value, hint = hint).also { body.addView(it, QuasarDesign.match(top = dp(7))) }
+        return QuasarDesign.field(this, value, hint = hint).also {
+            it.contentDescription = label
+            body.addView(it, QuasarDesign.match(top = dp(7)))
+        }
     }
 
     private fun codeBlock(value: String) = QuasarDesign.body(this, value, QuasarDesign.text, 12f).apply {
@@ -524,15 +559,20 @@ class MainActivity : Activity() {
         else -> QuasarDesign.amber
     }
 
-    private fun <T> runApi(operation: () -> T, result: (T) -> Unit) {
-        progress.visibility = View.VISIBLE
+    private fun <T> runApi(
+        operation: () -> T,
+        onFailure: (Throwable) -> Unit = { Toast.makeText(this, "Request failed. Check connection, permissions, and server capability.", Toast.LENGTH_LONG).show() },
+        result: (T) -> Unit,
+    ) {
+        val requestedProgress = progress
+        val generation = viewport.getChildAt(0)
+        requestedProgress.visibility = View.VISIBLE
         Thread {
             val value = runCatching(operation)
             runOnUiThread {
-                progress.visibility = View.GONE
-                value.onSuccess(result).onFailure { error ->
-                    Toast.makeText(this, error.message ?: "Request failed", Toast.LENGTH_LONG).show()
-                }
+                if (isFinishing || isDestroyed || viewport.getChildAt(0) !== generation) return@runOnUiThread
+                requestedProgress.visibility = View.GONE
+                value.onSuccess(result).onFailure(onFailure)
             }
         }.start()
     }
