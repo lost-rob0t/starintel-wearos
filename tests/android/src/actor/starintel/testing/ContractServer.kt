@@ -39,7 +39,7 @@ class ContractServer : AutoCloseable {
                         require(target.getString("actor") == "fixture" && target.getString("target") == "sample")
                         require(target.getString("dataset") == "test" && target.getString("idempotency_key").isNotBlank())
                         targets.incrementAndGet()
-                        """{"status":"ok","id":"target-fixture"}"""
+                        """{"status":"ok","target_id":"target-fixture","request_id":"request-fixture","correlation_id":"correlation-fixture"}"""
                     }
                     else -> "{}"
                 }
