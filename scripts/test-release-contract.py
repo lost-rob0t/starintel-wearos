@@ -78,6 +78,7 @@ def main() -> int:
         require("scripts/test-update-manifest.py", release_stem)
 
     require(".github/workflows/android.yml", "python3 scripts/test-release-contract.py")
+    require(".github/workflows/android.yml", "nix develop --no-update-lock-file --command gradle")
     require(".github/workflows/release.yml", "python3 scripts/test-release-contract.py")
     require(".github/workflows/update-channel.yml", "python3 scripts/test-release-contract.py")
     require("scripts/release.sh", "python3 scripts/test-release-contract.py")
