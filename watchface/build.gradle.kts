@@ -11,8 +11,8 @@ android {
         applicationId = "actor.starintel.watchface"
         minSdk = 33
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.3.0-alpha"
+        versionCode = 5
+        versionName = "0.4.0-alpha"
     }
 
     signingConfigs {

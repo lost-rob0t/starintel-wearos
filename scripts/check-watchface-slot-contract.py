@@ -12,7 +12,7 @@ FACES = {
     "command": (Path("watchface/src/command/res/raw/watchface.xml"), {1, 2, 3, 6, 7, 8}),
     "terminal": (Path("watchface/src/terminal/res/raw/watchface.xml"), {1, 2, 3, 6}),
 }
-TOKEN = {1: 5, 2: 6, 3: 7, 4: 8, 5: 9, 6: 10, 7: 11, 8: 12}
+TOKEN = {1: 0, 2: 1, 3: 2, 4: 0, 5: 1, 6: 3, 7: 1, 8: 0}
 RANGED_SOURCES = (
     "[COMPLICATION.RANGED_VALUE_VALUE]",
     "[COMPLICATION.RANGED_VALUE_MIN]",
@@ -69,18 +69,23 @@ def check_face(name: str, path: Path, expected_ids: set[int]) -> None:
         text = serialized(slot)
         accent = f"[CONFIGURATION.themeColor.{TOKEN[slot_id]}]"
         if accent not in text:
-            fail(f"{name} slot {slot_id}: missing dedicated accent {accent}")
+            fail(f"{name} slot {slot_id}: missing semantic accent {accent}")
 
-        # Every configured renderer, not just the slot as a whole, must have an
-        # Ultra Black branch with a one-pixel outline. This prevents e.g. a
-        # RANGED_VALUE provider from accidentally retaining a thick progress bar.
         for renderer in slot.findall("Complication"):
             kind = renderer.get("type", "")
             if kind == "EMPTY":
                 continue
-            renderer_text = serialized(renderer)
-            if "presentationMode" not in renderer_text or 'thickness="1"' not in renderer_text:
-                fail(f"{name} slot {slot_id} {kind}: missing one-pixel Ultra Black wireframe")
+            for draw in renderer.findall("PartDraw"):
+                transform = draw.find("Transform[@target='alpha']")
+                if transform is None or '== "0" ? 255 : 0' not in transform.get("value", ""):
+                    fail(f"{name} slot {slot_id} {kind}: decoration visible in Ultra Black")
+            if kind in {"SHORT_TEXT", "RANGED_VALUE"}:
+                if "[COMPLICATION.TITLE]" not in serialized(renderer):
+                    fail(f"{name} slot {slot_id}: provider title missing")
+                if name == "neon" and slot_id in {4, 5}:
+                    expected_angle = "270" if slot_id == 4 else "90"
+                    if any(text.get("angle") != expected_angle for text in renderer.findall(".//PartText")):
+                        fail(f"{name} slot {slot_id}: sideways provider text missing")
 
         ranged = slot.find("Complication[@type='RANGED_VALUE']")
         if ranged is not None:

@@ -67,7 +67,12 @@ internal object ActivityHistoryModel {
 
     fun points(state: ActivityHistoryState, range: ActivityRange, nowSeconds: Long): List<ActivityPoint> {
         val source = if (range.seconds <= ActivityRange.D1.seconds) state.detail else state.hourly
-        val samples = source.filter { it.epochSeconds in (nowSeconds - range.seconds)..nowSeconds }
+        val start = nowSeconds - range.seconds
+        // Retain the predecessor: the first in-window observation needs a baseline.
+        val samples = source.filter { it.epochSeconds <= nowSeconds }.let { available ->
+            listOfNotNull(available.lastOrNull { it.epochSeconds < start }) +
+                available.filter { it.epochSeconds >= start }
+        }
         if (samples.size < 2) return emptyList()
         val gapLimit = if (range.seconds <= ActivityRange.D1.seconds) DETAIL_GAP_SECONDS else HOURLY_GAP_SECONDS
         return samples.zipWithNext { previous, current ->
@@ -230,3 +235,6 @@ class ActivityHistoryStore private constructor(context: Context) : ActivityHisto
             }
     }
 }
+
+internal fun activityTimeFraction(epochSeconds: Long, range: ActivityRange, endSeconds: Long): Float =
+    ((epochSeconds - (endSeconds - range.seconds)).toDouble() / range.seconds).coerceIn(0.0, 1.0).toFloat()

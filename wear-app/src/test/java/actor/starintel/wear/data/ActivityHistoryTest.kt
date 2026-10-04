@@ -28,6 +28,12 @@ class ActivityHistoryTest {
     @Test fun sameTimestampReplacesInsteadOfDuplicating() {
         assertEquals(listOf(15L), values(record(sample(NOW - 300, 10), sample(NOW, 20), sample(NOW, 25)), ActivityRange.H1))
     }
+    @Test fun firstInWindowObservationUsesPredecessorAsItsBaseline() {
+        val state = record(sample(NOW - 3_700, 100), sample(NOW - 3_500, 107), sample(NOW, 109))
+        val points = ActivityHistoryModel.points(state, ActivityRange.H1, NOW)
+        assertEquals(NOW - 3_500, points.first().epochSeconds)
+        assertEquals(7L, points.first().documentsAdded)
+    }
     @Test fun oneWeekRangeUsesBoundedHourlyAnchors() {
         var state = ActivityHistoryState()
         for (hour in 0..900) state = ActivityHistoryModel.record(state, sample(NOW - (900L - hour) * 3600L, hour.toLong()))
@@ -48,7 +54,7 @@ class ActivityHistoryTest {
         val state = record(
             sample(NOW - 300, 100), sample(NOW - 240, 101), sample(NOW - 180, 102), sample(NOW - 120, 103), sample(NOW - 60, 104), sample(NOW, 105),
         )
-        assertTrue(ActivityHistoryModel.autoRange(state, NOW) in listOf(ActivityRange.M5, ActivityRange.M15, ActivityRange.H1, ActivityRange.H6, ActivityRange.D1))
+        assertTrue(ActivityHistoryModel.autoRange(state, NOW) in listOf(ActivityRange.M1, ActivityRange.M5, ActivityRange.M15, ActivityRange.H1, ActivityRange.H6, ActivityRange.D1))
     }
     private fun values(state: ActivityHistoryState, range: ActivityRange) = ActivityHistoryModel.points(state, range, NOW).map { it.documentsAdded }
     private fun record(vararg samples: ActivitySample) = samples.fold(ActivityHistoryState()) { state, sample -> ActivityHistoryModel.record(state, sample) }

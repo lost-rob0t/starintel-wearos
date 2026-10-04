@@ -27,7 +27,7 @@ class HomeActivity : Activity() {
         root.addView(TextView(this).apply {
             text = "STARINTEL"
             textSize = 13f
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             letterSpacing = 0.14f
             setTextColor(CYAN)
         }, matchWrap())
@@ -35,7 +35,7 @@ class HomeActivity : Activity() {
         root.addView(TextView(this).apply {
             text = "Companion"
             textSize = 34f
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             setTextColor(Color.WHITE)
         }, matchWrap(top = 2))
 
@@ -89,7 +89,7 @@ class HomeActivity : Activity() {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 setColor(CARD)
-                cornerRadius = dp(16).toFloat()
+                cornerRadius = dp(6).toFloat()
                 setStroke(dp(1), STROKE)
             }
             isClickable = true
@@ -98,7 +98,7 @@ class HomeActivity : Activity() {
             addView(TextView(this@HomeActivity).apply {
                 text = title
                 textSize = 16f
-                typeface = Typeface.DEFAULT_BOLD
+                typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
                 setTextColor(Color.WHITE)
             }, matchWrap())
             addView(TextView(this@HomeActivity).apply {

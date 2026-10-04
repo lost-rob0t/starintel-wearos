@@ -3,7 +3,9 @@ package actor.starintel.wear.data
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
+import java.net.SocketTimeoutException
 
 class StarIntelSearchClientTest {
     @Test
@@ -113,5 +115,14 @@ class StarIntelSearchClientTest {
         assertEquals(listOf(50, 16, 8, 4), StarIntelSearchClient.retryLimits(50))
         assertEquals(listOf(12, 8, 4), StarIntelSearchClient.retryLimits(12))
         assertEquals(listOf(4), StarIntelSearchClient.retryLimits(4))
+    }
+
+    @Test
+    fun searchRetriesTimeoutAndServerFailureButNotAuthorizationOrBadQuery() {
+        assertTrue(StarIntelSearchClient.shouldRetrySearch(SocketTimeoutException()))
+        assertTrue(StarIntelSearchClient.shouldRetrySearch(IllegalStateException("HTTP 500")))
+        assertTrue(StarIntelSearchClient.shouldRetrySearch(IllegalStateException("Search response too large")))
+        assertFalse(StarIntelSearchClient.shouldRetrySearch(IllegalStateException("HTTP 401 unauthorized")))
+        assertFalse(StarIntelSearchClient.shouldRetrySearch(IllegalStateException("HTTP 400 invalid search")))
     }
 }

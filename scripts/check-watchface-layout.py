@@ -154,7 +154,7 @@ def check_renderer_content(face: str, slot: ET.Element, slot_id: int) -> None:
     slot_w = integer(slot, "width")
     slot_h = integer(slot, "height")
     for complication in slot.findall("Complication"):
-        for node in list(complication):
+        for node in complication.iter():
             if node.tag not in {"PartDraw", "PartText", "PartImage"}:
                 continue
             check_box_inside(
