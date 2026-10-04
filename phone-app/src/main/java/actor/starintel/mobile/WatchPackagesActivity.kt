@@ -432,7 +432,7 @@ class WatchPackagesActivity : Activity(), MessageClient.OnMessageReceivedListene
             addView(TextView(this@WatchPackagesActivity).apply {
                 text = labelFor(artifact.id)
                 textSize = 14f
-                typeface = Typeface.DEFAULT_BOLD
+                typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
                 setTextColor(Color.WHITE)
             })
             addView(state, matchWrap(top = 3))
@@ -481,7 +481,8 @@ class WatchPackagesActivity : Activity(), MessageClient.OnMessageReceivedListene
         setPadding(dp(14), dp(12), dp(14), dp(12)); background = rounded(CARD, dp(14), STROKE)
     }
     private fun actionButton(value: String, action: () -> Unit) = Button(this).apply {
-        text = value; setTextColor(Color.WHITE); backgroundTintList = android.content.res.ColorStateList.valueOf(CARD)
+        terminalStyle()
+        text = value
         setOnClickListener { action() }
     }
     private fun rounded(fill: Int, radius: Int, stroke: Int) = GradientDrawable().apply {

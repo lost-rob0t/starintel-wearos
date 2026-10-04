@@ -5,6 +5,7 @@ import actor.starintel.wear.data.ActivityPoint
 import actor.starintel.wear.data.ActivityRange
 import actor.starintel.wear.data.ActivitySeries
 import actor.starintel.wear.data.StarIntelRepository
+import actor.starintel.wear.data.activityTimeFraction
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -131,12 +132,14 @@ object ActivityGraphRenderer {
             return bitmap
         }
 
-        val allTimes = series.flatMap { it.points }.map { it.first }
-        val minTime = allTimes.minOrNull() ?: 0L
-        val maxTime = allTimes.maxOrNull()?.coerceAtLeast(minTime + 1L) ?: minTime + 1L
         val maxValue = values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
         val graphHeight = HEIGHT - PAD_TOP - PAD_BOTTOM
         val graphWidth = WIDTH - PAD_X * 2f
+        val endSeconds = if (preview) {
+            series.flatMap { it.points }.maxOf { it.first }
+        } else {
+            System.currentTimeMillis() / 1000L
+        }
 
         val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = if (ambient) Color.rgb(80, 80, 80) else Color.rgb(40, 55, 66)
@@ -161,7 +164,7 @@ object ActivityGraphRenderer {
                 if (value == null) {
                     open = false
                 } else {
-                    val x = PAD_X + graphWidth * (timestamp - minTime).toFloat() / (maxTime - minTime).toFloat()
+                    val x = PAD_X + graphWidth * activityTimeFraction(timestamp, range, endSeconds)
                     val y = PAD_TOP + graphHeight * (1f - (value.toFloat() / maxValue.toFloat()).coerceIn(0f, 1f))
                     if (open) path.lineTo(x, y) else path.moveTo(x, y)
                     open = true
@@ -170,7 +173,7 @@ object ActivityGraphRenderer {
             canvas.drawPath(path, line)
             valuesForSeries.points.forEach { (timestamp, value) ->
                 if (value != null) {
-                    val x = PAD_X + graphWidth * (timestamp - minTime).toFloat() / (maxTime - minTime).toFloat()
+                    val x = PAD_X + graphWidth * activityTimeFraction(timestamp, range, endSeconds)
                     val y = PAD_TOP + graphHeight * (1f - (value.toFloat() / maxValue.toFloat()).coerceIn(0f, 1f))
                     canvas.drawCircle(x, y, if (index == 0) 2f else 1.4f, line.apply { style = Paint.Style.FILL })
                     line.style = Paint.Style.STROKE

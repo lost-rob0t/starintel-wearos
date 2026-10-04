@@ -32,6 +32,7 @@ import kotlin.math.sin
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
@@ -44,6 +45,7 @@ class GraphActivity : StarIntelActivity() {
     private lateinit var open: Button
     private lateinit var center: Button
     private var selected: GraphNode? = null
+    private var loadJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -148,7 +150,8 @@ class GraphActivity : StarIntelActivity() {
         selected = null
         open.isEnabled = false
         center.isEnabled = false
-        scope.launch {
+        loadJob?.cancel()
+        loadJob = scope.launch {
             val neighborhood = loader.load(requested)
             render(neighborhood)
         }
@@ -164,16 +167,18 @@ class GraphActivity : StarIntelActivity() {
             else -> "${neighborhood.nodes.size} nodes · ${neighborhood.edges.size} directed relation${plural(neighborhood.edges.size)}"
         }
         status.setTextColor(if (neighborhood.error == null) palette.accent else palette.warning)
-        neighborhood.nodes.firstOrNull { it.id == neighborhood.rootId }?.let(::select)
+        neighborhood.nodes.firstOrNull { it.id == neighborhood.rootId }?.let { select(it, announce = false) }
     }
 
-    private fun select(node: GraphNode) {
+    private fun select(node: GraphNode, announce: Boolean = true) {
         selected = node
         graph.select(node.id)
         open.isEnabled = node.dtype != "unresolved"
         center.isEnabled = true
-        status.text = "${node.dtype} · ${node.label}"
-        status.setTextColor(palette.text)
+        if (announce) {
+            status.text = "${node.dtype} · ${node.label}"
+            status.setTextColor(palette.text)
+        }
     }
 
     private fun plural(count: Int): String = if (count == 1) "" else "s"

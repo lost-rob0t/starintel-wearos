@@ -165,11 +165,14 @@ jobs:
           ./gradlew :specification:validator:executable-jar
       - name: Validate all WFF v1 faces
         run: |
+          set -euo pipefail
           validator=/tmp/google-watchface/third_party/wff/specification/validator/build/libs/wff-validator.jar
           for face in \
             watchface/src/neon/res/raw/watchface.xml \
             watchface/src/command/res/raw/watchface.xml \
             watchface/src/terminal/res/raw/watchface.xml; do
             echo "validating $face"
-            java -jar "$validator" 1 "$face"
+            output="$(java -jar "$validator" 1 "$face" 2>&1)"
+            printf '%s\n' "$output"
+            ! grep -q 'FAILED' <<<"$output"
           done

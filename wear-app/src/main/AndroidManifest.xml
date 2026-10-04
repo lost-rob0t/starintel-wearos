@@ -82,6 +82,7 @@
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
         <activity android:name=".DocumentViewerActivity" android:exported="false" />
+        <activity android:name=".RadarActivity" android:exported="false" />
         <activity android:name=".ConfigActivity" android:exported="false" />
         <activity android:name=".packages.PackageInstallActivity" android:exported="false" android:launchMode="singleTask" />
 

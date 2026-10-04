@@ -15,7 +15,9 @@
     "video",
     "audio",
     "transcript",
+    "person-identifier",
     "geo-point",
+    "location",
     "wireless-network",
     "wireless-station",
     "relation"

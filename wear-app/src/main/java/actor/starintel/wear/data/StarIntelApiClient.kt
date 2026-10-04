@@ -140,6 +140,16 @@ class StarIntelApiClient private constructor(context: Context) {
         }
     }
 
+    suspend fun recentDocuments(): RecentDocuments = withContext(Dispatchers.IO) {
+        try {
+            parseRecentDocuments(request("GET", "/api/v1/documents/search?feed=recent&limit=24").body)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            RecentDocuments(error = safeError(failure))
+        }
+    }
+
     private fun request(method: String, path: String, body: JSONObject? = null): HttpResponse {
         val baseUrl = repository.baseUrl()
         val apiKey = apiKeyStore.read()

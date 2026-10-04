@@ -3,7 +3,9 @@ package actor.starintel.wear.ui
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -60,7 +62,7 @@ class StarIntelThemeStore(context: Context) {
             StarIntelThemeId.CYAN -> StarIntelPalette(
                 id,
                 background = Color.BLACK,
-                surface = Color.rgb(11, 16, 21),
+                surface = Color.rgb(10, 15, 19),
                 accent = Color.rgb(0, 229, 255),
             )
             StarIntelThemeId.PURPLE -> StarIntelPalette(
@@ -86,15 +88,27 @@ class StarIntelThemeStore(context: Context) {
 }
 
 fun Button.applyStarIntelTheme(palette: StarIntelPalette) {
+    val density = resources.displayMetrics.density
     backgroundTintList = null
-    background = GradientDrawable().apply {
-        shape = GradientDrawable.RECTANGLE
-        setColor(palette.surface)
-        cornerRadius = 18f * resources.displayMetrics.density
-        setStroke((1.25f * resources.displayMetrics.density).toInt().coerceAtLeast(1), palette.accent)
-    }
-    setTextColor(palette.text)
-    minHeight = (44f * resources.displayMetrics.density).toInt()
+    background = RippleDrawable(
+        ColorStateList.valueOf(palette.accent and 0x40FFFFFF),
+        GradientDrawable().apply {
+            setColor(palette.surface)
+            cornerRadius = 6 * density
+            setStroke(density.toInt().coerceAtLeast(1), palette.accent)
+        },
+        null,
+    )
+    setTextColor(
+        ColorStateList(
+            arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
+            intArrayOf(palette.muted, palette.accent),
+        ),
+    )
+    typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+    textSize = 12f
+    minHeight = (48 * density).toInt()
+    setPadding((10 * density).toInt(), (8 * density).toInt(), (10 * density).toInt(), (8 * density).toInt())
     isAllCaps = true
 }
 

@@ -10,8 +10,8 @@ android {
         applicationId = "actor.starintel.wear"
         minSdk = 30
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.3.0-alpha"
+        versionCode = 5
+        versionName = "0.4.0-alpha"
     }
 
     signingConfigs {
@@ -33,6 +33,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions { unitTests.isIncludeAndroidResources = true }
+
     buildFeatures {
         buildConfig = true
     }
@@ -48,5 +50,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("org.json:json:20240303")
 }
