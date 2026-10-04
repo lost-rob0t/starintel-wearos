@@ -202,9 +202,16 @@ jobs:
           java-version: '17'
       - uses: actions/download-artifact@v4
         with:
-          pattern: '*debug'
+          name: starintel-phone-app-debug
           path: apks
-          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: quasar-android-debug
+          path: apks
+      - uses: actions/download-artifact@v4
+        with:
+          name: starintel-operator-debug
+          path: apks
       - uses: actions/download-artifact@v4
         with:
           name: native-journey-tests
@@ -229,3 +236,4 @@ jobs:
           name: native-journey-evidence
           path: build/native-journeys
           if-no-files-found: error
+          overwrite: true
