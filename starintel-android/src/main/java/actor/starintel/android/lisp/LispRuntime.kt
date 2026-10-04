@@ -1,5 +1,6 @@
 package actor.starintel.android.lisp
 
+import actor.starintel.edge.StarIntelEdgeRuntime
 import java.io.Closeable
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicBoolean
@@ -39,8 +40,7 @@ class EclLispRuntime internal constructor(
     private val imagePath: String,
     private val bridge: NativeLispBridge,
 ) : LispRuntime {
-    constructor(imagePath: String, nativeLibrary: String = "starintel_lisp") :
-        this(imagePath, JniNativeLispBridge(nativeLibrary))
+    constructor(imagePath: String) : this(imagePath, EdgeNativeLispBridge)
 
     private val closed = AtomicBoolean(false)
     private val started = runCatching { bridge.start(imagePath) }
@@ -66,14 +66,26 @@ class EclLispRuntime internal constructor(
         check(!closed.get()) { "Lisp runtime is closed" }
         check(status.available) { status.detail }
         require(operation in EXPOSED_OPERATIONS) { "Lisp operation is not exposed by the mobile control plane" }
-        val request = JSONObject().put("operation", operation).put("arguments", arguments).toString()
+        val request = JSONObject()
+            .put("op", operation)
+            .put("payload", arguments.toString())
+            .toString()
         require(request.utf8Size() <= MAX_REQUEST_BYTES) { "Lisp request exceeds 1 MiB" }
         val response = bridge.request(request)
         require(response.utf8Size() <= MAX_RESPONSE_BYTES) { "Lisp response exceeds 2 MiB" }
         val root = runCatching { JSONObject(response) }
             .getOrElse { throw LispRuntimeException("invalid-response", "Embedded Lisp returned malformed JSON") }
-        if (!root.optBoolean("ok", false)) throw projectedError(root.opt("error"))
-        return root.optJSONObject("result") ?: JSONObject()
+        if (root.has("ok")) {
+            if (!root.optBoolean("ok", false)) throw projectedError(root.opt("error"))
+            return root.optJSONObject("result") ?: JSONObject()
+        }
+        if (root.optString("status") == "error") {
+            throw LispRuntimeException(
+                root.optString("reason", "runtime-error"),
+                root.optString("reason", "Embedded runtime request failed"),
+            )
+        }
+        return root
     }
 
     @Synchronized
@@ -101,33 +113,31 @@ class EclLispRuntime internal constructor(
         /** No eval, load, arbitrary symbol invocation, environment, or filesystem operation. */
         val EXPOSED_OPERATIONS: Set<String> = setOf(
             "runtime.ping",
-            "runtime.reload-init",
-            "tek9.open",
-            "tek9.close",
-            "tek9.document",
-            "tek9.search",
-            "tek9.transaction",
-            "actor.dispatch",
+            "actor.roundtrip",
+            "status",
+            "start",
+            "suspend",
+            "resume",
+            "stop",
+            "dispatch",
         )
     }
 }
 
-private class JniNativeLispBridge(nativeLibrary: String) : NativeLispBridge {
-    private val loaded = runCatching { System.loadLibrary(nativeLibrary) }
-
+private object EdgeNativeLispBridge : NativeLispBridge {
     override fun start(runtimePath: String): NativeStartResult {
-        if (loaded.isFailure) return NativeStartResult(false, "Native ECL bridge is not packaged for this ABI")
-        val detail = nativeStart(runtimePath).take(400)
-        return NativeStartResult(
-            available = detail == "ready",
-            detail = if (detail == "ready") "Embedded Common Lisp runtime ready" else detail,
-        )
+        return runCatching {
+            check(StarIntelEdgeRuntime.abiVersion() == 1) { "Unsupported StarIntel Edge adapter ABI" }
+            val failure = StarIntelEdgeRuntime.start(runtimePath)
+            NativeStartResult(
+                available = failure == null,
+                detail = failure?.take(400) ?: "StarIntel Edge ECL/Sento runtime ready",
+            )
+        }.getOrElse { failure ->
+            NativeStartResult(false, failure.message?.take(400) ?: "StarIntel Edge runtime unavailable")
+        }
     }
 
-    override fun request(request: String): String = nativeRequest(request)
-    override fun stop() = nativeStop()
-
-    private external fun nativeStart(runtimePath: String): String
-    private external fun nativeRequest(request: String): String
-    private external fun nativeStop()
+    override fun request(request: String): String = StarIntelEdgeRuntime.request(request)
+    override fun stop() = StarIntelEdgeRuntime.stop()
 }

@@ -65,7 +65,7 @@ public final class CollectorMissionActivity extends Activity {
         mission.addView(status);
         mission.addView(si.display("Start Mission"), si.match(SiTokens.SPACE_XS));
         mission.addView(si.body(
-                "One visible session captures wireless, location, audio, and photo evidence, then pins it as StarIntel documents."), si.match(SiTokens.SPACE_S));
+                "One visible session captures Wi-Fi, Bluetooth, location, audio, pictures, and video, then queues canonical StarIntel documents."), si.match(SiTokens.SPACE_S));
         networkView = new MissionNetworkView(this, si.palette());
         mission.addView(networkView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, si.dp(176)));
@@ -156,6 +156,8 @@ public final class CollectorMissionActivity extends Activity {
                 () -> openTools(MainActivity.ACTION_AUDIO)), si.weight());
         quick.addView(quickAction("Photo", "Capture an analyzed frame", si.warn(),
                 () -> openTools(MainActivity.ACTION_PHOTO)), si.weight(SiTokens.SPACE_S));
+        quick.addView(quickAction("Video", "Record video for downstream actors", si.accent(),
+                () -> openTools(MainActivity.ACTION_VIDEO)), si.weight(SiTokens.SPACE_S));
         quick.addView(quickAction("WiGLE", "Import a WiGLE database", si.ok(),
                 () -> openTools(MainActivity.ACTION_WIGLE)), si.weight(SiTokens.SPACE_S));
         column.addView(quick, si.match(SiTokens.SPACE_S));
@@ -263,6 +265,8 @@ public final class CollectorMissionActivity extends Activity {
     private boolean hasMissionPermissions() {
         return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
                 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                && (Build.VERSION.SDK_INT < 31
+                    || checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED)
                 && (Build.VERSION.SDK_INT < 33
                     || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED);
     }
@@ -273,7 +277,18 @@ public final class CollectorMissionActivity extends Activity {
                     Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION,
                     Manifest.permission.RECORD_AUDIO,
+                    Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.BLUETOOTH_CONNECT,
                     Manifest.permission.POST_NOTIFICATIONS
+            };
+        }
+        if (Build.VERSION.SDK_INT >= 31) {
+            return new String[] {
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.RECORD_AUDIO,
+                    Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.BLUETOOTH_CONNECT
             };
         }
         return new String[] {

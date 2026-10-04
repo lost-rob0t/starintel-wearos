@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <files-path name="photo-captures" path="photo-captures/" />
+    <files-path name="video-captures" path="video-captures/" />
 </paths>

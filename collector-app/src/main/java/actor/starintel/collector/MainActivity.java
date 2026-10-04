@@ -10,6 +10,7 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.media.MediaMetadataRetriever;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -24,7 +25,6 @@ import android.widget.Toast;
 import androidx.core.content.FileProvider;
 import java.io.File;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Capture tools: grouped, single-purpose sections behind the Mission screen.
@@ -37,12 +37,14 @@ public final class MainActivity extends Activity {
     static final String EXTRA_ACTION = "actor.starintel.collector.extra.ACTION";
     static final String ACTION_AUDIO = "audio";
     static final String ACTION_PHOTO = "photo";
+    static final String ACTION_VIDEO = "video";
     static final String ACTION_WIGLE = "wigle";
 
     private static final int REQUEST_PERMISSIONS = 7;
     private static final int REQUEST_WIGLE_DB = 9;
     private static final int REQUEST_AUDIO_PERMISSIONS = 11;
     private static final int REQUEST_CAPTURE_IMAGE = 13;
+    private static final int REQUEST_CAPTURE_VIDEO = 15;
 
     private Si si;
     private LinearLayout pipelineSection;
@@ -52,7 +54,8 @@ public final class MainActivity extends Activity {
     private TextView asrStatus;
     private TranscriptionManager transcription;
     private StarIntelSharedConfig sharedConfig;
-    private final AtomicReference<File> pendingPhoto = new AtomicReference<>();
+    private PendingCapture pendingPhoto;
+    private PendingCapture pendingVideo;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -101,6 +104,9 @@ public final class MainActivity extends Activity {
         } else if (ACTION_PHOTO.equals(action)) {
             target = pipelineSection;
             startCapturePhoto();
+        } else if (ACTION_VIDEO.equals(action)) {
+            target = pipelineSection;
+            startCaptureVideo();
         } else if (ACTION_WIGLE.equals(action)) {
             target = importSection;
             chooseWigleDatabase();
@@ -120,6 +126,13 @@ public final class MainActivity extends Activity {
 
         asrStatus = si.statusPill(asrState(), "", si.accent());
         card.addView(asrStatus, si.match(SiTokens.SPACE_M));
+
+        card.addView(row("Record audio", this::startAudioCapture,
+                "Start segmented microphone capture in the visible mission service"), si.match(SiTokens.SPACE_M));
+        card.addView(row("Capture picture", this::startCapturePhoto,
+                "Capture a geotagged image and queue its canonical document"), si.match(SiTokens.SPACE_S));
+        card.addView(row("Record video", this::startCaptureVideo,
+                "Record a geotagged video and queue downstream extraction metadata"), si.match(SiTokens.SPACE_S));
 
         if (!transcription.deviceModelReady()) {
             Button model = si.primaryButton("Download voice model · 57 MB", this::downloadModel);
@@ -429,7 +442,8 @@ public final class MainActivity extends Activity {
             Toast.makeText(this, "Could not create photo directory", Toast.LENGTH_SHORT).show();
             return;
         }
-        pendingPhoto.set(raw);
+        pendingPhoto = new PendingCapture(raw, System.currentTimeMillis(),
+                LocationSnapshot.bestEffort(this));
         Uri uri = FileProvider.getUriForFile(this, "actor.starintel.collector.files", raw);
         Intent intent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
         intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri);
@@ -439,6 +453,33 @@ public final class MainActivity extends Activity {
             return;
         }
         startActivityForResult(intent, REQUEST_CAPTURE_IMAGE);
+    }
+
+    void startCaptureVideo() {
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[] {Manifest.permission.CAMERA}, REQUEST_CAPTURE_VIDEO);
+            return;
+        }
+        File directory = new File(getFilesDir(), "video-captures");
+        File video = new File(directory, "video-" + System.currentTimeMillis() + ".mp4");
+        if (!directory.isDirectory() && !directory.mkdirs()) {
+            Toast.makeText(this, "Could not create video directory", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        pendingVideo = new PendingCapture(video, System.currentTimeMillis(),
+                LocationSnapshot.bestEffort(this));
+        Uri uri = FileProvider.getUriForFile(this, "actor.starintel.collector.files", video);
+        Intent intent = new Intent(android.provider.MediaStore.ACTION_VIDEO_CAPTURE)
+                .putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
+                .putExtra(android.provider.MediaStore.EXTRA_DURATION_LIMIT, 10 * 60)
+                .putExtra(android.provider.MediaStore.EXTRA_VIDEO_QUALITY, 1)
+                .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        if (intent.resolveActivity(getPackageManager()) == null) {
+            pendingVideo = null;
+            Toast.makeText(this, "No video camera app available", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        startActivityForResult(intent, REQUEST_CAPTURE_VIDEO);
     }
 
     void startAudioCapture() {
@@ -458,13 +499,25 @@ public final class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_CAPTURE_IMAGE) {
-            File raw = pendingPhoto.getAndSet(null);
-            if (resultCode != RESULT_OK || raw == null || !raw.isFile()) {
-                if (raw != null) //noinspection ResultOfMethodCallIgnored
-                    raw.delete();
+            PendingCapture capture = pendingPhoto;
+            pendingPhoto = null;
+            if (resultCode != RESULT_OK || capture == null || !capture.file.isFile()) {
+                if (capture != null) //noinspection ResultOfMethodCallIgnored
+                    capture.file.delete();
                 return;
             }
-            ingestPhoto(raw);
+            ingestPhoto(capture);
+            return;
+        }
+        if (requestCode == REQUEST_CAPTURE_VIDEO) {
+            PendingCapture capture = pendingVideo;
+            pendingVideo = null;
+            if (resultCode != RESULT_OK || capture == null || !capture.file.isFile()) {
+                if (capture != null) //noinspection ResultOfMethodCallIgnored
+                    capture.file.delete();
+                return;
+            }
+            ingestVideo(capture);
             return;
         }
         if (requestCode != REQUEST_WIGLE_DB || resultCode != RESULT_OK || data == null) return;
@@ -487,10 +540,11 @@ public final class MainActivity extends Activity {
         }, "star-wireless-wigle-import").start();
     }
 
-    private void ingestPhoto(File raw) {
+    private void ingestPhoto(PendingCapture capture) {
         setPipelineStatus("PHOTO · ANALYZING");
         transcription.submit(() -> {
             try {
+                File raw = capture.file;
                 File normalized = new File(
                         new File(getFilesDir(), "photo-captures"),
                         raw.getName().replace("-raw.jpg", ".jpg"));
@@ -499,16 +553,28 @@ public final class MainActivity extends Activity {
                 raw.delete();
                 StarWirelessStore store = new StarWirelessStore(getApplicationContext());
                 try {
+                    String eventKey = "photo-" + normalized.getName();
                     store.insertCapture(
-                            "photo-" + normalized.getName(),
+                            eventKey,
                             "image",
                             normalized.getAbsolutePath(),
                             "image/jpeg",
                             normalized.length(),
-                            AudioSegmentRecorder.sha256Hex(java.nio.file.Files.readAllBytes(normalized.toPath())),
-                            System.currentTimeMillis(),
+                            AudioSegmentRecorder.sha256Hex(normalized),
+                            capture.startedAtMs,
                             0L,
-                            "captured");
+                            "captured",
+                            stats.width,
+                            stats.height,
+                            1,
+                            capture.location.latitude,
+                            capture.location.longitude,
+                            capture.location.altitude,
+                            capture.location.accuracy,
+                            "jpeg",
+                            currentRunId());
+                    StarWirelessStore.CaptureRow row = store.captureByEventKey(eventKey);
+                    if (row != null) DocumentProjection.projectMediaCapture(store, row);
                 } finally {
                     store.close();
                 }
@@ -522,12 +588,58 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private void ingestVideo(PendingCapture capture) {
+        setPipelineStatus("VIDEO · INDEXING");
+        transcription.submit(() -> {
+            MediaMetadataRetriever metadata = new MediaMetadataRetriever();
+            try {
+                metadata.setDataSource(capture.file.getAbsolutePath());
+                long duration = parseLong(metadata.extractMetadata(
+                        MediaMetadataRetriever.METADATA_KEY_DURATION));
+                int width = parseInt(metadata.extractMetadata(
+                        MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH));
+                int height = parseInt(metadata.extractMetadata(
+                        MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT));
+                int orientation = parseInt(metadata.extractMetadata(
+                        MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION));
+                String mediaType = metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE);
+                if (mediaType == null || !mediaType.startsWith("video/")) mediaType = "video/mp4";
+                String eventKey = "video-" + capture.file.getName();
+                StarWirelessStore store = new StarWirelessStore(getApplicationContext());
+                try {
+                    store.insertCapture(
+                            eventKey, "video", capture.file.getAbsolutePath(), mediaType,
+                            capture.file.length(), AudioSegmentRecorder.sha256Hex(capture.file),
+                            capture.startedAtMs, duration, "captured", width, height, orientation,
+                            capture.location.latitude, capture.location.longitude,
+                            capture.location.altitude, capture.location.accuracy, "", currentRunId());
+                    StarWirelessStore.CaptureRow row = store.captureByEventKey(eventKey);
+                    if (row != null) DocumentProjection.projectMediaCapture(store, row);
+                } finally {
+                    store.close();
+                }
+                String status = String.format(java.util.Locale.US,
+                        "VIDEO · %dx%d · %.1f s · READY FOR ACTORS",
+                        width, height, duration / 1000.0d);
+                runOnUiThread(() -> setPipelineStatus(status));
+            } catch (Exception failure) {
+                runOnUiThread(() -> setPipelineStatus("VIDEO FAILED · " + safe(failure.getMessage())));
+            } finally {
+                try {
+                    metadata.release();
+                } catch (java.io.IOException ignored) {
+                }
+            }
+        });
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (grantResults.length == 0 || grantResults[0] != PackageManager.PERMISSION_GRANTED) return;
         if (requestCode == REQUEST_AUDIO_PERMISSIONS) startAudioCapture();
         if (requestCode == REQUEST_CAPTURE_IMAGE) startCapturePhoto();
+        if (requestCode == REQUEST_CAPTURE_VIDEO) startCaptureVideo();
     }
 
     @Override
@@ -541,5 +653,38 @@ public final class MainActivity extends Activity {
         if (value == null || value.trim().isEmpty()) return "unknown error";
         String trimmed = value.trim();
         return trimmed.length() <= 160 ? trimmed : trimmed.substring(0, 160);
+    }
+
+    private String currentRunId() {
+        return getSharedPreferences(CollectorService.PREFS, MODE_PRIVATE)
+                .getString(CollectorService.KEY_RUN_ID, "");
+    }
+
+    private static int parseInt(String value) {
+        try {
+            return value == null ? 0 : Integer.parseInt(value);
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+    }
+
+    private static long parseLong(String value) {
+        try {
+            return value == null ? 0L : Long.parseLong(value);
+        } catch (NumberFormatException ignored) {
+            return 0L;
+        }
+    }
+
+    private static final class PendingCapture {
+        final File file;
+        final long startedAtMs;
+        final LocationSnapshot location;
+
+        PendingCapture(File file, long startedAtMs, LocationSnapshot location) {
+            this.file = file;
+            this.startedAtMs = startedAtMs;
+            this.location = location;
+        }
     }
 }

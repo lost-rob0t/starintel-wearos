@@ -5,24 +5,9 @@ plugins {
 android {
     namespace = "actor.starintel.android"
     compileSdk = 36
-    ndkVersion = "28.2.13676358"
-
     defaultConfig {
         minSdk = 26
-        externalNativeBuild {
-            cmake {
-                arguments += listOf(
-                    "-DSTARINTEL_ECL_ADAPTER_ROOT=${providers.gradleProperty("starintel.ecl.adapterRoot").orNull.orEmpty()}",
-                )
-            }
-        }
-    }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -31,7 +16,19 @@ android {
     }
 }
 
+val edgeRuntimeRoot = providers.gradleProperty("starintel.edge.runtimeRoot").orNull
+if (!edgeRuntimeRoot.isNullOrBlank()) {
+    androidComponents.onVariants { variant ->
+        variant.sources.kotlin?.addStaticSourceDirectory("$edgeRuntimeRoot/kotlin")
+        variant.sources.jniLibs?.addStaticSourceDirectory("$edgeRuntimeRoot/jni")
+        variant.sources.assets?.addStaticSourceDirectory("$edgeRuntimeRoot/assets")
+    }
+}
+
 dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    androidTestImplementation("androidx.test:core:1.6.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("junit:junit:4.13.2")
 }

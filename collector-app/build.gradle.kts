@@ -12,9 +12,12 @@ android {
         targetSdk = 36
         versionCode = 4
         versionName = "0.3.0-alpha"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += listOf(
+                providers.gradleProperty("starintel.android.abi").orElse("arm64-v8a").get(),
+            )
         }
     }
 
@@ -52,4 +55,7 @@ dependencies {
     implementation("org.opencv:opencv:4.11.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    androidTestImplementation("androidx.test:core:1.6.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("junit:junit:4.13.2")
 }

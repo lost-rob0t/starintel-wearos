@@ -4,6 +4,7 @@ import actor.starintel.android.api.StarHttpFailure;
 import actor.starintel.android.api.StarIntelClient;
 import actor.starintel.android.model.Endpoint;
 import actor.starintel.android.model.StarSession;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import org.json.JSONArray;
@@ -38,28 +39,25 @@ public final class StarDocumentSync {
         int retried = 0;
         int dead = 0;
         while (true) {
+            DocumentProjection.refillWirelessQueue(
+                    store, DocumentProjection.WIRELESS_QUEUE_HIGH_WATER);
             List<StarWirelessStore.QueuedDocument> batch = store.queuedDocuments(BULK_LIMIT);
             if (batch.isEmpty()) break;
-            JSONArray documents = new JSONArray();
-            for (StarWirelessStore.QueuedDocument document : batch) {
-                try {
-                    documents.put(new JSONObject(document.docJson));
-                } catch (JSONException malformed) {
-                    store.markDocument(document.docKey, "dead", "queued json malformed", false);
-                    dead++;
-                }
+            ParsedBatch parsed = parseBatch(batch);
+            for (StarWirelessStore.QueuedDocument malformed : parsed.malformed) {
+                store.markDocument(malformed.docKey, "dead", "queued json malformed", false);
+                dead++;
             }
-            if (documents.length() == 0) break;
+            if (parsed.valid.isEmpty()) continue;
 
             try {
-                client.bulkCreate(documents);
-                for (StarWirelessStore.QueuedDocument document : batch) {
+                client.bulkCreate(parsed.documents);
+                for (StarWirelessStore.QueuedDocument document : parsed.valid) {
                     store.markDocument(document.docKey, "accepted", "", false);
                     accepted++;
                 }
-                if (documents.length() < BULK_LIMIT) break;
             } catch (StarHttpFailure failure) {
-                for (StarWirelessStore.QueuedDocument document : batch) {
+                for (StarWirelessStore.QueuedDocument document : parsed.valid) {
                     if (failure.getStatus() == 409) {
                         store.markDocument(document.docKey, "accepted", "already present", false);
                         accepted++;
@@ -75,7 +73,7 @@ public final class StarDocumentSync {
             } catch (RuntimeException failure) {
                 String message = failure.getMessage() == null
                         ? failure.getClass().getSimpleName() : failure.getMessage();
-                for (StarWirelessStore.QueuedDocument document : batch) {
+                for (StarWirelessStore.QueuedDocument document : parsed.valid) {
                     store.markDocument(document.docKey, "retry", message, true);
                     retried++;
                 }
@@ -83,6 +81,36 @@ public final class StarDocumentSync {
             }
         }
         return String.format(Locale.US, "Sync · accepted %d · retry %d · dead %d", accepted, retried, dead);
+    }
+
+    static ParsedBatch parseBatch(List<StarWirelessStore.QueuedDocument> batch) {
+        JSONArray documents = new JSONArray();
+        List<StarWirelessStore.QueuedDocument> valid = new ArrayList<>();
+        List<StarWirelessStore.QueuedDocument> malformed = new ArrayList<>();
+        for (StarWirelessStore.QueuedDocument document : batch) {
+            try {
+                documents.put(new JSONObject(document.docJson));
+                valid.add(document);
+            } catch (JSONException ignored) {
+                malformed.add(document);
+            }
+        }
+        return new ParsedBatch(documents, valid, malformed);
+    }
+
+    static final class ParsedBatch {
+        final JSONArray documents;
+        final List<StarWirelessStore.QueuedDocument> valid;
+        final List<StarWirelessStore.QueuedDocument> malformed;
+
+        ParsedBatch(
+                JSONArray documents,
+                List<StarWirelessStore.QueuedDocument> valid,
+                List<StarWirelessStore.QueuedDocument> malformed) {
+            this.documents = documents;
+            this.valid = valid;
+            this.malformed = malformed;
+        }
     }
 
     static boolean advertises(List<Endpoint> endpoints, String id) {

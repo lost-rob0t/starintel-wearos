@@ -1,6 +1,12 @@
 package actor.starintel.collector;
 
 import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothManager;
+import android.bluetooth.le.BluetoothLeScanner;
+import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanRecord;
+import android.bluetooth.le.ScanSettings;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -17,8 +23,8 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.json.JSONArray;
 
 final class StarWirelessScanner {
     private static final long SCAN_INTERVAL_MS = 10_000L;
@@ -29,17 +35,23 @@ final class StarWirelessScanner {
     private final StarWirelessStore store;
     private final WifiManager wifi;
     private final LocationManager locations;
+    private final BluetoothLeScanner bluetooth;
+    private final String runId;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     private HandlerThread workerThread;
     private Handler worker;
     private volatile Location lastLocation;
 
-    StarWirelessScanner(Context context, StarWirelessStore store) {
+    StarWirelessScanner(Context context, StarWirelessStore store, String runId) {
         this.context = context.getApplicationContext();
         this.store = store;
         this.wifi = this.context.getSystemService(WifiManager.class);
         this.locations = this.context.getSystemService(LocationManager.class);
+        BluetoothManager bluetoothManager = this.context.getSystemService(BluetoothManager.class);
+        BluetoothAdapter adapter = bluetoothManager == null ? null : bluetoothManager.getAdapter();
+        this.bluetooth = adapter == null ? null : adapter.getBluetoothLeScanner();
+        this.runId = runId == null ? "" : runId;
     }
 
     void start() {
@@ -50,6 +62,7 @@ final class StarWirelessScanner {
 
         registerScanReceiver();
         startLocationUpdates();
+        startBluetoothScan();
         worker.post(scanLoop);
     }
 
@@ -65,6 +78,7 @@ final class StarWirelessScanner {
             } catch (SecurityException ignored) {
             }
         }
+        stopBluetoothScan();
         if (worker != null) worker.removeCallbacksAndMessages(null);
         if (workerThread != null) workerThread.quitSafely();
     }
@@ -100,29 +114,105 @@ final class StarWirelessScanner {
                     long wallNow = System.currentTimeMillis();
                     for (ScanResult result : results) {
                         if (result == null || result.BSSID == null || result.BSSID.trim().isEmpty()) continue;
-                        long observedAt = scanObservedAt(result, wallNow);
-                        String eventKey =
-                                "live:"
-                                        + observedAt
-                                        + ":"
-                                        + result.BSSID.toLowerCase(Locale.ROOT)
-                                        + ":"
-                                        + result.frequency
-                                        + ":"
-                                        + result.level;
-                        store.recordLiveObservation(
-                                eventKey,
+                        WirelessObservation observation = WirelessObservation.wifi(
                                 result.BSSID,
                                 result.SSID,
                                 result.frequency,
                                 result.capabilities,
                                 result.level,
+                                result.timestamp,
+                                android.os.SystemClock.elapsedRealtimeNanos(),
+                                wallNow);
+                        store.recordLiveObservation(
+                                observation.eventKey,
+                                observation.address,
+                                observation.label,
+                                observation.frequencyMhz,
+                                observation.capabilities,
+                                observation.signalDbm,
                                 snapshot == null ? null : snapshot.getLatitude(),
                                 snapshot == null ? null : snapshot.getLongitude(),
                                 snapshot == null || !snapshot.hasAltitude() ? null : snapshot.getAltitude(),
                                 snapshot == null || !snapshot.hasAccuracy() ? null : snapshot.getAccuracy(),
-                                observedAt);
+                                observation.observedAtMs);
+                        String dataset = DocumentProjection.datasetForCapture(observation.observedAtMs);
+                        DocumentProjection.projectWifiObservation(
+                                store,
+                                dataset,
+                                observation.eventKey,
+                                observation.address,
+                                observation.label,
+                                observation.frequencyMhz,
+                                observation.capabilities,
+                                observation.signalDbm,
+                                snapshot == null ? null : snapshot.getLatitude(),
+                                snapshot == null ? null : snapshot.getLongitude(),
+                                snapshot == null || !snapshot.hasAltitude() ? null : snapshot.getAltitude(),
+                                snapshot == null || !snapshot.hasAccuracy() ? null : snapshot.getAccuracy(),
+                                observation.observedAtMs,
+                                runId);
+                        store.markObservationProjected(observation.eventKey);
                     }
+                }
+            };
+
+    private final ScanCallback bluetoothCallback =
+            new ScanCallback() {
+                @Override
+                public void onScanResult(int callbackType, android.bluetooth.le.ScanResult result) {
+                    if (!running.get() || result == null || result.getDevice() == null) return;
+                    String address;
+                    try {
+                        address = result.getDevice().getAddress();
+                    } catch (SecurityException denied) {
+                        return;
+                    }
+                    if (address == null || address.trim().isEmpty()) return;
+                    ScanRecord record = result.getScanRecord();
+                    String name = record == null ? "" : record.getDeviceName();
+                    Integer txPower = record == null || record.getTxPowerLevel() == Integer.MIN_VALUE
+                            ? null : record.getTxPowerLevel();
+                    JSONArray serviceUuids = new JSONArray();
+                    if (record != null && record.getServiceUuids() != null) {
+                        for (android.os.ParcelUuid uuid : record.getServiceUuids()) {
+                            if (uuid != null) serviceUuids.put(uuid.toString());
+                        }
+                    }
+                    WirelessObservation observation = WirelessObservation.bluetooth(
+                            address,
+                            name,
+                            result.getRssi(),
+                            result.getTimestampNanos(),
+                            android.os.SystemClock.elapsedRealtimeNanos(),
+                            System.currentTimeMillis());
+                    Location snapshot = lastLocation;
+                    store.recordBluetoothObservation(
+                            observation.eventKey,
+                            observation.address,
+                            observation.label,
+                            serviceUuids.toString(),
+                            observation.signalDbm,
+                            snapshot == null ? null : snapshot.getLatitude(),
+                            snapshot == null ? null : snapshot.getLongitude(),
+                            snapshot == null || !snapshot.hasAltitude() ? null : snapshot.getAltitude(),
+                            snapshot == null || !snapshot.hasAccuracy() ? null : snapshot.getAccuracy(),
+                            observation.observedAtMs);
+                    DocumentProjection.projectBluetoothObservation(
+                            store,
+                            DocumentProjection.datasetForCapture(observation.observedAtMs),
+                            observation.eventKey,
+                            observation.address,
+                            observation.label,
+                            observation.signalDbm,
+                            txPower,
+                            serviceUuids,
+                            snapshot == null ? null : snapshot.getLatitude(),
+                            snapshot == null ? null : snapshot.getLongitude(),
+                            snapshot == null || !snapshot.hasAltitude() ? null : snapshot.getAltitude(),
+                            snapshot == null || !snapshot.hasAccuracy() ? null : snapshot.getAccuracy(),
+                            observation.observedAtMs,
+                            runId);
+                    store.markObservationProjected(observation.eventKey);
                 }
             };
 
@@ -178,6 +268,35 @@ final class StarWirelessScanner {
         }
     }
 
+    private void startBluetoothScan() {
+        if (bluetooth == null || !hasBluetoothPermission()) return;
+        try {
+            bluetooth.startScan(
+                    null,
+                    new ScanSettings.Builder()
+                            .setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
+                            .setReportDelay(0L)
+                            .build(),
+                    bluetoothCallback);
+        } catch (SecurityException | IllegalStateException ignored) {
+        }
+    }
+
+    private void stopBluetoothScan() {
+        if (bluetooth == null || !hasBluetoothPermission()) return;
+        try {
+            bluetooth.stopScan(bluetoothCallback);
+        } catch (SecurityException | IllegalStateException ignored) {
+        }
+    }
+
+    private boolean hasBluetoothPermission() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+                ? hasFineLocation()
+                : context.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)
+                        == PackageManager.PERMISSION_GRANTED;
+    }
+
     private boolean hasFineLocation() {
         return context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
@@ -189,13 +308,4 @@ final class StarWirelessScanner {
         return new Location(first.getTime() >= second.getTime() ? first : second);
     }
 
-    private static long scanObservedAt(ScanResult result, long wallNow) {
-        if (Build.VERSION.SDK_INT >= 17 && result.timestamp > 0L) {
-            long elapsedMicros = android.os.SystemClock.elapsedRealtimeNanos() / 1_000L;
-            long ageMicros = Math.max(0L, elapsedMicros - result.timestamp);
-            long ageMs = ageMicros / 1_000L;
-            if (ageMs < 24L * 60L * 60L * 1000L) return wallNow - ageMs;
-        }
-        return wallNow;
-    }
 }

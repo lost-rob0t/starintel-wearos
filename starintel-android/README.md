@@ -18,10 +18,11 @@ or duplicate the canonical Common Lisp Quasar runtime.
   bounded point-to-point connections, and initial information packets (IIPs).
   The closed `starintel.fbp.graph/v1` JSON form names registered component
   types; it never embeds executable code or creates another server protocol.
-- `store.LispTek9Store` batches documents, graph relations, facts, audit events,
-  and target outbox intents into one embedded Tek9 transaction.
-- `lisp.EclLispRuntime` is the Android-to-ECL JSON command bridge. It exposes a
-  closed operation vocabulary; it is not a general `eval` API.
+- `store.LispTek9Store` is retained as a compatibility-facing store port, but
+  reports unavailable until Tek9 operations are added to the canonical Edge ABI.
+- `lisp.EclLispRuntime` is the thin Android wrapper around the exact
+  `starintel-edge` runtime pinned in `flake.lock`. It exposes only Edge's closed
+  operation vocabulary; it is not a general `eval` API.
 
 ## Trust boundary
 
@@ -49,20 +50,13 @@ silently execute model output.
 
 ## Common Lisp packaging
 
-ECL is the selected Android implementation because its supported Android NDK
-cross-build and embeddable C API fit Tek9's native LMDB dependency. ABCL remains
-useful for Java interop, but it does not make the existing CFFI/LMDB Tek9 system
-portable to Android ART.
+`starintel-edge` owns ECL, LMDB, Sento, the JNI/C ABI, trusted Lisp assets, and
+runtime conformance. The Nix flake pins commit
+`f801b024965488c21f93c52a1a9fd2aecd224700`, merges its ARM64 and x86_64 bundles,
+and gives Gradle that immutable bundle as a source, JNI, and asset root. This
+repository no longer carries a second native bridge or product-owned runtime
+dispatcher.
 
-The runtime image must contain:
-
-1. ECL and its native runtime dependencies for each shipped ABI;
-2. LMDB;
-3. Alexandria, Bordeaux Threads, Serapeum, JSOWN, cl-conspack, and cl-lmdb;
-4. Tek9;
-5. `src/main/assets/lisp/starintel-mobile-runtime.lisp`;
-6. `src/main/assets/lisp/local-actors.lisp` plus product actor packages.
-
-The APK fails closed when the ABI-specific bridge/image is absent. Quasar shows
-that state directly instead of substituting SQLite or claiming a local actor
-ran remotely.
+The APK fails closed when the pinned ABI bundle is absent. Quasar copies the
+immutable `starintel-edge` asset tree into app-private storage and reports the
+real runtime state; mutable workspace Lisp is never evaluated by the runtime.

@@ -9,15 +9,20 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 
 import java.io.File;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class CollectorService extends Service {
     static final String PREFS = "collector_runtime_v2";
     static final String KEY_ACTIVE = "active";
     static final String KEY_STARTED_AT = "started_at_ms";
     static final String KEY_AUDIO_ACTIVE = "audio_active";
+    static final String KEY_RUN_ID = "run_id";
     static final String ACTION_START_AUDIO = "actor.starintel.collector.START_AUDIO";
     static final String ACTION_STOP_AUDIO = "actor.starintel.collector.STOP_AUDIO";
 
@@ -27,6 +32,10 @@ public final class CollectorService extends Service {
     private StarWirelessStore store;
     private StarWirelessScanner scanner;
     private AudioSegmentRecorder audioRecorder;
+    private final AudioRecordingState audioState = new AudioRecordingState();
+    private String runId;
+    private final Handler syncHandler = new Handler(Looper.getMainLooper());
+    private final AtomicBoolean syncRunning = new AtomicBoolean(false);
 
     @Override
     public void onCreate() {
@@ -34,15 +43,26 @@ public final class CollectorService extends Service {
         createChannel();
         startVisible(false);
 
+        android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        boolean restoreAudio = prefs.getBoolean(KEY_ACTIVE, false)
+                && prefs.getBoolean(KEY_AUDIO_ACTIVE, false);
+        runId = prefs.getString(KEY_RUN_ID, "");
+        if (runId == null || runId.isEmpty() || !prefs.getBoolean(KEY_ACTIVE, false)) {
+            runId = UUID.randomUUID().toString();
+        }
         store = new StarWirelessStore(getApplicationContext());
-        scanner = new StarWirelessScanner(getApplicationContext(), store);
+        scanner = new StarWirelessScanner(getApplicationContext(), store, runId);
         scanner.start();
 
-        getSharedPreferences(PREFS, MODE_PRIVATE)
-                .edit()
+        android.content.SharedPreferences.Editor editor = prefs.edit()
                 .putBoolean(KEY_ACTIVE, true)
-                .putLong(KEY_STARTED_AT, System.currentTimeMillis())
-                .apply();
+                .putString(KEY_RUN_ID, runId);
+        if (!prefs.getBoolean(KEY_ACTIVE, false)) {
+            editor.putLong(KEY_STARTED_AT, System.currentTimeMillis());
+        }
+        editor.apply();
+        syncHandler.post(syncLoop);
+        if (restoreAudio) startAudio();
     }
 
     @Override
@@ -61,6 +81,7 @@ public final class CollectorService extends Service {
         stopAudio();
         if (scanner != null) scanner.stop();
         if (store != null) store.close();
+        syncHandler.removeCallbacksAndMessages(null);
 
         getSharedPreferences(PREFS, MODE_PRIVATE)
                 .edit()
@@ -76,46 +97,104 @@ public final class CollectorService extends Service {
     }
 
     private void startAudio() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+        boolean permission = checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED;
+        if (!audioState.requestStart(permission)) {
+            if (!permission) notifyStatus("Audio needs the microphone permission");
+            return;
+        }
+        if (!permission) {
             notifyStatus("Audio needs the microphone permission");
             return;
         }
-        if (audioRecorder != null && audioRecorder.isRunning()) return;
 
         StarWirelessStore captureStore = store != null ? store : new StarWirelessStore(getApplicationContext());
         audioRecorder = new AudioSegmentRecorder(getFilesDir());
         audioRecorder.setListener(new AudioSegmentRecorder.Listener() {
             @Override
-            public void onSegment(File wavFile, long durationMs, String sha256Hex) {
+            public void onSegment(File wavFile, long startedAtMs, long durationMs, String sha256Hex) {
+                LocationSnapshot location = LocationSnapshot.bestEffort(getApplicationContext());
+                String eventKey = "audio-" + wavFile.getName();
                 captureStore.insertCapture(
-                        "audio-" + wavFile.getName(),
+                        eventKey,
                         "audio",
                         wavFile.getAbsolutePath(),
                         "audio/wav",
                         wavFile.length(),
                         sha256Hex,
-                        System.currentTimeMillis(),
+                        startedAtMs,
                         durationMs,
-                        "pending_transcript");
+                        "pending_transcript",
+                        0,
+                        0,
+                        0,
+                        location.latitude,
+                        location.longitude,
+                        location.altitude,
+                        location.accuracy,
+                        "pcm-s16le",
+                        runId);
+                StarWirelessStore.CaptureRow capture = captureStore.captureByEventKey(eventKey);
+                if (capture != null) {
+                    try {
+                        DocumentProjection.projectMediaCapture(captureStore, capture);
+                    } catch (RuntimeException failure) {
+                        notifyStatus("Audio saved; document queue delayed");
+                    }
+                }
             }
 
             @Override
             public void onError(String message) {
+                audioState.failed();
                 notifyStatus("Audio error · " + message);
             }
         });
         // Mic foreground-service type must be active before capture starts.
         startVisible(true);
         audioRecorder.start();
+        if (!audioRecorder.isRunning()) {
+            audioState.failed();
+            return;
+        }
+        audioState.started();
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_AUDIO_ACTIVE, true).apply();
         notifyStatus("Audio collection active");
     }
 
+    private final Runnable syncLoop =
+            new Runnable() {
+                @Override
+                public void run() {
+                    if (store != null && store.queuedCount() > 0 && syncRunning.compareAndSet(false, true)) {
+                        new Thread(() -> {
+                            try {
+                                String serverUrl = getSharedPreferences(
+                                        TranscriptionManager.CONFIG_PREFS, MODE_PRIVATE)
+                                        .getString(StarDocumentSync.KEY_SERVER_URL, "");
+                                String apiKey = new CollectorSecretStore(getApplicationContext())
+                                        .read(StarDocumentSync.SLOT_API_KEY);
+                                if (serverUrl != null && !serverUrl.trim().isEmpty() && apiKey != null) {
+                                    StarDocumentSync.sync(store, serverUrl, apiKey);
+                                }
+                            } catch (RuntimeException ignored) {
+                                // The durable queue remains retryable while offline.
+                            } finally {
+                                syncRunning.set(false);
+                            }
+                        }, "starintel-live-sync").start();
+                    }
+                    syncHandler.postDelayed(this, 30_000L);
+                }
+            };
+
     private void stopAudio() {
+        audioState.requestStop();
         if (audioRecorder != null) {
             audioRecorder.stop();
             audioRecorder = null;
         }
+        audioState.stopped();
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_AUDIO_ACTIVE, false).apply();
         if (store != null) startVisible(false);
     }

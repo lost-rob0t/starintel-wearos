@@ -41,7 +41,7 @@ class EclLispRuntimeTest {
         val runtime = EclLispRuntime("/runtime", bridge)
 
         try {
-            runtime.request("runtime.reload-init")
+            runtime.request("actor.roundtrip")
             fail("Expected LispRuntimeException")
         } catch (error: LispRuntimeException) {
             assertEquals("invalid-config", error.code)

@@ -7,6 +7,7 @@ import android.media.MediaRecorder;
 import android.os.Process;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.security.MessageDigest;
@@ -32,7 +33,7 @@ final class AudioSegmentRecorder {
     private volatile Listener listener;
 
     interface Listener {
-        void onSegment(File wavFile, long durationMs, String sha256Hex);
+        void onSegment(File wavFile, long startedAtMs, long durationMs, String sha256Hex);
 
         void onError(String message);
     }
@@ -182,7 +183,7 @@ final class AudioSegmentRecorder {
                 out.write(wav);
             }
             Listener sink = listener;
-            if (sink != null) sink.onSegment(segment, durationMs, sha256Hex(wav));
+            if (sink != null) sink.onSegment(segment, startedAtMs, durationMs, sha256Hex(wav));
         } catch (IOException failure) {
             notifyError(message(failure));
         }
@@ -193,6 +194,26 @@ final class AudioSegmentRecorder {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             StringBuilder hex = new StringBuilder();
             for (byte b : digest.digest(data)) hex.append(String.format(java.util.Locale.US, "%02x", b));
+            return hex.toString();
+        } catch (NoSuchAlgorithmException failure) {
+            throw new IllegalStateException("SHA-256 unavailable", failure);
+        }
+    }
+
+    static String sha256Hex(File file) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[64 * 1024];
+            try (FileInputStream input = new FileInputStream(file)) {
+                int count;
+                while ((count = input.read(buffer)) >= 0) {
+                    if (count > 0) digest.update(buffer, 0, count);
+                }
+            }
+            StringBuilder hex = new StringBuilder();
+            for (byte b : digest.digest()) {
+                hex.append(String.format(java.util.Locale.US, "%02x", b));
+            }
             return hex.toString();
         } catch (NoSuchAlgorithmException failure) {
             throw new IllegalStateException("SHA-256 unavailable", failure);

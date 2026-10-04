@@ -53,7 +53,7 @@ public final class EntityExtraction {
             store.markCaptureProjected(capture.id);
             captures++;
             documents += result.documents;
-            latestAnalysisDocId = result.analysisDocId;
+            latestAnalysisDocId = result.transcriptDocId;
         }
         return new HeuristicResult(captures, documents, latestAnalysisDocId);
     }
@@ -121,16 +121,25 @@ public final class EntityExtraction {
         }
 
         String dataset = DocumentProjection.datasetForCapture(capture.createdAtMs);
-        String analysisId = StarDocumentFactory.deterministicId(
-                dataset, "analysis", fileIdFor(capture), "agent-refinement:" + capture.eventKey);
+        String[] detail = store.captureDetail(capture.id);
+        TranscriptModels.Transcript transcript;
+        try {
+            transcript = TranscriptModels.fromJson(detail[1]);
+        } catch (org.json.JSONException failure) {
+            throw new IllegalStateException("Stored transcript is unreadable", failure);
+        }
+        String engine = detail.length > 2 && !detail[2].isEmpty() ? detail[2] : "unknown";
+        String audioId = audioIdFor(capture);
+        String transcriptId = StarDocumentFactory.deterministicId(
+                dataset, "transcript", audioId, engine, transcript.fullText());
         int queued = 0;
         JSONArray people = parsed.optJSONArray("people");
         if (people != null) {
             for (int index = 0; index < Math.min(people.length(), 64); index++) {
                 String name = people.optString(index, "").trim();
                 if (name.isEmpty()) continue;
-                String personDoc = StarDocumentFactory.personDocument(dataset, name, analysisId);
-                String personRelation = relationDoc(dataset, personDoc, analysisId, name, 0.6d, "prolog-rlm agent");
+                String personDoc = StarDocumentFactory.personDocument(dataset, name, transcriptId);
+                String personRelation = relationDoc(dataset, personDoc, transcriptId, name, 0.6d, "prolog-rlm agent");
                 store.enqueueDocument(idOf(personDoc), "person", personDoc);
                 store.enqueueDocument(idOf(personRelation), "relation", personRelation);
                 queued += 2;
@@ -141,8 +150,8 @@ public final class EntityExtraction {
             for (int index = 0; index < Math.min(orgs.length(), 64); index++) {
                 String name = orgs.optString(index, "").trim();
                 if (name.isEmpty()) continue;
-                String orgDoc = StarDocumentFactory.orgDocument(dataset, name, analysisId);
-                String orgRelation = relationDoc(dataset, orgDoc, analysisId, name, 0.6d, "prolog-rlm agent");
+                String orgDoc = StarDocumentFactory.orgDocument(dataset, name, transcriptId);
+                String orgRelation = relationDoc(dataset, orgDoc, transcriptId, name, 0.6d, "prolog-rlm agent");
                 store.enqueueDocument(idOf(orgDoc), "org", orgDoc);
                 store.enqueueDocument(idOf(orgRelation), "relation", orgRelation);
                 queued += 2;
@@ -153,7 +162,7 @@ public final class EntityExtraction {
 
     private static String idOf(String documentJson) {
         try {
-            return new JSONObject(documentJson).optString("_id");
+            return new JSONObject(documentJson).optString("id");
         } catch (org.json.JSONException failure) {
             throw new IllegalStateException("Could not read document id", failure);
         }
@@ -165,9 +174,9 @@ public final class EntityExtraction {
                 dataset, idOf(entityJson), "mentioned-in", analysisId, confidence, note + " · " + label);
     }
 
-    private static String fileIdFor(StarWirelessStore.CaptureRow capture) {
+    private static String audioIdFor(StarWirelessStore.CaptureRow capture) {
         return StarDocumentFactory.deterministicId(
                 DocumentProjection.datasetForCapture(capture.createdAtMs),
-                "file", capture.eventKey + ".wav", capture.sha256);
+                "audio", capture.eventKey, capture.sha256);
     }
 }

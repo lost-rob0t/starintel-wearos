@@ -2,8 +2,9 @@
   description = "Nix build environment for StarIntel Android + Wear OS apps";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.starintel-edge.url = "github:lost-rob0t/starintel-edge/f801b024965488c21f93c52a1a9fd2aecd224700";
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, starintel-edge }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
@@ -30,11 +31,46 @@
             ndkVersions = [ "28.2.13676358" ];
           };
 
+          # Emulator/QEMU composition: SDK emulator (QEMU fork with goldfish
+          # devices) plus a rootable google_apis x86_64 system image. Kept
+          # separate from the build SDK so builds stay hermetic.
+          androidCompositionEmulator = pkgs.androidenv.composeAndroidPackages {
+            platformVersions = [ "36" ];
+            buildToolsVersions = [ "36.0.0" ];
+            includeSources = false;
+            includeSystemImages = true;
+            systemImageTypes = [ "google_apis" ];
+            abiVersions = [ "x86_64" ];
+            includeEmulator = true;
+            includeCmake = false;
+            includeNDK = false;
+          };
+
+          emulatorSdk = androidCompositionEmulator.androidsdk;
+          emulatorHome = "${emulatorSdk}/libexec/android-sdk";
+
           androidSdk = androidComposition.androidsdk;
           jdk = pkgs.jdk17;
           gradle = pkgs.gradle_9.override { java = jdk; };
           androidHome = "${androidSdk}/libexec/android-sdk";
           aapt2 = "${androidHome}/build-tools/36.0.0/aapt2";
+          edgeArm64 = starintel-edge.packages.${system}.android-runtime-arm64-v8a;
+          edgeX86_64 = if system == "x86_64-linux"
+            then starintel-edge.packages.${system}.android-runtime-x86_64
+            else null;
+          edgeRuntimeBundle = pkgs.runCommand "starintel-edge-android-runtime-f801b02" { } ''
+            mkdir -p "$out/jni" "$out/kotlin" "$out/assets"
+            cp -R ${edgeArm64}/jni/. "$out/jni/"
+            cp -R ${edgeArm64}/kotlin/. "$out/kotlin/"
+            cp -R ${edgeArm64}/assets/. "$out/assets/"
+            ${pkgs.lib.optionalString (edgeX86_64 != null) ''
+              cp -R ${edgeX86_64}/jni/. "$out/jni/"
+            ''}
+            cp ${edgeArm64}/manifest.json "$out/manifest-arm64-v8a.json"
+            ${pkgs.lib.optionalString (edgeX86_64 != null) ''
+              cp ${edgeX86_64}/manifest.json "$out/manifest-x86_64.json"
+            ''}
+          '';
 
           common = ''
             if [[ ! -f settings.gradle.kts ]]; then
@@ -45,7 +81,7 @@
             export ANDROID_SDK_ROOT="$ANDROID_HOME"
             export JAVA_HOME="${jdk}"
             export GRADLE_USER_HOME="''${GRADLE_USER_HOME:-''${XDG_CACHE_HOME:-$HOME/.cache}/starintel-wearos/gradle}"
-            export GRADLE_OPTS="-Dorg.gradle.project.android.aapt2FromMavenOverride=${aapt2} -Dorg.gradle.java.home=$JAVA_HOME ''${GRADLE_OPTS:-}"
+            export GRADLE_OPTS="-Dorg.gradle.project.android.aapt2FromMavenOverride=${aapt2} -Dorg.gradle.project.starintel.edge.runtimeRoot=${edgeRuntimeBundle} -Dorg.gradle.java.home=$JAVA_HOME ''${GRADLE_OPTS:-}"
             mkdir -p "$GRADLE_USER_HOME" build/nix
           '';
 
@@ -250,13 +286,94 @@
             '';
           };
 
+          emulatorRun = pkgs.writeShellApplication {
+            name = "starintel-emulator";
+            runtimeInputs = [
+              jdk emulatorSdk pkgs.bash pkgs.coreutils
+              pkgs.xorg-server pkgs.xdpyinfo pkgs.xdotool
+            ];
+            text = ''
+              if [[ ! -f scripts/emulator-run.sh ]]; then
+                echo "error: run this from the starintel-wearos repository root" >&2
+                exit 2
+              fi
+              export STARINTEL_EMULATOR_SDK="${emulatorHome}"
+              export STARINTEL_EMULATOR_ADB="${androidHome}/platform-tools/adb"
+              export JAVA_HOME="${jdk}"
+              export ANDROID_HOME="${emulatorHome}"
+              export ANDROID_SDK_ROOT="$ANDROID_HOME"
+              exec bash scripts/emulator-run.sh "$@"
+            '';
+          };
+
+          emulatorShot = pkgs.writeShellApplication {
+            name = "starintel-emulator-shot";
+            runtimeInputs = [ pkgs.imagemagick pkgs.xdotool pkgs.coreutils ];
+            text = ''
+              if [[ ! -f scripts/emulator-screenshot.sh ]]; then
+                echo "error: run this from the starintel-wearos repository root" >&2
+                exit 2
+              fi
+              exec bash scripts/emulator-screenshot.sh "$@"
+            '';
+          };
+
+          emulatorStop = pkgs.writeShellApplication {
+            name = "starintel-emulator-stop";
+            runtimeInputs = [ emulatorSdk pkgs.coreutils ];
+            text = ''
+              if [[ ! -f scripts/emulator-stop.sh ]]; then
+                echo "error: run this from the starintel-wearos repository root" >&2
+                exit 2
+              fi
+              export STARINTEL_EMULATOR_ADB="${androidHome}/platform-tools/adb"
+              exec bash scripts/emulator-stop.sh "$@"
+            '';
+          };
+
+          emulatorQemu = pkgs.writeShellApplication {
+            name = "starintel-emulator-qemu";
+            runtimeInputs = [ pkgs.qemu_kvm pkgs.bash pkgs.coreutils pkgs.gnugrep pkgs.e2fsprogs pkgs.gptfdisk pkgs.xdpyinfo pkgs.xorg-server ];
+            text = ''
+              if [[ ! -f scripts/emulator-qemu.sh ]]; then
+                echo "error: run this from the starintel-wearos repository root" >&2
+                exit 2
+              fi
+              export STARINTEL_EMULATOR_SDK="${emulatorHome}"
+              export STARINTEL_EMULATOR_ADB="${androidHome}/platform-tools/adb"
+              exec bash scripts/emulator-qemu.sh "$@"
+            '';
+          };
+
+          emulatorTest = pkgs.writeShellApplication {
+            name = "starintel-emulator-test";
+            runtimeInputs = [
+              jdk gradle androidSdk emulatorSdk pkgs.bash pkgs.coreutils pkgs.findutils pkgs.gnugrep
+            ];
+            text = ''
+              if [[ ! -f scripts/emulator-test.sh ]]; then
+                echo "error: run this from the starintel-wearos repository root" >&2
+                exit 2
+              fi
+              export STARINTEL_EMULATOR_SDK="${emulatorHome}"
+              export STARINTEL_EMULATOR_ADB="${androidHome}/platform-tools/adb"
+              export STARINTEL_BUILD_SDK="${androidHome}"
+              export ANDROID_HOME="${androidHome}"
+              export ANDROID_SDK_ROOT="$ANDROID_HOME"
+              export JAVA_HOME="${jdk}"
+              export GRADLE_USER_HOME="''${GRADLE_USER_HOME:-''${XDG_CACHE_HOME:-$HOME/.cache}/starintel-wearos/gradle}"
+              export GRADLE_OPTS="-Dorg.gradle.project.android.aapt2FromMavenOverride=${aapt2} -Dorg.gradle.project.starintel.edge.runtimeRoot=${edgeRuntimeBundle} -Dorg.gradle.java.home=$JAVA_HOME ''${GRADLE_OPTS:-}"
+              exec env -u 'BASH_FUNC_git-sync%%' bash scripts/emulator-test.sh "$@"
+            '';
+          };
+
           toolchain = pkgs.buildEnv {
             name = "starintel-wearos-android-toolchain";
             paths = [ jdk gradle androidSdk pkgs.python3 ];
           };
         in
         {
-          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildQuasar buildCollector buildHackmode buildOperator buildWear buildWatchface buildAll checkAll fieldMappingCheck pairAndroid pairWatch installPhone installWatch;
+          inherit pkgs androidSdk jdk gradle toolchain buildPhone buildQuasar buildCollector buildHackmode buildOperator buildWear buildWatchface buildAll checkAll fieldMappingCheck pairAndroid pairWatch installPhone installWatch emulatorSdk emulatorRun emulatorShot emulatorStop emulatorQemu emulatorTest edgeRuntimeBundle;
         };
     in
     {
@@ -264,6 +381,7 @@
         let e = mkEnv system;
         in {
           android-sdk = e.androidSdk;
+          emulator-sdk = e.emulatorSdk;
           gradle = e.gradle;
           toolchain = e.toolchain;
           default = e.toolchain;
@@ -285,6 +403,11 @@
           pair-watch = { type = "app"; program = "${e.pairWatch}/bin/starintel-pair-watch"; };
           install-phone = { type = "app"; program = "${e.installPhone}/bin/starintel-install-phone"; };
           install-watch = { type = "app"; program = "${e.installWatch}/bin/starintel-install-watch"; };
+          emulator = { type = "app"; program = "${e.emulatorRun}/bin/starintel-emulator"; };
+          emulator-shot = { type = "app"; program = "${e.emulatorShot}/bin/starintel-emulator-shot"; };
+          emulator-stop = { type = "app"; program = "${e.emulatorStop}/bin/starintel-emulator-stop"; };
+          emulator-qemu = { type = "app"; program = "${e.emulatorQemu}/bin/starintel-emulator-qemu"; };
+          emulator-test = { type = "app"; program = "${e.emulatorTest}/bin/starintel-emulator-test"; };
           default = { type = "app"; program = "${e.buildAll}/bin/starintel-build-all"; };
         });
 
@@ -298,7 +421,7 @@
             JAVA_HOME = "${e.jdk}";
             shellHook = ''
               export GRADLE_USER_HOME="''${GRADLE_USER_HOME:-''${XDG_CACHE_HOME:-$HOME/.cache}/starintel-wearos/gradle}"
-              export GRADLE_OPTS="-Dorg.gradle.project.android.aapt2FromMavenOverride=$ANDROID_HOME/build-tools/36.0.0/aapt2 -Dorg.gradle.java.home=$JAVA_HOME ''${GRADLE_OPTS:-}"
+              export GRADLE_OPTS="-Dorg.gradle.project.android.aapt2FromMavenOverride=$ANDROID_HOME/build-tools/36.0.0/aapt2 -Dorg.gradle.project.starintel.edge.runtimeRoot=${e.edgeRuntimeBundle} -Dorg.gradle.java.home=$JAVA_HOME ''${GRADLE_OPTS:-}"
               mkdir -p "$GRADLE_USER_HOME"
               echo "StarIntel Wear OS Nix shell"
               echo "  Java:   $(java -version 2>&1 | head -n1)"

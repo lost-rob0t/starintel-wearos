@@ -19,8 +19,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 internal class LocalRuntimeController(private val context: Context) : AutoCloseable {
-    private val runtimeDirectory = File(context.filesDir, "quasar-lisp-v1")
-    private val initStore = InitLispStore(runtimeDirectory) { context.assets.open("lisp/init.lisp") }
+    private val runtimeDirectory = File(context.filesDir, "starintel-edge-runtime-f801b02")
+    private val workspaceDirectory = File(context.filesDir, "quasar-lisp-workspace-v1")
+    private val initStore = InitLispStore(workspaceDirectory) { context.assets.open("lisp/init.lisp") }
     private val lispRuntime by lazy {
         installLispSources()
         EclLispRuntime(runtimeDirectory.absolutePath)
@@ -50,16 +51,15 @@ internal class LocalRuntimeController(private val context: Context) : AutoClosea
 
     fun initLispSource(): String = initStore.ensureSeeded().readText()
 
-    /** Persists first, then asks the closed Lisp API to reload the fixed app-private file. */
+    /** Persists workspace source without weakening the pinned Edge runtime boundary. */
     fun saveInitLisp(source: String): LispRuntimeStatus {
         initStore.save(source)
-        if (!lispRuntime.status.available) return lispRuntime.status
-        return runCatching {
-            lispRuntime.request("runtime.reload-init")
-            lispRuntime.status
-        }.getOrElse { error ->
-            LispRuntimeStatus(false, "ECL", error.message?.take(400) ?: "init.lisp reload failed")
-        }
+        val current = lispRuntime.status
+        return LispRuntimeStatus(
+            current.available,
+            current.implementation,
+            "Workspace source saved; the pinned Edge runtime does not evaluate mutable Lisp",
+        )
     }
 
     fun tek9Status(): Tek9Status = if (lispRuntime.status.available) {
@@ -91,14 +91,23 @@ internal class LocalRuntimeController(private val context: Context) : AutoClosea
     }
 
     private fun installLispSources() {
-        runtimeDirectory.mkdirs()
         initStore.ensureSeeded()
-        listOf("starintel-mobile-runtime.lisp", "local-actors.lisp").forEach { name ->
-            val target = File(runtimeDirectory, name)
-            context.assets.open("lisp/$name").use { input ->
-                target.outputStream().use { output -> input.copyTo(output) }
+        if (File(runtimeDirectory, "lisp/startup.lisp").isFile) return
+        runtimeDirectory.deleteRecursively()
+        copyAssetTree("starintel-edge", runtimeDirectory)
+    }
+
+    private fun copyAssetTree(assetPath: String, destination: File) {
+        val children = context.assets.list(assetPath) ?: emptyArray()
+        if (children.isEmpty()) {
+            destination.parentFile?.mkdirs()
+            context.assets.open(assetPath).use { input ->
+                destination.outputStream().use { output -> input.copyTo(output) }
             }
+            return
         }
+        destination.mkdirs()
+        children.forEach { child -> copyAssetTree("$assetPath/$child", File(destination, child)) }
     }
 }
 

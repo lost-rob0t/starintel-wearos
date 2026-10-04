@@ -11,7 +11,7 @@ import org.json.JSONObject;
 
 final class StarWirelessStore extends SQLiteOpenHelper {
     private static final String NAME = "star-wireless.db";
-    private static final int VERSION = 2;
+    private static final int VERSION = 4;
 
     StarWirelessStore(Context context) {
         super(context.getApplicationContext(), NAME, null, VERSION);
@@ -59,6 +59,7 @@ final class StarWirelessStore extends SQLiteOpenHelper {
                         + "mfgrid INTEGER NOT NULL DEFAULT 0,"
                         + "source TEXT NOT NULL,"
                         + "source_row_id INTEGER,"
+                        + "projected INTEGER NOT NULL DEFAULT 0,"
                         + "ingested_at_ms INTEGER NOT NULL"
                         + ")");
         db.execSQL("CREATE INDEX idx_observation_bssid_time ON observation(bssid, observed_at_ms DESC)");
@@ -95,6 +96,8 @@ final class StarWirelessStore extends SQLiteOpenHelper {
                         + ")");
 
         createV2Tables(db);
+        createV3Tables(db, true);
+        createV4Tables(db, false);
     }
 
     private static void createV2Tables(SQLiteDatabase db) {
@@ -131,11 +134,40 @@ final class StarWirelessStore extends SQLiteOpenHelper {
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_queue_state ON document_queue(state, created_at_ms)");
     }
 
+    private static void createV3Tables(SQLiteDatabase db, boolean alterCapture) {
+        if (alterCapture) {
+            db.execSQL("ALTER TABLE capture ADD COLUMN width INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE capture ADD COLUMN height INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE capture ADD COLUMN orientation INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE capture ADD COLUMN lat REAL");
+            db.execSQL("ALTER TABLE capture ADD COLUMN lon REAL");
+            db.execSQL("ALTER TABLE capture ADD COLUMN altitude REAL");
+            db.execSQL("ALTER TABLE capture ADD COLUMN accuracy REAL");
+            db.execSQL("ALTER TABLE capture ADD COLUMN codec TEXT NOT NULL DEFAULT ''");
+            db.execSQL("ALTER TABLE capture ADD COLUMN run_id TEXT NOT NULL DEFAULT ''");
+        }
+    }
+
+    private static void createV4Tables(SQLiteDatabase db, boolean alterObservation) {
+        if (alterObservation) {
+            db.execSQL("ALTER TABLE observation ADD COLUMN projected INTEGER NOT NULL DEFAULT 0");
+        }
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_observation_projected ON observation(projected, _id)");
+    }
+
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 2 && newVersion >= 2) {
             createV2Tables(db);
-            return;
+            oldVersion = 2;
+        }
+        if (oldVersion < 3 && newVersion >= 3) {
+            createV3Tables(db, true);
+            oldVersion = 3;
+        }
+        if (oldVersion < 4 && newVersion >= 4) {
+            createV4Tables(db, true);
+            oldVersion = 4;
         }
         if (oldVersion != newVersion) {
             throw new IllegalStateException("Star Wireless DB migration missing: " + oldVersion + " -> " + newVersion);
@@ -196,6 +228,31 @@ final class StarWirelessStore extends SQLiteOpenHelper {
         }
     }
 
+    void recordBluetoothObservation(
+            String eventKey,
+            String address,
+            String name,
+            String serviceSummary,
+            int level,
+            Double lat,
+            Double lon,
+            Double altitude,
+            Float accuracy,
+            long observedAtMs) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            upsertNetwork(db, address, name, 0, serviceSummary, "B", level, lat, lon,
+                    observedAtMs, "", 0, serviceSummary, "star-wireless-ble");
+            insertObservation(db, eventKey, address, name, 0, serviceSummary, "B", level,
+                    lat, lon, altitude, accuracy, observedAtMs, 0, 0,
+                    "star-wireless-ble", null);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
     Batch beginBatch() {
         return new Batch(getWritableDatabase());
     }
@@ -206,6 +263,13 @@ final class StarWirelessStore extends SQLiteOpenHelper {
 
     long observationCount() {
         return count("observation");
+    }
+
+    long unprojectedObservationCount() {
+        try (Cursor cursor = getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM observation WHERE projected=0", null)) {
+            return cursor.moveToFirst() ? cursor.getLong(0) : 0L;
+        }
     }
 
     long routeCount() {
@@ -275,6 +339,29 @@ final class StarWirelessStore extends SQLiteOpenHelper {
             long createdAtMs,
             long durationMs,
             String state) {
+        insertCapture(eventKey, kind, filePath, mediaType, sizeBytes, sha256, createdAtMs,
+                durationMs, state, 0, 0, 0, null, null, null, null, "", "");
+    }
+
+    void insertCapture(
+            String eventKey,
+            String kind,
+            String filePath,
+            String mediaType,
+            long sizeBytes,
+            String sha256,
+            long createdAtMs,
+            long durationMs,
+            String state,
+            int width,
+            int height,
+            int orientation,
+            Double lat,
+            Double lon,
+            Double altitude,
+            Float accuracy,
+            String codec,
+            String runId) {
         ContentValues values = new ContentValues();
         values.put("event_key", clean(eventKey, 512));
         values.put("kind", clean(kind, 16));
@@ -287,6 +374,16 @@ final class StarWirelessStore extends SQLiteOpenHelper {
         values.put("state", clean(state, 32));
         values.put("transcript", "");
         values.put("transcript_engine", "");
+        values.put("width", Math.max(0, width));
+        values.put("height", Math.max(0, height));
+        values.put("orientation", Math.max(0, orientation));
+        putNullable(values, "lat", lat);
+        putNullable(values, "lon", lon);
+        putNullable(values, "altitude", altitude);
+        if (accuracy == null || !Float.isFinite(accuracy)) values.putNull("accuracy");
+        else values.put("accuracy", accuracy);
+        values.put("codec", clean(codec, 128));
+        values.put("run_id", clean(runId, 256));
         getWritableDatabase()
                 .insertWithOnConflict("capture", null, values, SQLiteDatabase.CONFLICT_IGNORE);
     }
@@ -295,7 +392,8 @@ final class StarWirelessStore extends SQLiteOpenHelper {
         int bounded = Math.max(1, Math.min(limit, 64));
         java.util.List<CaptureRow> rows = new java.util.ArrayList<>();
         try (Cursor cursor = getReadableDatabase().rawQuery(
-                "SELECT _id,event_key,file_path,media_type,size_bytes,sha256,created_at_ms,duration_ms "
+                "SELECT _id,event_key,kind,file_path,media_type,size_bytes,sha256,created_at_ms,duration_ms,"
+                        + "width,height,orientation,lat,lon,altitude,accuracy,codec,run_id "
                         + "FROM capture WHERE state=? ORDER BY created_at_ms LIMIT ?",
                 new String[] {clean(state, 32), Integer.toString(bounded)})) {
             while (cursor.moveToNext()) {
@@ -304,13 +402,46 @@ final class StarWirelessStore extends SQLiteOpenHelper {
                         cursor.getString(1),
                         cursor.getString(2),
                         cursor.getString(3),
-                        cursor.getLong(4),
-                        cursor.getString(5),
-                        cursor.getLong(6),
-                        cursor.getLong(7)));
+                        cursor.getString(4),
+                        cursor.getLong(5),
+                        cursor.getString(6),
+                        cursor.getLong(7),
+                        cursor.getLong(8),
+                        cursor.getInt(9),
+                        cursor.getInt(10),
+                        cursor.getInt(11),
+                        cursor.isNull(12) ? null : cursor.getDouble(12),
+                        cursor.isNull(13) ? null : cursor.getDouble(13),
+                        cursor.isNull(14) ? null : cursor.getDouble(14),
+                        cursor.isNull(15) ? null : cursor.getFloat(15),
+                        cursor.getString(16),
+                        cursor.getString(17)));
             }
         }
         return rows;
+    }
+
+    CaptureRow captureByEventKey(String eventKey) {
+        try (Cursor cursor = getReadableDatabase().rawQuery(
+                "SELECT _id,event_key,kind,file_path,media_type,size_bytes,sha256,created_at_ms,duration_ms,"
+                        + "width,height,orientation,lat,lon,altitude,accuracy,codec,run_id "
+                        + "FROM capture WHERE event_key=? LIMIT 1",
+                new String[] {clean(eventKey, 512)})) {
+            if (!cursor.moveToFirst()) return null;
+            return captureRow(cursor);
+        }
+    }
+
+    private static CaptureRow captureRow(Cursor cursor) {
+        return new CaptureRow(
+                cursor.getLong(0), cursor.getString(1), cursor.getString(2), cursor.getString(3),
+                cursor.getString(4), cursor.getLong(5), cursor.getString(6), cursor.getLong(7),
+                cursor.getLong(8), cursor.getInt(9), cursor.getInt(10), cursor.getInt(11),
+                cursor.isNull(12) ? null : cursor.getDouble(12),
+                cursor.isNull(13) ? null : cursor.getDouble(13),
+                cursor.isNull(14) ? null : cursor.getDouble(14),
+                cursor.isNull(15) ? null : cursor.getFloat(15), cursor.getString(16),
+                cursor.getString(17));
     }
 
     void updateCaptureTranscript(long captureId, String transcriptJson, String engine, String state) {
@@ -347,26 +478,88 @@ final class StarWirelessStore extends SQLiteOpenHelper {
                 new String[] {Long.toString(captureId)});
     }
 
+    JSONArray unprojectedObservations(int limit) {
+        int bounded = Math.max(1, Math.min(limit, 500));
+        JSONArray rows = new JSONArray();
+        try (Cursor cursor = getReadableDatabase().rawQuery(
+                "SELECT event_key,bssid,ssid,frequency,capabilities,network_type,"
+                        + "level,lat,lon,altitude,accuracy,observed_at_ms,source "
+                        + "FROM observation WHERE projected=0 ORDER BY _id LIMIT ?",
+                new String[] {Integer.toString(bounded)})) {
+            while (cursor.moveToNext()) {
+                try {
+                    JSONObject row = new JSONObject();
+                    row.put("event_key", cursor.getString(0));
+                    row.put("bssid", cursor.getString(1));
+                    row.put("ssid", cursor.getString(2));
+                    row.put("frequency", cursor.getInt(3));
+                    row.put("capabilities", cursor.getString(4));
+                    row.put("network_type", cursor.getString(5));
+                    row.put("level", cursor.getInt(6));
+                    putJsonNullable(row, "lat", cursor, 7);
+                    putJsonNullable(row, "lon", cursor, 8);
+                    putJsonNullable(row, "altitude", cursor, 9);
+                    putJsonNullable(row, "accuracy", cursor, 10);
+                    row.put("observed_at_ms", cursor.getLong(11));
+                    row.put("source", cursor.getString(12));
+                    rows.put(row);
+                } catch (JSONException error) {
+                    throw new IllegalStateException("Could not encode pending observation", error);
+                }
+            }
+        }
+        return rows;
+    }
+
+    void markObservationProjected(String eventKey) {
+        ContentValues values = new ContentValues();
+        values.put("projected", 1);
+        getWritableDatabase().update(
+                "observation", values, "event_key=?", new String[] {clean(eventKey, 512)});
+    }
+
     static final class CaptureRow {
         final long id;
         final String eventKey;
+        final String kind;
         final String filePath;
         final String mediaType;
         final long sizeBytes;
         final String sha256;
         final long createdAtMs;
         final long durationMs;
+        final int width;
+        final int height;
+        final int orientation;
+        final Double lat;
+        final Double lon;
+        final Double altitude;
+        final Float accuracy;
+        final String codec;
+        final String runId;
 
-        CaptureRow(long id, String eventKey, String filePath, String mediaType,
-                long sizeBytes, String sha256, long createdAtMs, long durationMs) {
+        CaptureRow(long id, String eventKey, String kind, String filePath, String mediaType,
+                long sizeBytes, String sha256, long createdAtMs, long durationMs,
+                int width, int height, int orientation, Double lat, Double lon,
+                Double altitude, Float accuracy, String codec, String runId) {
             this.id = id;
             this.eventKey = eventKey;
+            this.kind = kind;
             this.filePath = filePath;
             this.mediaType = mediaType;
             this.sizeBytes = sizeBytes;
             this.sha256 = sha256;
             this.createdAtMs = createdAtMs;
             this.durationMs = durationMs;
+            this.width = width;
+            this.height = height;
+            this.orientation = orientation;
+            this.lat = lat;
+            this.lon = lon;
+            this.altitude = altitude;
+            this.accuracy = accuracy;
+            this.codec = codec;
+            this.runId = runId;
         }
     }
 
