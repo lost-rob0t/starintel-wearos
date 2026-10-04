@@ -47,11 +47,13 @@ def main() -> int:
         payload = json.loads((dist / "update.json").read_text())
         assert payload["schema"] == 2
         assert payload["artifacts"]["phone"]["target"] == "phone"
+        assert payload["artifacts"]["phone"]["package"] == "actor.starintel.wear"
         assert payload["artifacts"]["quasar"]["package"] == "actor.starintel.quasar"
         assert payload["artifacts"]["collector"]["package"] == "actor.starintel.collector"
         assert payload["artifacts"]["hackmode"]["package"] == "actor.starintel.hackmode"
         assert payload["artifacts"]["operator"]["package"] == "actor.starintel.operator"
         assert payload["artifacts"]["watchface-neon"]["package"] == "actor.starintel.watchface.neon"
+        assert payload["artifacts"]["wear"]["package"] == "actor.starintel.wear"
         assert payload["artifacts"]["wear"]["install_order"] > payload["artifacts"]["watchface-terminal"]["install_order"]
         for value in payload["artifacts"].values():
             assert value["url"].startswith("https://")

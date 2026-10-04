@@ -101,6 +101,9 @@ for code in "${version_codes[@]}"; do
 done
 
 if [[ "$skip_local_checks" == false ]]; then
+  echo "==> validating CI and release asset contract"
+  python3 scripts/test-release-contract.py
+
   echo "==> validating pinned Nix environment"
   nix flake check --no-update-lock-file --show-trace
 

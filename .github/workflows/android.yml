@@ -35,12 +35,15 @@ jobs:
             :quasar-app:testDebugUnitTest :quasar-app:assembleDebug \
             :collector-app:testDebugUnitTest :collector-app:assembleDebug \
             :hackmode-app:testDebugUnitTest :hackmode-app:assembleDebug \
+            :operator-app:testDebugUnitTest :operator-app:assembleDebug \
             :wear-app:testDebugUnitTest :wear-app:assembleDebug \
             :watchface:assembleNeonDebug \
             :watchface:assembleCommandDebug \
             :watchface:assembleTerminalDebug
       - name: Test update catalog generator
         run: python3 scripts/test-update-manifest.py
+      - name: Test CI and release asset contract
+        run: python3 scripts/test-release-contract.py
       - name: Test companion signer diagnostics
         run: python3 scripts/test-companion-signing.py
       - name: Verify companion signer parity
@@ -62,6 +65,12 @@ jobs:
         with:
           name: starintel-hackmode-debug
           path: hackmode-app/build/outputs/apk/debug/hackmode-app-debug.apk
+          if-no-files-found: error
+      - name: Publish Operator Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: starintel-operator-debug
+          path: operator-app/build/outputs/apk/debug/operator-app-debug.apk
           if-no-files-found: error
       - name: Publish Wear app APK
         uses: actions/upload-artifact@v4
@@ -115,6 +124,7 @@ jobs:
           bash -n scripts/release.sh
           bash scripts/test-pair-android-qr.sh
           python3 scripts/test-update-manifest.py
+          python3 scripts/test-release-contract.py
           nix run --no-update-lock-file .#pair-android -- --help
           nix run --no-update-lock-file .#pair-watch -- --help
           nix run --no-update-lock-file .#install-phone -- --help
@@ -133,6 +143,7 @@ jobs:
           test -s build/nix/quasar-app-debug.apk
           test -s build/nix/collector-app-debug.apk
           test -s build/nix/hackmode-app-debug.apk
+          test -s build/nix/operator-app-debug.apk
           test -s build/nix/wear-app-debug.apk
           test -s build/nix/watchface-neon-debug.apk
           test -s build/nix/watchface-command-debug.apk

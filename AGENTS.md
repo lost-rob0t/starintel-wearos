@@ -67,6 +67,7 @@ Run before proposing a merge:
 
 ```sh
 python3 scripts/test-update-manifest.py
+python3 scripts/test-release-contract.py
 nix flake check --no-update-lock-file --show-trace
 nix run --no-update-lock-file .#build-all
 ```
