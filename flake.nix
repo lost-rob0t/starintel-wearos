@@ -2,7 +2,7 @@
   description = "Nix build environment for StarIntel Android + Wear OS apps";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  inputs.starintel-edge.url = "github:lost-rob0t/starintel-edge/f801b024965488c21f93c52a1a9fd2aecd224700";
+  inputs.starintel-edge.url = "github:lost-rob0t/starintel-edge/d658c0ad7130cab3fa8d99d7d3476c9353d87eeb";
 
   outputs = { self, nixpkgs, starintel-edge }:
     let
@@ -58,7 +58,7 @@
           edgeX86_64 = if system == "x86_64-linux"
             then starintel-edge.packages.${system}.android-runtime-x86_64
             else null;
-          edgeRuntimeBundle = pkgs.runCommand "starintel-edge-android-runtime-f801b02" { } ''
+          edgeRuntimeBundle = pkgs.runCommand "starintel-edge-android-runtime-d658c0a" { } ''
             mkdir -p "$out/jni" "$out/kotlin" "$out/assets"
             cp -R ${edgeArm64}/jni/. "$out/jni/"
             cp -R ${edgeArm64}/kotlin/. "$out/kotlin/"

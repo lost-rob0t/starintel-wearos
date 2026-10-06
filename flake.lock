@@ -43,17 +43,17 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1790395509,
-        "narHash": "sha256-V8V0PfVl34Fpt6eGzGTC3GrCxk1Khi/EbRjIwigFlIw=",
+        "lastModified": 1791088445,
+        "narHash": "sha256-yj+vbcD01MnuCaPL0/EpaGeiv5tOU77e3EiuGHAHmrw=",
         "owner": "lost-rob0t",
         "repo": "starintel-edge",
-        "rev": "f801b024965488c21f93c52a1a9fd2aecd224700",
+        "rev": "d658c0ad7130cab3fa8d99d7d3476c9353d87eeb",
         "type": "github"
       },
       "original": {
         "owner": "lost-rob0t",
         "repo": "starintel-edge",
-        "rev": "f801b024965488c21f93c52a1a9fd2aecd224700",
+        "rev": "d658c0ad7130cab3fa8d99d7d3476c9353d87eeb",
         "type": "github"
       }
     }

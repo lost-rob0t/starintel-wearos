@@ -90,7 +90,7 @@ public final class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(root);
-        setContentView(scroll);
+        Si.install(this, scroll);
 
         focusRequestedSection();
     }

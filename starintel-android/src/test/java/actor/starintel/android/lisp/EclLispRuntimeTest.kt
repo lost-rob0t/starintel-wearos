@@ -33,6 +33,19 @@ class EclLispRuntimeTest {
     }
 
     @Test
+    fun `allows managed actor catalog and dispatch operations`() {
+        val bridge = RecordingBridge()
+        val runtime = EclLispRuntime("/runtime", bridge)
+
+        runtime.request("actor.list")
+        runtime.request("actor.dispatch", JSONObject().put("actor_id", "runtime.echo"))
+
+        assertEquals(2, bridge.requests.size)
+        assertTrue(bridge.requests[0].contains("actor.list"))
+        assertTrue(bridge.requests[1].contains("actor.dispatch"))
+    }
+
+    @Test
     fun `projects structured errors and truncates untrusted detail`() {
         val bridge = RecordingBridge(response = JSONObject()
             .put("ok", false)

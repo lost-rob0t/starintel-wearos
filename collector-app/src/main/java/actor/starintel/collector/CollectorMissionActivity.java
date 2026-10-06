@@ -1,6 +1,8 @@
 package actor.starintel.collector;
 
 import actor.starintel.android.config.OperatorContracts;
+import actor.starintel.android.lisp.EdgeRuntimeSnapshot;
+import actor.starintel.android.lisp.ManagedEdgeRuntime;
 import actor.starintel.design.Si;
 import actor.starintel.design.SiTokens;
 import actor.starintel.design.SiTokens.ThemeStore;
@@ -13,12 +15,15 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Mission screen: the one place a collection session is started, read, and stopped.
@@ -40,7 +45,11 @@ public final class CollectorMissionActivity extends Activity {
     private TextView captures;
     private TextView process;
     private TextView sync;
+    private TextView localCoreStatus;
+    private TextView localCoreDetail;
     private MissionNetworkView networkView;
+    private ManagedEdgeRuntime edgeRuntime;
+    private final ExecutorService runtimeIo = Executors.newSingleThreadExecutor();
     private boolean resumed;
 
     @Override
@@ -68,7 +77,7 @@ public final class CollectorMissionActivity extends Activity {
                 "One visible session captures Wi-Fi, Bluetooth, location, audio, pictures, and video, then queues canonical StarIntel documents."), si.match(SiTokens.SPACE_S));
         networkView = new MissionNetworkView(this, si.palette());
         mission.addView(networkView, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, si.dp(176)));
+                ViewGroup.LayoutParams.MATCH_PARENT, si.dp(164)));
         primary = si.primaryButton("START MISSION", this::toggleMission);
         primary.setContentDescription("Start or stop the collection mission");
         primaryLabel = (TextView) primary;
@@ -76,14 +85,16 @@ public final class CollectorMissionActivity extends Activity {
         mission.addView(stageRail(), si.match(SiTokens.SPACE_XL));
         root.addView(mission, si.match(SiTokens.SPACE_XXL));
 
-        root.addView(evidenceCard(), si.match(SiTokens.SPACE_L));
         root.addView(captureRow(), si.match(SiTokens.SPACE_XL));
+        root.addView(localCoreCard(), si.match(SiTokens.SPACE_L));
+        root.addView(evidenceCard(), si.match(SiTokens.SPACE_L));
         root.addView(appRail(), si.match(SiTokens.SPACE_L));
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.addView(root);
-        setContentView(scroll);
+        Si.install(this, scroll);
+        probeLocalCore();
     }
 
     @Override
@@ -98,6 +109,13 @@ public final class CollectorMissionActivity extends Activity {
         resumed = false;
         refreshHandler.removeCallbacksAndMessages(null);
         super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        runtimeIo.shutdownNow();
+        if (edgeRuntime != null) edgeRuntime.close();
+        super.onDestroy();
     }
 
     /** Operator handoff: COLLECT opens the mission; an optional kind jumps straight into a tool. */
@@ -148,19 +166,35 @@ public final class CollectorMissionActivity extends Activity {
         return evidence;
     }
 
+    private LinearLayout localCoreCard() {
+        LinearLayout card = si.card(si.accentAlt());
+        LinearLayout header = si.row();
+        header.addView(si.sectionHeader("Local core"), si.weight());
+        localCoreStatus = si.label("BOOTING", SiTokens.TYPE_LABEL, si.warn(), true);
+        localCoreStatus.setLetterSpacing(0.1f);
+        header.addView(localCoreStatus);
+        card.addView(header);
+        card.addView(si.title("Common Lisp actor runtime"), si.match(SiTokens.SPACE_S));
+        localCoreDetail = si.body("Loading the pinned StarIntel Edge image and trusted Sento actors.");
+        card.addView(localCoreDetail, si.match(SiTokens.SPACE_XS));
+        return card;
+    }
+
     private LinearLayout captureRow() {
         LinearLayout column = si.vertical();
         column.addView(si.sectionHeader("Capture"), si.match());
-        LinearLayout quick = si.row();
-        quick.addView(quickAction("Audio", "Record a voice segment", si.accentAlt(),
+        LinearLayout first = si.row();
+        first.addView(quickAction("Audio", "Voice + transcript", si.accentAlt(),
                 () -> openTools(MainActivity.ACTION_AUDIO)), si.weight());
-        quick.addView(quickAction("Photo", "Capture an analyzed frame", si.warn(),
+        first.addView(quickAction("Photo", "Frame + features", si.warn(),
                 () -> openTools(MainActivity.ACTION_PHOTO)), si.weight(SiTokens.SPACE_S));
-        quick.addView(quickAction("Video", "Record video for downstream actors", si.accent(),
-                () -> openTools(MainActivity.ACTION_VIDEO)), si.weight(SiTokens.SPACE_S));
-        quick.addView(quickAction("WiGLE", "Import a WiGLE database", si.ok(),
+        column.addView(first, si.match(SiTokens.SPACE_S));
+        LinearLayout second = si.row();
+        second.addView(quickAction("Video", "Media + metadata", si.accent(),
+                () -> openTools(MainActivity.ACTION_VIDEO)), si.weight());
+        second.addView(quickAction("WiGLE", "Bulk observations", si.ok(),
                 () -> openTools(MainActivity.ACTION_WIGLE)), si.weight(SiTokens.SPACE_S));
-        column.addView(quick, si.match(SiTokens.SPACE_S));
+        column.addView(second, si.match(SiTokens.SPACE_S));
         return column;
     }
 
@@ -176,12 +210,20 @@ public final class CollectorMissionActivity extends Activity {
         return column;
     }
 
-    private Button quickAction(String title, String description, int accent, Runnable click) {
-        Button view = si.secondaryButton(title, click);
-        view.setContentDescription(description);
-        view.setMinHeight(si.dp(68));
-        view.setBackground(si.ripple(si.palette().raised, accent, SiTokens.RADIUS_CONTROL));
-        return view;
+    private View quickAction(String title, String description, int accent, Runnable click) {
+        LinearLayout tile = si.vertical();
+        tile.setPadding(si.dp(SiTokens.SPACE_L), si.dp(SiTokens.SPACE_L),
+                si.dp(SiTokens.SPACE_L), si.dp(SiTokens.SPACE_L));
+        tile.setMinimumHeight(si.dp(92));
+        tile.setBackground(si.ripple(si.palette().raised, accent, SiTokens.RADIUS_CONTROL));
+        tile.setClickable(true);
+        tile.setFocusable(true);
+        tile.setContentDescription(title + ". " + description);
+        tile.setOnClickListener(ignored -> click.run());
+        tile.addView(si.label(title, SiTokens.TYPE_HEADLINE, si.text(), true));
+        tile.addView(si.label(description, SiTokens.TYPE_LABEL, si.muted(), false),
+                si.match(SiTokens.SPACE_XS));
+        return tile;
     }
 
     private Button railButton(String title, String description, Runnable click) {
@@ -232,6 +274,33 @@ public final class CollectorMissionActivity extends Activity {
 
     private TextView firstText(LinearLayout metricColumn) {
         return (TextView) metricColumn.getChildAt(0);
+    }
+
+    private void probeLocalCore() {
+        runtimeIo.execute(() -> {
+            EdgeRuntimeSnapshot snapshot;
+            try {
+                edgeRuntime = new ManagedEdgeRuntime(getApplicationContext());
+                snapshot = edgeRuntime.snapshot();
+            } catch (RuntimeException failure) {
+                snapshot = new EdgeRuntimeSnapshot(false, "ECL", safe(failure.getMessage()), java.util.Collections.emptyList());
+            }
+            EdgeRuntimeSnapshot settled = snapshot;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (settled.getAvailable()) {
+                    int count = settled.getActors().size();
+                    localCoreStatus.setText("ECL + SENTO · READY");
+                    localCoreStatus.setTextColor(si.ok());
+                    localCoreDetail.setText(count + (count == 1 ? " trusted actor" : " trusted actors")
+                            + " available on-device. Requests stay inside the closed Edge API.");
+                } else {
+                    localCoreStatus.setText("EDGE RUNTIME · UNAVAILABLE");
+                    localCoreStatus.setTextColor(si.warn());
+                    localCoreDetail.setText(settled.getDetail());
+                }
+            });
+        });
     }
 
     // ---- mission control ----
@@ -375,5 +444,10 @@ public final class CollectorMissionActivity extends Activity {
         if (value >= 1_000_000) return String.format(java.util.Locale.US, "%.1fM", value / 1_000_000d);
         if (value >= 1_000) return String.format(java.util.Locale.US, "%.1fK", value / 1_000d);
         return Long.toString(value);
+    }
+
+    private static String safe(String value) {
+        if (value == null || value.trim().isEmpty()) return "Runtime unavailable";
+        return value.length() <= 220 ? value : value.substring(0, 220);
     }
 }

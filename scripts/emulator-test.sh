@@ -136,6 +136,12 @@ done
 grep -q 'OK (2 tests)' build/emulator-test/wigle-instrumentation.log
 
 "$starintel_adb" -s "$starintel_serial" shell am instrument -w -r \
+  -e class actor.starintel.collector.CollectorMissionUiTest \
+  actor.starintel.collector.test/androidx.test.runner.AndroidJUnitRunner \
+  | tee build/emulator-test/collector-ui-instrumentation.log
+grep -q 'OK (1 test)' build/emulator-test/collector-ui-instrumentation.log
+
+"$starintel_adb" -s "$starintel_serial" shell am instrument -w -r \
   -e class actor.starintel.android.lisp.EdgeRuntimeInstrumentedTest \
   actor.starintel.android.test/androidx.test.runner.AndroidJUnitRunner \
   | tee build/emulator-test/edge-runtime-instrumentation.log
@@ -145,5 +151,14 @@ grep -q 'OK (1 test)' build/emulator-test/edge-runtime-instrumentation.log
   -n actor.starintel.collector/.CollectorMissionActivity \
   >build/emulator-test/collector-launch.log
 grep -q 'Status: ok' build/emulator-test/collector-launch.log
+sleep 15
+"$starintel_adb" -s "$starintel_serial" exec-out screencap -p \
+  >build/emulator-test/collector-ui.png
+test -s build/emulator-test/collector-ui.png
+"$starintel_adb" -s "$starintel_serial" shell input swipe 540 1900 540 650 500
+sleep 1
+"$starintel_adb" -s "$starintel_serial" exec-out screencap -p \
+  >build/emulator-test/collector-runtime-ui.png
+test -s build/emulator-test/collector-runtime-ui.png
 
-echo "PASS: $starintel_serial; mocked wireless JVM tests; v3-v4 migration; 325000-row WiGLE import/replay; Edge ECL/Sento ART round-trip; collector launch"
+echo "PASS: $starintel_serial; mocked wireless JVM tests; v3-v4 migration; 325000-row WiGLE import/replay; Edge ECL/Sento ART round-trip; Collector UI + managed runtime; collector launch"

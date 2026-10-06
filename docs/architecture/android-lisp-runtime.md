@@ -32,6 +32,8 @@ runtime/actor operations proven by its conformance suite:
 
 - `runtime.ping`
 - `actor.roundtrip`
+- `actor.list`
+- `actor.dispatch`
 - bounded runtime lifecycle/status operations
 
 There is no public `eval`, `load`, arbitrary symbol call, filesystem primitive,
@@ -41,16 +43,15 @@ payloads are data and are never passed to the Lisp reader or evaluator.
 
 ## Local actor lifecycle
 
-1. The Android product loads lock-verified built-in manifests.
-2. Schema parsing rejects unknown capabilities and unqualified entrypoints.
-3. The trusted Lisp image separately registers compiled handlers.
-4. Kotlin registers enabled actor instances with bounded mailboxes.
-5. A document envelope is admitted only when its dtype is accepted.
-6. The actor returns typed effects.
-7. Kotlin checks every effect against the manifest.
-8. The product-owned durable store commits admitted effects plus the audit
-   event in one transaction.
-9. External work remains a durable outbox intent until a separately authorized
+1. The Android product copies the immutable, lock-pinned Edge bundle into its
+   app-private runtime directory.
+2. ECL boots the trusted image and starts the process-owned Sento actor system.
+3. The image registers its compiled handlers and closed actor IDs.
+4. Android lists the catalog through `actor.list`; it does not load manifests
+   or entrypoint text supplied by the client.
+5. `actor.dispatch` admits only bounded JSON and an actor ID already registered
+   by the trusted image.
+6. External work remains a durable outbox intent until a separately authorized
    dispatcher sends it.
 
 ## Prolog-RLM
