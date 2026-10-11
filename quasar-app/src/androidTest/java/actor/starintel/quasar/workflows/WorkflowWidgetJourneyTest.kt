@@ -283,6 +283,18 @@ class WorkflowWidgetJourneyTest {
         await { device.currentPackageName == context.packageName }
         device.waitForIdle()
         assertFalse("System error obscures evidence", device.hasObject(By.res("android", "aerr_close")))
+        if (name.startsWith("status-")) {
+            instrumentation.runOnMainSync {
+                val activity = requireNotNull(resumedStatus())
+                val scroll = activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0) as ViewGroup
+                val content = scroll.getChildAt(0)
+                val location = IntArray(2)
+                content.getLocationOnScreen(location)
+                @Suppress("DEPRECATION")
+                val topInset = activity.window.decorView.rootWindowInsets.systemWindowInsetTop
+                assertTrue("Status content overlaps the system bar", location[1] >= topInset)
+            }
+        }
         val directory = File(context.getExternalFilesDir(null), "widget-evidence").apply { mkdirs() }
         val bitmap = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
         File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
