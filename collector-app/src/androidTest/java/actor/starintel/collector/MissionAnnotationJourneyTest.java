@@ -174,25 +174,38 @@ public class MissionAnnotationJourneyTest {
     private static void capture(Context context, String name) throws Exception {
         File directory = new File(context.getExternalFilesDir(null), "mission-annotations-evidence");
         assertTrue(directory.isDirectory() || directory.mkdirs());
-        android.view.accessibility.AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
-                .getUiAutomation().getRootInActiveWindow();
-        assertNotNull("No active accessibility window", root);
-        assertEquals("System dialog or another app obscures Collector", "actor.starintel.collector",
-                String.valueOf(root.getPackageName()));
-        assertTrue("Annotation controls must be visible", hasVisibleText(root, "END INTERVAL"));
-        try (FileOutputStream output = new FileOutputStream(new File(directory, name.replace(".png", ".xml")))) {
-            org.xmlpull.v1.XmlSerializer xml = android.util.Xml.newSerializer();
-            xml.setOutput(output, "UTF-8");
-            xml.startDocument("UTF-8", true);
-            writeNode(xml, root);
-            xml.endDocument();
-        } finally { root.recycle(); }
-        Bitmap screenshot = InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
-        assertNotNull(screenshot);
-        try (FileOutputStream output = new FileOutputStream(new File(directory, name))) {
-            assertTrue(screenshot.compress(Bitmap.CompressFormat.PNG, 100, output));
-        } finally {
-            screenshot.recycle();
+        android.app.UiAutomation automation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        android.view.accessibility.AccessibilityNodeInfo root = null;
+        long deadline = android.os.SystemClock.uptimeMillis() + 10000;
+        // Main-thread idle is not a guarantee that recreation/IME window transactions have committed.
+        // Wait for the actual foreground window; do not dismiss or accept system dialogs.
+        while (true) {
+            root = automation.getRootInActiveWindow();
+            if (root != null && "actor.starintel.collector".equals(String.valueOf(root.getPackageName()))
+                    && hasVisibleText(root, "END INTERVAL")) break;
+            if (android.os.SystemClock.uptimeMillis() >= deadline) break;
+            if (root != null) root.recycle();
+            Thread.sleep(100);
         }
+        // Preserve diagnostic evidence before assertions, including a wrong/system window.
+        try {
+            try (FileOutputStream output = new FileOutputStream(new File(directory, name.replace(".png", ".xml")))) {
+                org.xmlpull.v1.XmlSerializer xml = android.util.Xml.newSerializer();
+                xml.setOutput(output, "UTF-8");
+                xml.startDocument("UTF-8", true);
+                if (root == null) { xml.startTag(null, "missing-window"); xml.endTag(null, "missing-window"); }
+                else writeNode(xml, root);
+                xml.endDocument();
+            }
+            Bitmap screenshot = automation.takeScreenshot();
+            assertNotNull(screenshot);
+            try (FileOutputStream output = new FileOutputStream(new File(directory, name))) {
+                assertTrue(screenshot.compress(Bitmap.CompressFormat.PNG, 100, output));
+            } finally { screenshot.recycle(); }
+            assertNotNull("No active accessibility window", root);
+            assertEquals("System dialog or another app obscures Collector", "actor.starintel.collector",
+                    String.valueOf(root.getPackageName()));
+            assertTrue("Annotation controls must be visible", hasVisibleText(root, "END INTERVAL"));
+        } finally { if (root != null) root.recycle(); }
     }
 }
