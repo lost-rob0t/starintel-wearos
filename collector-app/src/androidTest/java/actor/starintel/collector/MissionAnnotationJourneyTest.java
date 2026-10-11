@@ -45,7 +45,7 @@ public class MissionAnnotationJourneyTest {
                 showControls(activity);
             });
             InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-            capture(context, "synthetic-open-interval.png");
+            capture(context, "synthetic-open-interval.png", "Open interval: Measured observation interval", true, false, true);
             scenario.onActivity(activity -> findText(activity.getWindow().getDecorView(), "END INTERVAL").performClick());
             try (StarWirelessStore store = new StarWirelessStore(context)) {
                 assertNull(store.activeAnnotation("synthetic-annotation-test"));
@@ -53,7 +53,7 @@ public class MissionAnnotationJourneyTest {
                 assertEquals("Synthetic note: north entrance", store.recentAnnotations("synthetic-annotation-test").get(2).text);
             }
             InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-            capture(context, "synthetic-ended-interval.png");
+            capture(context, "synthetic-ended-interval.png", "No interval open", true, true, false);
         } finally {
             context.getSharedPreferences(CollectorService.PREFS, Context.MODE_PRIVATE).edit().clear().commit();
             context.deleteDatabase("star-wireless.db");
@@ -92,7 +92,7 @@ public class MissionAnnotationJourneyTest {
                 showControls(activity);
             });
             InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-            capture(context, "service-stopped-interval.png");
+            capture(context, "service-stopped-interval.png", "Start a mission to add notes", false, false, false);
         } finally {
             context.stopService(service);
             InstrumentationRegistry.getInstrumentation().waitForIdleSync();
@@ -143,15 +143,27 @@ public class MissionAnnotationJourneyTest {
         return null;
     }
 
-    private static boolean hasVisibleText(android.view.accessibility.AccessibilityNodeInfo node, String text) {
-        if (node.isVisibleToUser() && text.contentEquals(node.getText() == null ? "" : node.getText())) return true;
+    private static boolean hasVisibleNode(android.view.accessibility.AccessibilityNodeInfo node,
+            String text, boolean substring, Boolean enabled) {
+        String actual = node.getText() == null ? "" : node.getText().toString();
+        if (node.isVisibleToUser() && (substring ? actual.contains(text) : text.equals(actual))
+                && (enabled == null || node.isEnabled() == enabled)) return true;
         for (int i = 0; i < node.getChildCount(); i++) {
             android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
             if (child != null) {
-                try { if (hasVisibleText(child, text)) return true; } finally { child.recycle(); }
+                try { if (hasVisibleNode(child, text, substring, enabled)) return true; } finally { child.recycle(); }
             }
         }
         return false;
+    }
+
+    private static boolean expectedState(android.view.accessibility.AccessibilityNodeInfo root,
+            String status, boolean saveEnabled, boolean startEnabled, boolean endEnabled) {
+        return root != null && "actor.starintel.collector".equals(String.valueOf(root.getPackageName()))
+                && hasVisibleNode(root, status, true, null)
+                && hasVisibleNode(root, "SAVE NOTE", false, saveEnabled)
+                && hasVisibleNode(root, "START INTERVAL", false, startEnabled)
+                && hasVisibleNode(root, "END INTERVAL", false, endEnabled);
     }
 
     private static void writeNode(org.xmlpull.v1.XmlSerializer xml,
@@ -171,18 +183,20 @@ public class MissionAnnotationJourneyTest {
         xml.endTag(null, "node");
     }
 
-    private static void capture(Context context, String name) throws Exception {
+    private static void capture(Context context, String name, String status,
+            boolean saveEnabled, boolean startEnabled, boolean endEnabled) throws Exception {
         File directory = new File(context.getExternalFilesDir(null), "mission-annotations-evidence");
         assertTrue(directory.isDirectory() || directory.mkdirs());
         android.app.UiAutomation automation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
         android.view.accessibility.AccessibilityNodeInfo root = null;
         long deadline = android.os.SystemClock.uptimeMillis() + 10000;
         // Main-thread idle is not a guarantee that recreation/IME window transactions have committed.
-        // Wait for the actual foreground window; do not dismiss or accept system dialogs.
+        // Wait for the actual foreground state, including accessibility updates after ending an interval.
+        // An old tree can have visible controls while still describing the previous state.
+        // Do not dismiss or accept system dialogs.
         while (true) {
             root = automation.getRootInActiveWindow();
-            if (root != null && "actor.starintel.collector".equals(String.valueOf(root.getPackageName()))
-                    && hasVisibleText(root, "END INTERVAL")) break;
+            if (expectedState(root, status, saveEnabled, startEnabled, endEnabled)) break;
             if (android.os.SystemClock.uptimeMillis() >= deadline) break;
             if (root != null) root.recycle();
             Thread.sleep(100);
@@ -205,7 +219,8 @@ public class MissionAnnotationJourneyTest {
             assertNotNull("No active accessibility window", root);
             assertEquals("System dialog or another app obscures Collector", "actor.starintel.collector",
                     String.valueOf(root.getPackageName()));
-            assertTrue("Annotation controls must be visible", hasVisibleText(root, "END INTERVAL"));
+            assertTrue("Annotation hierarchy did not reach expected state: " + status,
+                    expectedState(root, status, saveEnabled, startEnabled, endEnabled));
         } finally { if (root != null) root.recycle(); }
     }
 }

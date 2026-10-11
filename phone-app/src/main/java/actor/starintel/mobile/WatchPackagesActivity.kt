@@ -5,6 +5,8 @@ import actor.starintel.update.UpdateArtifact
 import actor.starintel.update.UpdateFeed
 import actor.starintel.update.UpdateManifest
 import actor.starintel.update.UpdateSources
+import actor.starintel.design.Si
+import actor.starintel.design.SiTokens
 import android.app.Activity
 import android.graphics.Color
 import android.graphics.Typeface
@@ -103,7 +105,7 @@ class WatchPackagesActivity : Activity(), MessageClient.OnMessageReceivedListene
         root.addView(cancel, matchWrap(top = 8))
         root.addView(body("Keep the watch awake while approval is requested. If an acknowledgement is lost, Companion asks the watch for its saved state, retries once, then continues the remaining queue with a failure summary."), matchWrap(top = 18))
 
-        setContentView(ScrollView(this).apply { isFillViewport = true; addView(root) })
+        Si.install(this, ScrollView(this).apply { isFillViewport = true; addView(root) })
         setButtonsEnabled(false)
     }
 
@@ -503,12 +505,12 @@ class WatchPackagesActivity : Activity(), MessageClient.OnMessageReceivedListene
         private const val STATUS_QUERY_TIMEOUT_MS = 15_000L
         private const val RETRY_DELAY_MS = 1_200L
         private const val NEXT_ITEM_DELAY_MS = 700L
-        private val BACKGROUND = Color.BLACK
-        private val CARD = Color.rgb(12, 16, 22)
-        private val STROKE = Color.rgb(45, 59, 72)
-        private val CYAN = Color.rgb(0, 229, 255)
-        private val AMBER = Color.rgb(255, 190, 70)
-        private val MUTED = Color.rgb(183, 194, 207)
-        private val WARNING = Color.rgb(255, 112, 120)
+        private val BACKGROUND = SiTokens.CYAN.background
+        private val CARD = SiTokens.CYAN.surface
+        private val STROKE = SiTokens.CYAN.border
+        private val CYAN = SiTokens.CYAN.accent
+        private val AMBER = SiTokens.CYAN.warn
+        private val MUTED = SiTokens.CYAN.muted
+        private val WARNING = SiTokens.CYAN.danger
     }
 }

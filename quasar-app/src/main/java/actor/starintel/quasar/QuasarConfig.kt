@@ -17,7 +17,8 @@ internal class QuasarConfig(context: Context) {
     private val shared = StarIntelSharedConfig(appContext)
 
     fun serverUrl(): String =
-        shared.get(StarIntelSharedConfig.KEY_SERVER_URL, prefs.getString(KEY_SERVER, "").orEmpty())
+        (prefs.getString(KEY_SERVER, null)
+            ?: shared.get(StarIntelSharedConfig.KEY_SERVER_URL, ""))
             .trimEnd('/')
 
     fun save(serverUrl: String, apiKey: String) {

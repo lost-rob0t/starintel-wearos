@@ -11,6 +11,13 @@
 
     <uses-permission android:name="actor.starintel.permission.CONFIG" />
 
+    <queries>
+        <package android:name="actor.starintel.operator" />
+        <package android:name="actor.starintel.quasar" />
+        <package android:name="actor.starintel.collector" />
+        <package android:name="actor.starintel.hackmode" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:label="StarIntel Companion"

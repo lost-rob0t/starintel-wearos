@@ -1,5 +1,7 @@
 package actor.starintel.mobile
 
+import actor.starintel.design.Si
+import actor.starintel.design.SiTokens
 import android.app.Activity
 import android.graphics.Color
 import android.graphics.Typeface
@@ -156,7 +158,7 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
         root.addView(progress, centeredWrap(top = 14))
         root.addView(status, matchWrap(top = 14))
 
-        setContentView(ScrollView(this).apply {
+        Si.install(this, ScrollView(this).apply {
             isFillViewport = true
             addView(root)
         })
@@ -419,13 +421,13 @@ class MainActivity : Activity(), MessageClient.OnMessageReceivedListener {
         private const val KEY_SERVER_URL = "server_url"
         private val TIMEOUT_TOKEN = Any()
 
-        private val BACKGROUND = Color.BLACK
-        private val CARD = Color.rgb(15, 20, 27)
+        private val BACKGROUND = SiTokens.CYAN.background
+        private val CARD = SiTokens.CYAN.surface
         private val FIELD = Color.rgb(11, 15, 21)
-        private val STROKE = Color.rgb(42, 54, 66)
-        private val CYAN = Color.rgb(0, 229, 255)
-        private val MUTED = Color.rgb(176, 187, 199)
+        private val STROKE = SiTokens.CYAN.border
+        private val CYAN = SiTokens.CYAN.accent
+        private val MUTED = SiTokens.CYAN.muted
         private val HINT = Color.rgb(111, 123, 136)
-        private val WARNING = Color.rgb(255, 132, 132)
+        private val WARNING = SiTokens.CYAN.danger
     }
 }

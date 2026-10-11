@@ -24,7 +24,7 @@ public final class Si {
     private final SiTokens.Palette palette;
 
     public Si(Context context, SiTokens.Palette palette) {
-        this.context = context.getApplicationContext();
+        this.context = context;
         this.palette = palette;
     }
 
@@ -74,6 +74,44 @@ public final class Si {
         block.addView(display(titleText), match(SiTokens.SPACE_XS));
         if (bodyText != null) block.addView(body(bodyText), match(SiTokens.SPACE_S));
         return block;
+    }
+
+    /** Edge-to-edge content stays clear of system bars and the keyboard. */
+    public static void install(android.app.Activity activity, View content) {
+        android.widget.FrameLayout frame = new android.widget.FrameLayout(activity);
+        frame.addView(content);
+        frame.setOnApplyWindowInsetsListener((view, insets) -> {
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars = insets.getInsets(
+                        android.view.WindowInsets.Type.systemBars()
+                        | android.view.WindowInsets.Type.ime());
+                view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            } else {
+                view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
+                        insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            }
+            return insets;
+        });
+        activity.setContentView(frame);
+        frame.requestApplyInsets();
+    }
+
+    public android.widget.EditText field(String hint, boolean secret) {
+        android.widget.EditText field = new android.widget.EditText(context);
+        field.setHint(hint);
+        field.setSingleLine(true);
+        field.setTextSize(SiTokens.TYPE_BODY);
+        field.setTextColor(palette.text);
+        field.setHintTextColor(palette.muted);
+        field.setMinHeight(dp(SiTokens.TOUCH_MIN_DP));
+        field.setPadding(dp(SiTokens.SPACE_L), dp(SiTokens.SPACE_M), dp(SiTokens.SPACE_L), dp(SiTokens.SPACE_M));
+        field.setBackground(rounded(palette.raised, palette.border, SiTokens.RADIUS_CONTROL));
+        if (secret) {
+            field.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                    | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            field.setSaveEnabled(false);
+        }
+        return field;
     }
 
     // ---- containers ----

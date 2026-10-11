@@ -27,6 +27,18 @@ public final class OperatorSecretStore {
     }
 
     public void save(String slot, String value) {
+        save(slot, value, null);
+    }
+
+    public void saveConnection(String origin, String apiKey) {
+        save("star_api_key", apiKey, origin);
+    }
+
+    public String connectionOrigin() {
+        return prefs.getString("server_origin", null);
+    }
+
+    private void save(String slot, String value, String origin) {
         try {
             if (value == null || value.trim().isEmpty()) {
                 clear(slot);
@@ -35,10 +47,11 @@ public final class OperatorSecretStore {
             Cipher cipher = Cipher.getInstance(GCM_TRANSFORMATION);
             cipher.init(Cipher.ENCRYPT_MODE, key());
             byte[] encrypted = cipher.doFinal(value.trim().getBytes(StandardCharsets.UTF_8));
-            prefs.edit()
+            SharedPreferences.Editor editor = prefs.edit()
                     .putString(prefKey(slot), Base64.getEncoder().encodeToString(encrypted))
-                    .putString(prefKey(slot) + ".iv", Base64.getEncoder().encodeToString(cipher.getIV()))
-                    .apply();
+                    .putString(prefKey(slot) + ".iv", Base64.getEncoder().encodeToString(cipher.getIV()));
+            if (origin != null) editor.putString("server_origin", origin);
+            if (!editor.commit()) throw new IllegalStateException("Could not persist connection");
         } catch (Exception failure) {
             throw new IllegalStateException("Could not store secret", failure);
         }
@@ -61,7 +74,9 @@ public final class OperatorSecretStore {
     }
 
     public void clear(String slot) {
-        prefs.edit().remove(prefKey(slot)).remove(prefKey(slot) + ".iv").apply();
+        SharedPreferences.Editor editor = prefs.edit().remove(prefKey(slot)).remove(prefKey(slot) + ".iv");
+        if ("star_api_key".equals(slot)) editor.remove("server_origin");
+        editor.apply();
     }
 
     private static String prefKey(String slot) {
