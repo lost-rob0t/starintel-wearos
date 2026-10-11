@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.text.format.DateUtils
 import android.view.View
 import android.widget.RemoteViews
@@ -27,6 +28,10 @@ class WorkflowWidgetProvider : AppWidgetProvider() {
             return
         }
         super.onReceive(context, intent)
+    }
+
+    override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, options: Bundle) {
+        WorkflowWidgetRenderer.update(context, manager, id)
     }
 
     override fun onUpdate(
@@ -86,8 +91,10 @@ internal object WorkflowWidgetRenderer {
         if (active != null) {
             bindActive(context, views, widgetId, active, WorkflowSnapshotPolicy.canRequest(state, System.currentTimeMillis()))
         }
-        bindSecondary(context, views, R.id.workflow_widget_row_one, workflows.getOrNull(1), widgetId)
-        bindSecondary(context, views, R.id.workflow_widget_row_two, workflows.getOrNull(2), widgetId)
+        // Leave room for wrapped observation text and 48dp controls at the supported minimum.
+        val expanded = manager.getAppWidgetOptions(widgetId).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT) >= 480
+        bindSecondary(context, views, R.id.workflow_widget_row_one, workflows.getOrNull(1).takeIf { expanded }, widgetId)
+        bindSecondary(context, views, R.id.workflow_widget_row_two, workflows.getOrNull(2).takeIf { expanded }, widgetId)
         manager.updateAppWidget(widgetId, views)
     }
 
