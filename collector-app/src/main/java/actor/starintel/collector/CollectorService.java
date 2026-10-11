@@ -80,7 +80,18 @@ public final class CollectorService extends Service {
     public void onDestroy() {
         stopAudio();
         if (scanner != null) scanner.stop();
-        if (store != null) store.close();
+        if (store != null) {
+            try {
+                if (store.activeAnnotation(runId) != null) {
+                    store.appendAnnotation(runId, "end", "", System.currentTimeMillis(), "service_stop");
+                }
+            } catch (android.database.SQLException | IllegalStateException failure) {
+                // Collection must still stop if storage is full or an operator already closed it.
+                android.util.Log.w("StarWireless", "Could not append interval service-stop marker");
+            } finally {
+                store.close();
+            }
+        }
         syncHandler.removeCallbacksAndMessages(null);
 
         getSharedPreferences(PREFS, MODE_PRIVATE)
