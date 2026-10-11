@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.text.format.DateUtils
 import android.view.View
 import android.widget.RemoteViews
 import java.util.UUID
@@ -111,7 +110,7 @@ internal object WorkflowWidgetRenderer {
             summary.pendingCommand?.let { "${it.name} PENDING" } ?: summary.status.name,
         )
         views.setTextColor(R.id.workflow_widget_active_status, context.getColor(statusColor(summary.status)))
-        views.setTextViewText(R.id.workflow_widget_last_run, lastRunText(summary.lastRunEpochMillis))
+        views.setTextViewText(R.id.workflow_widget_last_run, WorkflowSnapshotText.lastRun(summary.lastRunEpochMillis))
         val failure = summary.lastFailure.takeIf { summary.status == WorkflowRunStatus.FAILED }
         views.setViewVisibility(R.id.workflow_widget_failure, if (failure == null) View.GONE else View.VISIBLE)
         views.setTextViewText(R.id.workflow_widget_failure, context.getString(R.string.workflow_failure_details))
@@ -207,9 +206,4 @@ internal object WorkflowWidgetRenderer {
         else -> R.color.quasar_widget_muted
     }
 
-    private fun lastRunText(epochMillis: Long?): CharSequence = if (epochMillis == null) {
-        "Never run"
-    } else {
-        "Last run ${DateUtils.getRelativeTimeSpanString(epochMillis, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)}"
-    }
 }
