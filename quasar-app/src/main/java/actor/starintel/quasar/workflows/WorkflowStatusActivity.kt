@@ -3,9 +3,10 @@ package actor.starintel.quasar.workflows
 import actor.starintel.quasar.QuasarDesign
 import actor.starintel.quasar.dp
 import android.app.Activity
+import android.content.Intent
+import android.widget.Toast
 import android.graphics.Typeface
 import android.os.Bundle
-import android.text.format.DateUtils
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -24,8 +25,26 @@ class WorkflowStatusActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         window.statusBarColor = QuasarDesign.background
         window.navigationBarColor = QuasarDesign.background
-        selectedId = WorkflowDeepLink.parse(intent?.dataString)
+        selectedId = savedInstanceState?.getString("selectedWorkflow")?.let { runCatching { WorkflowId.parse(it) }.getOrNull() }
+            ?: WorkflowDeepLink.parse(intent?.dataString)
+    }
+
+    override fun onResume() {
+        super.onResume()
         render()
+        WorkflowWidgetRenderer.updateAll(this)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        selectedId = WorkflowDeepLink.parse(intent.dataString)
+        render()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("selectedWorkflow", selectedId?.value)
+        super.onSaveInstanceState(outState)
     }
 
     private fun render() {
@@ -47,16 +66,23 @@ class WorkflowStatusActivity : Activity() {
             addView(
                 QuasarDesign.body(
                     this@WorkflowStatusActivity,
-                    if (state.connectivity == WorkflowConnectivity.ONLINE) "● Runtime online" else "○ Runtime offline · cached state",
-                    if (state.connectivity == WorkflowConnectivity.ONLINE) QuasarDesign.cyan else QuasarDesign.amber,
+                    WorkflowSnapshotText.describe(this@WorkflowStatusActivity, state),
+                    QuasarDesign.amber,
                     12f,
                 ),
                 QuasarDesign.match(top = dp(7)),
             )
         }
 
+        content.addView(QuasarDesign.action(this, "Open Flow studio") {
+            startActivity(Intent(this, FlowStudioActivity::class.java))
+        }, QuasarDesign.match(top = dp(12)))
+        content.addView(QuasarDesign.body(this,
+            "Run and Stop are available. Pause and resume are not supported by the current runtime adapter. Controls queue a request for Flow studio to handle when it resumes; a cached report does not confirm execution.",
+            QuasarDesign.muted, 12f), QuasarDesign.match(top = dp(8)))
+
         if (selected != null) {
-            content.addView(detailCard(selected), QuasarDesign.match(top = dp(20)))
+            content.addView(detailCard(selected, state), QuasarDesign.match(top = dp(20)))
             content.addView(QuasarDesign.eyebrow(this, "All workflows"), QuasarDesign.match(top = dp(28)))
         } else {
             content.addView(
@@ -70,7 +96,7 @@ class WorkflowStatusActivity : Activity() {
                 QuasarDesign.card(this, QuasarDesign.amber).apply {
                     addView(QuasarDesign.title(this@WorkflowStatusActivity, "No workflow state", 18f))
                     addView(
-                        QuasarDesign.body(this@WorkflowStatusActivity, "Start the native Quasar FBP runtime so it can publish its workflow projection."),
+                        QuasarDesign.body(this@WorkflowStatusActivity, "Flow studio publishes reports when workflows change. Queued controls are handled when Flow studio resumes."),
                         QuasarDesign.match(top = dp(7)),
                     )
                 },
@@ -83,7 +109,7 @@ class WorkflowStatusActivity : Activity() {
                     isFocusable = true
                     addView(statusLine(workflow))
                     addView(
-                        QuasarDesign.body(this@WorkflowStatusActivity, lastRunText(workflow.lastRunEpochMillis), QuasarDesign.muted, 11f),
+                        QuasarDesign.body(this@WorkflowStatusActivity, WorkflowSnapshotText.lastRun(workflow.lastRunEpochMillis), QuasarDesign.muted, 11f),
                         QuasarDesign.match(top = dp(6)),
                     )
                     setOnClickListener {
@@ -97,6 +123,8 @@ class WorkflowStatusActivity : Activity() {
 
         setContentView(ScrollView(this).apply {
             isFillViewport = true
+            fitsSystemWindows = true
+            setBackgroundColor(QuasarDesign.background)
             addView(
                 content,
                 ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
@@ -104,18 +132,19 @@ class WorkflowStatusActivity : Activity() {
         })
     }
 
-    private fun detailCard(summary: WorkflowWidgetSummary): LinearLayout =
+    private fun detailCard(summary: WorkflowWidgetSummary, state: WorkflowWidgetState): LinearLayout =
         QuasarDesign.card(this, statusColor(summary.status)).apply {
             addView(statusLine(summary))
             addView(
-                QuasarDesign.body(this@WorkflowStatusActivity, lastRunText(summary.lastRunEpochMillis)),
+                QuasarDesign.body(this@WorkflowStatusActivity, WorkflowSnapshotText.lastRun(summary.lastRunEpochMillis)),
                 QuasarDesign.match(top = dp(8)),
             )
             summary.lastFailure?.takeIf { summary.status == WorkflowRunStatus.FAILED }?.let { failure ->
                 addView(QuasarDesign.body(this@WorkflowStatusActivity, failure, QuasarDesign.coral, 12f), QuasarDesign.match(top = dp(8)))
             }
             val commands = WorkflowCommand.entries.filter {
-                summary.pendingCommand == null && WorkflowCommandPolicy.isAllowed(summary.status, it)
+                WorkflowCommandPolicy.isExposedByUi(it) && WorkflowSnapshotPolicy.canRequest(state, System.currentTimeMillis()) &&
+                    summary.pendingCommand == null && WorkflowCommandPolicy.isAllowed(summary.status, it)
             }
             if (commands.isNotEmpty()) {
                 val actions = LinearLayout(this@WorkflowStatusActivity).apply {
@@ -133,8 +162,10 @@ class WorkflowStatusActivity : Activity() {
                             )
                             if (receipt.accepted) {
                                 WorkflowWidgetRenderer.updateAll(this@WorkflowStatusActivity)
-                                render()
+                            } else {
+                                Toast.makeText(this@WorkflowStatusActivity, receipt.reason, Toast.LENGTH_LONG).show()
                             }
+                            render()
                         },
                         LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                             if (index > 0) marginStart = dp(7)
@@ -175,9 +206,4 @@ class WorkflowStatusActivity : Activity() {
         else -> QuasarDesign.muted
     }
 
-    private fun lastRunText(epochMillis: Long?): String = if (epochMillis == null) {
-        "Never run"
-    } else {
-        "Last run ${DateUtils.getRelativeTimeSpanString(epochMillis, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)}"
-    }
 }

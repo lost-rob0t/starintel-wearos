@@ -69,6 +69,14 @@ class WorkflowWidgetActionRoutingTest {
         assertFalse(WorkflowCommandPolicy.isAllowed(WorkflowRunStatus.FAILED, WorkflowCommand.RESUME))
     }
 
+    @Test
+    fun uiDoesNotAdvertiseUnimplementedPauseResumeSemantics() {
+        assertTrue(WorkflowCommandPolicy.isExposedByUi(WorkflowCommand.RUN))
+        assertTrue(WorkflowCommandPolicy.isExposedByUi(WorkflowCommand.STOP))
+        assertFalse(WorkflowCommandPolicy.isExposedByUi(WorkflowCommand.PAUSE))
+        assertFalse(WorkflowCommandPolicy.isExposedByUi(WorkflowCommand.RESUME))
+    }
+
     private class RecordingWorkflowCommandRepository : WorkflowCommandRepository {
         val requests = mutableListOf<WorkflowCommandRequest>()
 

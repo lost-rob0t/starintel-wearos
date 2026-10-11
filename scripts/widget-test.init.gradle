@@ -1,0 +1,12 @@
+// Widget-only hosted validation. Keeps shared production build configuration untouched.
+gradle.beforeProject { project ->
+    if (project.path == ':quasar-app') {
+        project.plugins.withId('com.android.application') {
+            project.android.defaultConfig.testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
+            project.dependencies.add('androidTestImplementation', 'androidx.test:core:1.6.1')
+            project.dependencies.add('androidTestImplementation', 'androidx.test:runner:1.6.2')
+            project.dependencies.add('androidTestImplementation', 'androidx.test.ext:junit:1.2.1')
+            project.dependencies.add('androidTestImplementation', 'androidx.test.uiautomator:uiautomator:2.3.0')
+        }
+    }
+}

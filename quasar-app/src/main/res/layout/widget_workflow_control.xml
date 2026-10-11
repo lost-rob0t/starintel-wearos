@@ -9,6 +9,7 @@
 
     <LinearLayout
         android:id="@+id/workflow_widget_header"
+        android:minHeight="48dp"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
@@ -36,12 +37,21 @@
             android:paddingTop="4dp"
             android:paddingEnd="9dp"
             android:paddingBottom="4dp"
-            android:text="@string/workflow_offline"
+            android:text="@string/workflow_cached"
             android:textAllCaps="true"
             android:textColor="@color/quasar_widget_gold"
             android:textSize="9sp"
             android:textStyle="bold" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/workflow_widget_observation"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/workflow_snapshot_missing"
+        android:textColor="@color/quasar_widget_muted"
+        android:textSize="11sp" />
 
     <TextView
         android:id="@+id/workflow_widget_empty"
@@ -70,6 +80,8 @@
 
             <TextView
                 android:id="@+id/workflow_widget_active_name"
+                android:minHeight="48dp"
+                android:gravity="center_vertical"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -120,8 +132,8 @@
 
             <ImageButton
                 android:id="@+id/workflow_widget_run"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="@drawable/widget_action_background"
                 android:contentDescription="@string/workflow_action_run"
                 android:padding="10dp"
@@ -130,8 +142,8 @@
 
             <ImageButton
                 android:id="@+id/workflow_widget_pause"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_marginStart="6dp"
                 android:background="@drawable/widget_action_background"
                 android:contentDescription="@string/workflow_action_pause"
@@ -141,8 +153,8 @@
 
             <ImageButton
                 android:id="@+id/workflow_widget_resume"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_marginStart="6dp"
                 android:background="@drawable/widget_action_background"
                 android:contentDescription="@string/workflow_action_resume"
@@ -152,8 +164,8 @@
 
             <ImageButton
                 android:id="@+id/workflow_widget_stop"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_marginStart="6dp"
                 android:background="@drawable/widget_action_background"
                 android:contentDescription="@string/workflow_action_stop"
@@ -166,7 +178,7 @@
     <TextView
         android:id="@+id/workflow_widget_row_one"
         android:layout_width="match_parent"
-        android:layout_height="36dp"
+        android:layout_height="48dp"
         android:layout_marginTop="8dp"
         android:background="@drawable/widget_list_row_background"
         android:ellipsize="end"
@@ -181,7 +193,7 @@
     <TextView
         android:id="@+id/workflow_widget_row_two"
         android:layout_width="match_parent"
-        android:layout_height="36dp"
+        android:layout_height="48dp"
         android:layout_marginTop="5dp"
         android:background="@drawable/widget_list_row_background"
         android:ellipsize="end"

@@ -12,7 +12,12 @@ result=0
 for package in actor.starintel.operator actor.starintel.quasar actor.starintel.wear; do
   timeout 30 adb wait-for-device
   log="build/native-journeys/${package}.log"
-  adb shell am instrument -w "$package.test/androidx.test.runner.AndroidJUnitRunner" | tee "$log"
+  case "$package" in
+    actor.starintel.operator) journey=actor.starintel.operator.OperatorJourneyTest ;;
+    actor.starintel.quasar) journey=actor.starintel.quasar.OperatorJourneyTest ;;
+    actor.starintel.wear) journey=actor.starintel.mobile.OperatorJourneyTest ;;
+  esac
+  adb shell am instrument -w -e class "$journey" "$package.test/androidx.test.runner.AndroidJUnitRunner" | tee "$log"
   if ! grep -Fq 'OK (1 test)' "$log"; then result=1; fi
   timeout 30 adb wait-for-device
   adb pull "/sdcard/Android/data/$package/files/e2e" "build/native-journeys/$package" || result=1

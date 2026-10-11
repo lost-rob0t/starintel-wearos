@@ -22,13 +22,16 @@ internal interface WorkflowRuntimeBridge {
     }
 }
 
-internal class SharedPreferencesWorkflowRepository(context: Context) :
+internal class SharedPreferencesWorkflowRepository(
+    private val preferences: SharedPreferences,
+    private val now: () -> Long = System::currentTimeMillis,
+    private val onPublished: () -> Unit = {},
+) :
     WorkflowCommandRepository,
     WorkflowRuntimeBridge {
-    private val applicationContext = context.applicationContext
-    private val preferences: SharedPreferences = applicationContext.getSharedPreferences(
-        PREFERENCES,
-        Context.MODE_PRIVATE,
+    constructor(context: Context) : this(
+        context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE),
+        onPublished = { WorkflowWidgetRenderer.updateAll(context.applicationContext) },
     )
 
     override fun state(): WorkflowWidgetState = synchronized(LOCK) {
@@ -41,7 +44,7 @@ internal class SharedPreferencesWorkflowRepository(context: Context) :
                 .putString(KEY_STATE, WorkflowWidgetStateCodec.encode(state))
                 .commit()
         }
-        if (committed) WorkflowWidgetRenderer.updateAll(applicationContext)
+        if (committed) onPublished()
         return committed
     }
 
@@ -57,7 +60,10 @@ internal class SharedPreferencesWorkflowRepository(context: Context) :
         val currentState = state()
         val current = currentState.workflows.firstOrNull { it.id == request.workflowId }
             ?: return@synchronized WorkflowCommandReceipt(false, false, "Unknown workflow")
-        if (current.pendingCommand != null) {
+        if (!WorkflowSnapshotPolicy.canRequest(currentState, now())) {
+            return@synchronized WorkflowCommandReceipt(false, false, "A recent online runtime report is required; open Flow studio for runtime controls")
+        }
+        if (current.pendingCommand != null || queued.any { it.workflowId == request.workflowId }) {
             return@synchronized WorkflowCommandReceipt(false, false, "A workflow command is already pending")
         }
         if (!WorkflowCommandPolicy.isAllowed(current.status, request.command)) {
@@ -74,7 +80,6 @@ internal class SharedPreferencesWorkflowRepository(context: Context) :
         )
         val nextState = currentState.copy(
             workflows = currentState.workflows.map { if (it.id == request.workflowId) nextSummary else it },
-            updatedAtEpochMillis = System.currentTimeMillis(),
         )
         val nextCommands = queued + request
         val committed = preferences.edit()
