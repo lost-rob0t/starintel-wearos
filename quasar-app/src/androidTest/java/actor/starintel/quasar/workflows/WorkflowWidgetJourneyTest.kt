@@ -22,7 +22,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
+import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
 import java.io.File
 import org.junit.After
 import org.junit.Before
@@ -270,10 +272,20 @@ class WorkflowWidgetJourneyTest {
 
     private fun saveScreenshot(name: String) {
         instrumentation.waitForIdleSync()
-        UiDevice.getInstance(instrumentation).waitForIdle()
+        val device = UiDevice.getInstance(instrumentation)
+        // The disposable emulator's launcher can ANR while the fixture owns the host.
+        // Dismiss only that named external process; a Quasar failure must fail the test.
+        val launcherAnr = By.text("Pixel Launcher isn't responding")
+        if (device.hasObject(launcherAnr)) {
+            requireNotNull(device.findObject(By.res("android", "aerr_close"))).click()
+            assertTrue("Launcher dialog remained visible", device.wait(Until.gone(launcherAnr), 5_000))
+        }
+        await { device.currentPackageName == context.packageName }
+        device.waitForIdle()
+        assertFalse("System error obscures evidence", device.hasObject(By.res("android", "aerr_close")))
         val directory = File(context.getExternalFilesDir(null), "widget-evidence").apply { mkdirs() }
         val bitmap = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
         File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        UiDevice.getInstance(instrumentation).dumpWindowHierarchy(File(directory, "$name.xml"))
+        device.dumpWindowHierarchy(File(directory, "$name.xml"))
     }
 }
