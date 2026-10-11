@@ -14,7 +14,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import org.junit.Test;
 
-/** Synthetic mission UI only: does not start sensors, microphone, or a collection service. */
+/** Isolated emulator fixtures: synthetic notes plus graceful collection service stop, without microphone. */
 public class MissionAnnotationJourneyTest {
     @Test public void recordsNotesAndRestoresIntervalAndDraftAfterRecreation() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();

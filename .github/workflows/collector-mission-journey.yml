@@ -3,12 +3,26 @@ on:
   pull_request:
     paths:
       - 'collector-app/**'
+      - 'starintel-android/**'
+      - 'starintel-design/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'flake.nix'
+      - 'flake.lock'
       - 'scripts/test-collector-mission-journey.sh'
       - '.github/workflows/collector-mission-journey.yml'
   push:
     branches: [main]
     paths:
       - 'collector-app/**'
+      - 'starintel-android/**'
+      - 'starintel-design/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'flake.nix'
+      - 'flake.lock'
       - 'scripts/test-collector-mission-journey.sh'
       - '.github/workflows/collector-mission-journey.yml'
 jobs:
