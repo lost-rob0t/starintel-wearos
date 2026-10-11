@@ -123,6 +123,8 @@ class WorkflowStatusActivity : Activity() {
 
         setContentView(ScrollView(this).apply {
             isFillViewport = true
+            fitsSystemWindows = true
+            setBackgroundColor(QuasarDesign.background)
             addView(
                 content,
                 ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
