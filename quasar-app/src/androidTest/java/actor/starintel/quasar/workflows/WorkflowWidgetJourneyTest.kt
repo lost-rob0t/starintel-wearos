@@ -42,7 +42,8 @@ class WorkflowWidgetJourneyTest {
     private fun snapshot(time: Long? = System.currentTimeMillis(), status: WorkflowRunStatus = WorkflowRunStatus.IDLE,
                          online: Boolean = true, failure: String? = null) = WorkflowWidgetState(
         if (online) WorkflowConnectivity.ONLINE else WorkflowConnectivity.OFFLINE,
-        listOf(WorkflowWidgetSummary.create("alpha", "Alpha workflow", status, lastFailure = failure)), time)
+        listOf(WorkflowWidgetSummary.create("alpha", "Alpha workflow", status,
+            lastRunEpochMillis = System.currentTimeMillis() - 86_400_000, lastFailure = failure)), time)
 
     @Test fun hostRendersCachedReportsAndRoutesTypedCommandWithoutRefreshingObservation() {
         val observed = System.currentTimeMillis() - 1000

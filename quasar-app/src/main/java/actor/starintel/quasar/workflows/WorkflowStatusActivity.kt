@@ -7,7 +7,6 @@ import android.content.Intent
 import android.widget.Toast
 import android.graphics.Typeface
 import android.os.Bundle
-import android.text.format.DateUtils
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -110,7 +109,7 @@ class WorkflowStatusActivity : Activity() {
                     isFocusable = true
                     addView(statusLine(workflow))
                     addView(
-                        QuasarDesign.body(this@WorkflowStatusActivity, lastRunText(workflow.lastRunEpochMillis), QuasarDesign.muted, 11f),
+                        QuasarDesign.body(this@WorkflowStatusActivity, WorkflowSnapshotText.lastRun(workflow.lastRunEpochMillis), QuasarDesign.muted, 11f),
                         QuasarDesign.match(top = dp(6)),
                     )
                     setOnClickListener {
@@ -135,7 +134,7 @@ class WorkflowStatusActivity : Activity() {
         QuasarDesign.card(this, statusColor(summary.status)).apply {
             addView(statusLine(summary))
             addView(
-                QuasarDesign.body(this@WorkflowStatusActivity, lastRunText(summary.lastRunEpochMillis)),
+                QuasarDesign.body(this@WorkflowStatusActivity, WorkflowSnapshotText.lastRun(summary.lastRunEpochMillis)),
                 QuasarDesign.match(top = dp(8)),
             )
             summary.lastFailure?.takeIf { summary.status == WorkflowRunStatus.FAILED }?.let { failure ->
@@ -205,9 +204,4 @@ class WorkflowStatusActivity : Activity() {
         else -> QuasarDesign.muted
     }
 
-    private fun lastRunText(epochMillis: Long?): String = if (epochMillis == null) {
-        "Never run"
-    } else {
-        "Last run ${DateUtils.getRelativeTimeSpanString(epochMillis, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)}"
-    }
 }

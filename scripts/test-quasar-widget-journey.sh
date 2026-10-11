@@ -14,3 +14,9 @@ adb logcat -d > build/widget-journey/logcat.txt
 adb shell dumpsys appwidget > build/widget-journey/appwidget.txt
 set -e
 grep -Fq 'OK (3 tests)' build/widget-journey/instrumentation.txt
+for state in widget-recent-minimum-250x360 widget-expanded-three-workflows widget-command-pending \
+  widget-retained-control-rejected widget-running-stop-only widget-stale widget-future \
+  widget-missing widget-offline widget-failure status-resumed-alpha status-new-intent-beta status-all-workflows; do
+  test -s "build/widget-journey/widget-evidence/$state.png"
+  test -s "build/widget-journey/widget-evidence/$state.xml"
+done
