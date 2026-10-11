@@ -79,7 +79,7 @@ class WorkflowStatusActivity : Activity() {
             startActivity(Intent(this, FlowStudioActivity::class.java))
         }, QuasarDesign.match(top = dp(12)))
         content.addView(QuasarDesign.body(this,
-            "Controls queue a request. Flow studio handles queued requests when it resumes; a cached report does not confirm execution.",
+            "Run and Stop are available. Pause and resume are not supported by the current runtime adapter. Controls queue a request for Flow studio to handle when it resumes; a cached report does not confirm execution.",
             QuasarDesign.muted, 12f), QuasarDesign.match(top = dp(8)))
 
         if (selected != null) {
@@ -142,7 +142,7 @@ class WorkflowStatusActivity : Activity() {
                 addView(QuasarDesign.body(this@WorkflowStatusActivity, failure, QuasarDesign.coral, 12f), QuasarDesign.match(top = dp(8)))
             }
             val commands = WorkflowCommand.entries.filter {
-                WorkflowSnapshotPolicy.canRequest(state, System.currentTimeMillis()) &&
+                WorkflowCommandPolicy.isExposedByUi(it) && WorkflowSnapshotPolicy.canRequest(state, System.currentTimeMillis()) &&
                     summary.pendingCommand == null && WorkflowCommandPolicy.isAllowed(summary.status, it)
             }
             if (commands.isNotEmpty()) {
