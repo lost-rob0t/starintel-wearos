@@ -67,3 +67,16 @@ command for a workflow while an earlier command remains in the outbox.
 Unit tests exercise policy boundaries and the repository against an in-memory
 SharedPreferences interface. This is not evidence of Android disk persistence,
 launcher rendering, or lifecycle behavior on a device.
+
+The current UI exposes Run and Stop only. Pause/Resume remain typed protocol
+operations for a future capable adapter, but are not presented as supported UI
+capabilities while Flow Studio maps them to stop/run. The status view states this
+limitation. At heights below 480dp the widget omits secondary rows; its header
+still opens all workflows. The minimum size is 250×360dp. Resize callbacks rerender
+the projection without refreshing the runtime observation.
+
+`Quasar widget journey` uses a widget-only Gradle init script to build the Android
+instrumentation APK without changing shared production build/manifest files.
+Its API 35 fixture binds the real AppWidgetProvider into an AppWidgetHost inside
+the secure status activity (security flags are cleared only by instrumentation
+for screenshots). It is native host evidence, not a third-party launcher test.

@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.os.SystemClock
+import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -45,7 +46,10 @@ class WorkflowWidgetJourneyTest {
 
     @Test fun hostRendersCachedReportsAndRoutesTypedCommandWithoutRefreshingObservation() {
         val observed = System.currentTimeMillis() - 1000
-        repository.publish(snapshot(observed))
+        repository.publish(snapshot(observed).copy(workflows = snapshot(observed).workflows + listOf(
+            WorkflowWidgetSummary.create("beta", "Beta workflow", WorkflowRunStatus.IDLE),
+            WorkflowWidgetSummary.create("gamma", "Gamma workflow", WorkflowRunStatus.IDLE),
+        )))
         withHost { scenario, host ->
             await { text(scenario).contains("Last reported online") }
             scenario.onActivity {
@@ -54,8 +58,18 @@ class WorkflowWidgetJourneyTest {
                 assertTrue(run.height >= (48 * it.resources.displayMetrics.density).toInt())
                 assertEquals("Run Alpha workflow", run.contentDescription.toString())
                 assertFalse(host.findViewById<View>(R.id.workflow_widget_pause).isShown)
+                assertFalse(host.findViewById<View>(R.id.workflow_widget_row_one).isShown)
+                val position = IntArray(2); run.getLocationOnScreen(position)
+                val hostPosition = IntArray(2); host.getLocationOnScreen(hostPosition)
+                assertTrue("Run target is clipped at the advertised minimum", position[1] + run.height <= hostPosition[1] + host.height)
             }
-            capture(scenario, "widget-recent")
+            capture(scenario, "widget-recent-minimum-250x360")
+            scenario.onActivity { activity ->
+                host.layoutParams = host.layoutParams.apply { height = (480 * activity.resources.displayMetrics.density).toInt() }
+                AppWidgetManager.getInstance(activity).updateAppWidgetOptions(host.appWidgetId, options(480))
+            }
+            await { text(scenario).contains("Gamma workflow") }
+            capture(scenario, "widget-expanded-three-workflows")
             scenario.onActivity { host.findViewById<View>(R.id.workflow_widget_run).performClick() }
             await { repository.pendingCommands().size == 1 }
             assertEquals(WorkflowCommand.RUN, repository.pendingCommands().single().command)
@@ -63,6 +77,16 @@ class WorkflowWidgetJourneyTest {
             assertEquals(observed, SharedPreferencesWorkflowRepository(context).state().updatedAtEpochMillis)
             await { text(scenario).contains("RUN PENDING") }
             capture(scenario, "widget-command-pending")
+            // Keep the rendered Run PendingIntent but expire its persisted observation before the click.
+            repository.acknowledge(repository.pendingCommands().single().requestId)
+            repository.publish(snapshot())
+            await { text(scenario).contains("IDLE") }
+            preferences.edit().putString("widget_state", WorkflowWidgetStateCodec.encode(
+                snapshot(System.currentTimeMillis() - WorkflowSnapshotPolicy.MAX_AGE_MILLIS - 1000))).commit()
+            scenario.onActivity { host.findViewById<View>(R.id.workflow_widget_run).performClick() }
+            await { text(scenario).contains("Report expired") }
+            assertTrue(repository.pendingCommands().isEmpty())
+            capture(scenario, "widget-retained-control-rejected")
         }
     }
 
@@ -158,14 +182,22 @@ class WorkflowWidgetJourneyTest {
                     setBackgroundColor(Color.BLACK)
                     val density = resources.displayMetrics.density
                     setPadding((16 * density).toInt(), (48 * density).toInt(), (16 * density).toInt(), 0)
-                    addView(view, FrameLayout.LayoutParams(-1, -2))
+                    addView(view, FrameLayout.LayoutParams((250 * density).toInt(), (360 * density).toInt()))
                 }
                 activity.setContentView(frame)
+                manager.updateAppWidgetOptions(id, options(360))
                 host.startListening()
                 WorkflowWidgetRenderer.update(activity, manager, id)
             }
             try { block(scenario, view) } finally { scenario.onActivity { host.stopListening(); host.deleteHost() } }
         }
+    }
+
+    private fun options(height: Int) = Bundle().apply {
+        putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
+        putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 250)
+        putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, height)
+        putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, height)
     }
 
     private fun text(scenario: ActivityScenario<WorkflowStatusActivity>): String {
@@ -190,6 +222,7 @@ class WorkflowWidgetJourneyTest {
     private fun capture(scenario: ActivityScenario<WorkflowStatusActivity>, name: String) {
         scenario.onActivity { it.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
         instrumentation.waitForIdleSync()
+        UiDevice.getInstance(instrumentation).waitForIdle()
         val directory = File(context.getExternalFilesDir(null), "widget-evidence").apply { mkdirs() }
         val bitmap = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
         File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
