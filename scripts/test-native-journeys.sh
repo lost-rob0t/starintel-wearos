@@ -17,5 +17,6 @@ for package in actor.starintel.operator actor.starintel.quasar actor.starintel.w
   timeout 30 adb wait-for-device
   adb pull "/sdcard/Android/data/$package/files/e2e" "build/native-journeys/$package" || result=1
 done
-adb logcat -d -s AndroidRuntime > build/native-journeys/crashes.log
+# Keep crash diagnostics readable even when artifact downloads are unavailable.
+adb logcat -d -b crash | tee build/native-journeys/crashes.log
 exit "$result"

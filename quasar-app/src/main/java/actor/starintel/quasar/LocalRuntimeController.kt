@@ -22,10 +22,11 @@ internal class LocalRuntimeController(private val context: Context) : AutoClosea
     private val runtimeDirectory = File(context.filesDir, "starintel-edge-runtime-f801b02")
     private val workspaceDirectory = File(context.filesDir, "quasar-lisp-workspace-v1")
     private val initStore = InitLispStore(workspaceDirectory) { context.assets.open("lisp/init.lisp") }
-    private val lispRuntime by lazy {
+    private val lispRuntimeDelegate = lazy {
         installLispSources()
-        EclLispRuntime(runtimeDirectory.absolutePath)
+        processRuntime(runtimeDirectory.absolutePath).openSession()
     }
+    private val lispRuntime by lispRuntimeDelegate
     private val tek9Store by lazy { LispTek9Store(lispRuntime, File(context.filesDir, "tek9").absolutePath) }
     private val config by lazy { QuasarConfig(context.applicationContext) }
     private val flowRegistry by lazy {
@@ -86,8 +87,17 @@ internal class LocalRuntimeController(private val context: Context) : AutoClosea
             flowRuns.toList().forEach { runCatching(it::close) }
             flowRuns.clear()
         }
+        if (!lispRuntimeDelegate.isInitialized()) return
         if (lispRuntime.status.available) runCatching { tek9Store.close() }
         else runCatching { lispRuntime.close() }
+    }
+
+    companion object {
+        private var runtimeOwner: ProcessLispRuntime? = null
+
+        @Synchronized
+        private fun processRuntime(path: String): ProcessLispRuntime =
+            runtimeOwner ?: ProcessLispRuntime { EclLispRuntime(path) }.also { runtimeOwner = it }
     }
 
     private fun installLispSources() {
