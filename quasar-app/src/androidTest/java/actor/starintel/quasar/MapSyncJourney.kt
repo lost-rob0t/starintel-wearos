@@ -3,6 +3,7 @@ package actor.starintel.quasar
 import actor.starintel.android.config.OperatorContracts
 import actor.starintel.testing.NativeUi as Ui
 import android.content.Intent
+import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
@@ -30,37 +31,57 @@ internal object MapSyncJourney {
             QuasarConfig(context).save(server.origin, "star_sk_v1_fixture")
             val intent = Intent(context, MainActivity::class.java)
                 .setAction(OperatorContracts.ACTION_OPEN_MAP)
+            report("Starting map response: $destination / $status")
             ActivityScenario.launch<MainActivity>(intent).use { scenario ->
-                assertTrue("Map search did not start", server.requested.await(10, TimeUnit.SECONDS))
-                val request = Thread.getAllStackTraces().keys.single { it.name == "quasar-geo-search" }
-                lateinit var oldStatus: TextView
-                scenario.onActivity { activity ->
-                    oldStatus = descendants(activity.window.decorView)
-                        .filterIsInstance<TextView>().single { it.text.toString() == "SYNCING" }
+                try {
+                    assertTrue("Map search did not start", server.requested.await(10, TimeUnit.SECONDS))
+                    val request = Thread.getAllStackTraces().keys.single { it.name == "quasar-geo-search" }
+                    lateinit var oldStatus: TextView
+                    scenario.onActivity { activity ->
+                        oldStatus = descendants(activity.window.decorView)
+                            .filterIsInstance<TextView>().single { it.text.toString() == "SYNCING" }
+                    }
+                    when (destination) {
+                        "Settings" -> scenario.onActivity { activity ->
+                            descendants(activity.window.decorView).filterIsInstance<TextView>()
+                                .single { it.text.toString() == "Settings" }.performClick()
+                        }
+                        "recreate" -> scenario.recreate()
+                    }
+                    if (destination != "Field") {
+                        instrumentation.runOnMainSync { assertFalse(oldStatus.isAttachedToWindow) }
+                    }
+                    server.release.countDown()
+                    request.join(10_000)
+                    assertFalse("Map request did not finish", request.isAlive)
+                    instrumentation.waitForIdleSync()
+                    instrumentation.runOnMainSync {
+                        val expected = if (destination != "Field") "SYNCING"
+                            else if (status == 200) "0 SYNCED" else "DATA DEGRADED"
+                        assertEquals("Late response must not mutate a retired field view", expected, oldStatus.text.toString())
+                    }
+                    when (destination) {
+                        "Settings" -> Ui.waitText("Credentials are validated")
+                        "recreate" -> Ui.waitText("Investigation desk")
+                    }
+                    server.assertHealthy()
+                    Ui.capture("quasar-map-response-$destination-$status")
+                    report("Passed map response: $destination / $status")
+                } catch (failure: Throwable) {
+                    report(failure.stackTraceToString())
+                    throw failure
+                } finally {
+                    // Release before ActivityScenario closes, even if an assertion failed.
+                    server.release.countDown()
                 }
-                when (destination) {
-                    "Settings" -> Ui.click("Settings")
-                    "recreate" -> scenario.recreate()
-                }
-                if (destination != "Field") {
-                    instrumentation.runOnMainSync { assertFalse(oldStatus.isAttachedToWindow) }
-                }
-                server.release.countDown()
-                request.join(10_000)
-                assertFalse("Map request did not finish", request.isAlive)
-                instrumentation.waitForIdleSync()
-                instrumentation.runOnMainSync {
-                    val expected = if (destination != "Field") "SYNCING"
-                        else if (status == 200) "0 SYNCED" else "DATA DEGRADED"
-                    assertEquals("Late response must not mutate a retired field view", expected, oldStatus.text.toString())
-                }
-                when (destination) {
-                    "Settings" -> Ui.waitText("Credentials are validated")
-                    "recreate" -> Ui.waitText("Investigation desk")
-                }
-                Ui.capture("quasar-map-response-$destination-$status")
             }
         }
+    }
+
+    private fun report(message: String) {
+        InstrumentationRegistry.getInstrumentation().sendStatus(0, Bundle().apply {
+            putString("stream", "\n$message\n")
+        })
     }
 
     private fun descendants(view: View): Sequence<View> = sequence {
@@ -74,6 +95,7 @@ internal object MapSyncJourney {
         val origin = "http://127.0.0.1:${server.localPort}"
         val requested = CountDownLatch(1)
         val release = CountDownLatch(1)
+        @Volatile private var failure: Exception? = null
         private val worker = Thread {
             while (!server.isClosed) {
                 try {
@@ -96,10 +118,15 @@ internal object MapSyncJourney {
                         socket.getOutputStream().write(bytes)
                     }
                 } catch (failure: Exception) {
-                    if (!server.isClosed) throw failure
+                    if (!server.isClosed) this.failure = failure
+                    break
                 }
             }
         }.apply { name = "quasar-delayed-search-fixture"; start() }
+
+        fun assertHealthy() {
+            failure?.let { throw AssertionError("Delayed search fixture failed", it) }
+        }
 
         override fun close() {
             release.countDown()
