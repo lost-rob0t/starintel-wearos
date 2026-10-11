@@ -194,9 +194,11 @@ class MainActivity : Activity() {
     private fun loadGeoDocuments(field: FieldOpsView, fieldProgress: ProgressBar, query: String) {
         field.setDataStatus("SYNCING", ready = false)
         fieldProgress.visibility = View.VISIBLE
-        Thread {
+        Thread({
             val result = runCatching { client.search(query.ifBlank { "*" }, limit = 200) }
             runOnUiThread {
+                // The field view is replaced on navigation and belongs to this activity instance.
+                if (isFinishing || isDestroyed || viewport.getChildAt(0) !== field) return@runOnUiThread
                 fieldProgress.visibility = View.GONE
                 result.onSuccess { rows ->
                     val features = GeoDocumentParser.parseSearchRows(rows)
@@ -206,7 +208,7 @@ class MainActivity : Activity() {
                     field.showDataError(error.message ?: "Star server is unavailable. Cached basemap tiles may still render.")
                 }
             }
-        }.start()
+        }, "quasar-geo-search").start()
     }
 
     private fun renderSearchResults(container: LinearLayout, rows: JSONArray) {

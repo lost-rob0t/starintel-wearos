@@ -26,5 +26,6 @@ class OperatorJourneyTest {
                 assertEquals(1, backend.targets.get())
             }
         }
+        MapSyncJourney.verifyLifecycle()
     }
 }
