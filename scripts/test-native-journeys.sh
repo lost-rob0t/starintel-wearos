@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# This script resets fixture state and must never target a physical device.
+export ANDROID_SERIAL="$(adb get-serialno)"
+[[ "$ANDROID_SERIAL" == emulator-* ]]
+[[ "$(adb shell getprop ro.kernel.qemu | tr -d '\r')" == 1 ]]
 mkdir -p build/native-journeys
 adb logcat -v threadtime > build/native-journeys/logcat.log &
 logcat_pid=$!
@@ -11,6 +15,8 @@ while IFS= read -r apk; do adb install -r "$apk"; done < <(find journey-tests -n
 result=0
 for package in actor.starintel.operator actor.starintel.quasar actor.starintel.wear; do
   timeout 30 adb wait-for-device
+  [[ "$(adb shell pm clear "$package" | tr -d '\r')" == Success ]]
+  rm -rf "build/native-journeys/$package"
   log="build/native-journeys/${package}.log"
   case "$package" in
     actor.starintel.operator) journey=actor.starintel.operator.OperatorJourneyTest ;;
@@ -24,4 +30,39 @@ for package in actor.starintel.operator actor.starintel.quasar actor.starintel.w
 done
 # Keep crash diagnostics readable even when artifact downloads are unavailable.
 adb logcat -d -b crash | tee build/native-journeys/crashes.log
+# Only explicitly named synthetic fixture screens enter the bounded log fallback.
+# The normal artifact remains authoritative, with full instrumentation diagnostics.
+screens=()
+for entry in \
+  actor.starintel.operator/operator-overview \
+  actor.starintel.operator/operator-actors \
+  actor.starintel.operator/operator-fleet \
+  actor.starintel.wear/companion-home \
+  actor.starintel.wear/companion-connection \
+  actor.starintel.wear/companion-packages \
+  actor.starintel.quasar/quasar-home \
+  actor.starintel.quasar/quasar-actors \
+  actor.starintel.quasar/quasar-map-response-Settings-200 \
+  actor.starintel.quasar/quasar-map-response-recreate-503 \
+  actor.starintel.quasar/quasar-map-response-Field-200 \
+  actor.starintel.quasar/quasar-map-response-Field-503; do
+  for extension in png xml; do
+    file="$entry.$extension"
+    if [[ -f "build/native-journeys/$file" && ! -L "build/native-journeys/$file" && -s "build/native-journeys/$file" ]]; then
+      screens+=("$file")
+    else
+      echo "Missing fixture screen: $file" >&2
+      result=1
+    fi
+  done
+done
+if (( ${#screens[@]} > 0 )); then
+  tar -czf build/native-journeys/native-screens.tar.gz -C build/native-journeys "${screens[@]}"
+  test "$(stat -c%s build/native-journeys/native-screens.tar.gz)" -le 8388608
+  git rev-parse HEAD
+  sha256sum build/native-journeys/native-screens.tar.gz
+  echo NATIVE_EVIDENCE_BASE64_BEGIN
+  base64 build/native-journeys/native-screens.tar.gz
+  echo NATIVE_EVIDENCE_BASE64_END
+fi
 exit "$result"
