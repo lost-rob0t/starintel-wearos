@@ -11,7 +11,7 @@ import org.json.JSONObject;
 
 final class StarWirelessStore extends SQLiteOpenHelper {
     private static final String NAME = "star-wireless.db";
-    private static final int VERSION = 4;
+    private static final int VERSION = 5;
 
     StarWirelessStore(Context context) {
         super(context.getApplicationContext(), NAME, null, VERSION);
@@ -98,6 +98,7 @@ final class StarWirelessStore extends SQLiteOpenHelper {
         createV2Tables(db);
         createV3Tables(db, true);
         createV4Tables(db, false);
+        createV5Tables(db);
     }
 
     private static void createV2Tables(SQLiteDatabase db) {
@@ -169,8 +170,81 @@ final class StarWirelessStore extends SQLiteOpenHelper {
             createV4Tables(db, true);
             oldVersion = 4;
         }
+        if (oldVersion < 5 && newVersion >= 5) {
+            createV5Tables(db);
+            oldVersion = 5;
+        }
         if (oldVersion != newVersion) {
             throw new IllegalStateException("Star Wireless DB migration missing: " + oldVersion + " -> " + newVersion);
+        }
+    }
+
+    private static void createV5Tables(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE mission_annotation ("
+                + "_id INTEGER PRIMARY KEY AUTOINCREMENT,event_id TEXT UNIQUE NOT NULL,"
+                + "run_id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('note','start','end')),"
+                + "interval_id TEXT,text TEXT NOT NULL,at_ms INTEGER NOT NULL,source TEXT NOT NULL)");
+        db.execSQL("CREATE INDEX idx_annotation_run ON mission_annotation(run_id, _id)");
+        db.execSQL("CREATE UNIQUE INDEX idx_annotation_marker ON mission_annotation(interval_id, kind) "
+                + "WHERE kind IN ('start','end')");
+    }
+
+    MissionAnnotation activeAnnotation(String runId) {
+        return activeAnnotation(getReadableDatabase(), runId);
+    }
+
+    private static MissionAnnotation activeAnnotation(SQLiteDatabase db, String runId) {
+        try (Cursor c = db.rawQuery("SELECT s.event_id,s.run_id,s.kind,s.interval_id,s.text,s.at_ms,s.source "
+                + "FROM mission_annotation s WHERE s.run_id=? AND s.kind='start' AND NOT EXISTS "
+                + "(SELECT 1 FROM mission_annotation e WHERE e.interval_id=s.interval_id AND e.kind='end') "
+                + "ORDER BY s._id DESC LIMIT 1", new String[] {runId})) {
+            return c.moveToFirst() ? readAnnotation(c) : null;
+        }
+    }
+
+    java.util.List<MissionAnnotation> recentAnnotations(String runId) {
+        java.util.List<MissionAnnotation> events = new java.util.ArrayList<>();
+        try (Cursor c = getReadableDatabase().rawQuery(
+                "SELECT event_id,run_id,kind,interval_id,text,at_ms,source FROM mission_annotation "
+                        + "WHERE run_id=? ORDER BY _id DESC LIMIT 20", new String[] {runId})) {
+            while (c.moveToNext()) events.add(readAnnotation(c));
+        }
+        return events;
+    }
+
+    private static MissionAnnotation readAnnotation(Cursor c) {
+        return new MissionAnnotation(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
+                c.getString(4), c.getLong(5), c.getString(6));
+    }
+
+    /** Serializes state checks with insertion, including callers using different helper instances. */
+    MissionAnnotation appendAnnotation(String runId, String kind, String text, long atMs, String source) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            MissionAnnotation active = activeAnnotation(db, runId);
+            if ("start".equals(kind) && active != null) {
+                throw new IllegalStateException("End the current interval first");
+            }
+            if ("end".equals(kind) && active == null) {
+                throw new IllegalStateException("No interval is open");
+            }
+            String id = java.util.UUID.randomUUID().toString();
+            String intervalId = "start".equals(kind) ? id : active == null ? null : active.id;
+            MissionAnnotation event = new MissionAnnotation(id, runId, kind, intervalId, text, atMs, source);
+            ContentValues values = new ContentValues();
+            values.put("event_id", event.id);
+            values.put("run_id", event.runId);
+            values.put("kind", event.kind);
+            values.put("interval_id", event.intervalId);
+            values.put("text", event.text);
+            values.put("at_ms", event.atMs);
+            values.put("source", event.source);
+            db.insertOrThrow("mission_annotation", null, values);
+            db.setTransactionSuccessful();
+            return event;
+        } finally {
+            db.endTransaction();
         }
     }
 
