@@ -20,6 +20,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import androidx.test.uiautomator.UiDevice
 import java.io.File
 import org.junit.After
@@ -150,16 +152,57 @@ class WorkflowWidgetJourneyTest {
             scenario.moveToState(Lifecycle.State.RESUMED)
             await { text(scenario).contains("Changed alpha details") }
             capture(scenario, "status-resumed-alpha")
-            scenario.onActivity { it.startActivity(route("beta").addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)) }
-            await { text(scenario).contains("Only beta details") }
-            assertFalse(text(scenario).contains("Changed alpha details"))
-            capture(scenario, "status-new-intent-beta")
-            scenario.recreate()
-            assertTrue(text(scenario).contains("Only beta details"))
-            scenario.onActivity { it.startActivity(route(null).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)) }
-            await { !text(scenario).contains("Only beta details") }
-            capture(scenario, "status-all-workflows")
         }
+        // ActivityScenario filters lifecycle callbacks by its original Intent.data.
+        // Use the Android lifecycle monitor for real onNewIntent + recreation after
+        // the route changes, otherwise the harness ignores the recreated Beta activity.
+        instrumentation.startActivitySync(route("alpha"))
+        try {
+            await { statusText().contains("Changed alpha details") }
+            instrumentation.runOnMainSync {
+                requireNotNull(resumedStatus()).startActivity(route("beta")
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            }
+            await { statusText().contains("Only beta details") }
+            assertFalse(statusText().contains("Changed alpha details"))
+            captureStatus("status-new-intent-beta")
+            var previous: WorkflowStatusActivity? = null
+            instrumentation.runOnMainSync { previous = resumedStatus(); requireNotNull(previous).recreate() }
+            await {
+                var recreated = false
+                instrumentation.runOnMainSync { recreated = resumedStatus()?.let { it !== previous } == true }
+                recreated && statusText().contains("Only beta details")
+            }
+            instrumentation.runOnMainSync {
+                requireNotNull(resumedStatus()).startActivity(route(null)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            }
+            await { statusText().let { "Only beta details" !in it && "Workflows" in it } }
+            captureStatus("status-all-workflows")
+        } finally {
+            instrumentation.runOnMainSync {
+                for (stage in listOf(Stage.RESUMED, Stage.PAUSED, Stage.STOPPED)) {
+                    ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(stage)
+                        .filterIsInstance<WorkflowStatusActivity>().toList().forEach { it.finish() }
+                }
+            }
+            instrumentation.waitForIdleSync()
+        }
+    }
+
+    private fun resumedStatus(): WorkflowStatusActivity? = ActivityLifecycleMonitorRegistry.getInstance()
+        .getActivitiesInStage(Stage.RESUMED).filterIsInstance<WorkflowStatusActivity>().singleOrNull()
+
+    private fun statusText(): String {
+        var result = ""
+        instrumentation.runOnMainSync { result = resumedStatus()?.let { viewText(it.window.decorView) }.orEmpty() }
+        return result
+    }
+
+    private fun viewText(view: View): String = when (view) {
+        is TextView -> if (view.isShown) view.text.toString() else ""
+        is ViewGroup -> (0 until view.childCount).joinToString("\n") { viewText(view.getChildAt(it)) }
+        else -> ""
     }
 
     private fun route(id: String?) = Intent(context, WorkflowStatusActivity::class.java).apply {
@@ -204,12 +247,7 @@ class WorkflowWidgetJourneyTest {
     private fun text(scenario: ActivityScenario<WorkflowStatusActivity>): String {
         var result = ""
         scenario.onActivity { activity ->
-            fun collect(view: View): String = when (view) {
-                is TextView -> if (view.isShown) view.text.toString() else ""
-                is ViewGroup -> (0 until view.childCount).joinToString("\n") { collect(view.getChildAt(it)) }
-                else -> ""
-            }
-            result = collect(activity.window.decorView)
+            result = viewText(activity.window.decorView)
         }
         return result
     }
@@ -222,6 +260,15 @@ class WorkflowWidgetJourneyTest {
 
     private fun capture(scenario: ActivityScenario<WorkflowStatusActivity>, name: String) {
         scenario.onActivity { it.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+        saveScreenshot(name)
+    }
+
+    private fun captureStatus(name: String) {
+        instrumentation.runOnMainSync { requireNotNull(resumedStatus()).window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+        saveScreenshot(name)
+    }
+
+    private fun saveScreenshot(name: String) {
         instrumentation.waitForIdleSync()
         UiDevice.getInstance(instrumentation).waitForIdle()
         val directory = File(context.getExternalFilesDir(null), "widget-evidence").apply { mkdirs() }

@@ -13,6 +13,15 @@ adb pull /sdcard/Android/data/actor.starintel.quasar/files/widget-evidence build
 adb logcat -d > build/widget-journey/logcat.txt
 adb shell dumpsys appwidget > build/widget-journey/appwidget.txt
 set -e
+# Bounded fixture-only fallback for reviewers whose environment cannot fetch artifact URLs.
+# The normal downloadable artifact remains authoritative and includes logs/device identity.
+if test -d build/widget-journey/widget-evidence; then
+  tar -czf build/widget-journey/widget-screens.tar.gz -C build/widget-journey widget-evidence
+  test "$(stat -c%s build/widget-journey/widget-screens.tar.gz)" -le 8388608
+  echo WIDGET_EVIDENCE_BASE64_BEGIN
+  base64 build/widget-journey/widget-screens.tar.gz
+  echo WIDGET_EVIDENCE_BASE64_END
+fi
 grep -Fq 'OK (3 tests)' build/widget-journey/instrumentation.txt
 for state in widget-recent-minimum-250x360 widget-expanded-three-workflows widget-command-pending \
   widget-retained-control-rejected widget-running-stop-only widget-stale widget-future \
