@@ -62,7 +62,7 @@ internal object MapSyncJourney {
                     }
                     when (destination) {
                         "Settings" -> Ui.waitText("Credentials are validated")
-                        "recreate" -> Ui.waitText("Investigation desk")
+                        "recreate" -> Ui.waitText("Quasar tactical")
                     }
                     server.assertHealthy()
                     Ui.capture("quasar-map-response-$destination-$status")
