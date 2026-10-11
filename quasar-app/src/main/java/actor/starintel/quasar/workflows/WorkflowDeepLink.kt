@@ -11,7 +11,7 @@ object WorkflowDeepLink {
     fun parse(raw: String?): WorkflowId? = runCatching {
         if (raw.isNullOrBlank()) return@runCatching null
         val uri = URI(raw)
-        if (uri.scheme != SCHEME || uri.host != HOST || uri.rawQuery != null || uri.rawFragment != null) {
+        if (uri.scheme != SCHEME || uri.host != HOST || uri.rawAuthority != HOST || uri.rawQuery != null || uri.rawFragment != null) {
             return@runCatching null
         }
         val path = uri.rawPath ?: return@runCatching null

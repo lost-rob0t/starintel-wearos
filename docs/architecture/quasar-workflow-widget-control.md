@@ -39,3 +39,31 @@ command as pending while the control plane decides and executes it.
 These constraints let the Common Lisp side map a typed operation onto its
 canonical FBP network semantics without allowing Android UI input to become an
 arbitrary Lisp evaluation path.
+
+## Cached observation freshness
+
+The launcher always labels the snapshot as cached, with an absolute last-report
+time (or an explicit missing/future-time warning). Persisted ONLINE is a past
+observation, never verified live connectivity. A report is eligible for command
+enqueue only when it reports ONLINE and its timestamp is between now minus five
+minutes and now, inclusive. The repository checks this again when a retained
+launcher PendingIntent fires. Enqueue changes only the pending marker, not the
+observation timestamp. Runtime publication remains the source of freshness.
+
+No timer or background service is added. Launcher delivery can be suspended;
+controls rendered earlier may remain visible but expired requests are rejected.
+Opening the secure status activity refreshes its projection and the widget.
+Failure text is shown only in that activity, not on the launcher. Widget touch
+targets are at least 48dp and action descriptions include the workflow name.
+
+The current consumer is FlowStudioActivity.consumeWidgetCommands on resume.
+Queue acceptance does not mean execution or continuous background consumption.
+Flow Studio currently maps RESUME to runGraph and PAUSE to stopGraph; this change
+does not add canonical pause/resume semantics. Tokens are deduplicated while in
+the outbox; there is no durable consumed-token ledger, so runtime-side idempotency
+is still required after acknowledgement. A publication cannot enable another
+command for a workflow while an earlier command remains in the outbox.
+
+Unit tests exercise policy boundaries and the repository against an in-memory
+SharedPreferences interface. This is not evidence of Android disk persistence,
+launcher rendering, or lifecycle behavior on a device.

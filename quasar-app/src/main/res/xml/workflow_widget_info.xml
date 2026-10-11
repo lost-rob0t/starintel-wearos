@@ -3,10 +3,10 @@
     android:description="@string/workflow_widget_description"
     android:initialLayout="@layout/widget_workflow_control"
     android:minWidth="250dp"
-    android:minHeight="180dp"
+    android:minHeight="300dp"
     android:previewLayout="@layout/widget_workflow_control"
     android:resizeMode="horizontal|vertical"
     android:targetCellWidth="4"
-    android:targetCellHeight="3"
+    android:targetCellHeight="5"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen" />

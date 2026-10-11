@@ -15,6 +15,9 @@ class WorkflowDeepLinkTest {
 
     @Test
     fun rejectsForeignHostsQueriesFragmentsAndExtraSegments() {
+        assertNull(WorkflowDeepLink.parse("quasar://user@workflow/geo-alerts"))
+        assertNull(WorkflowDeepLink.parse("quasar://workflow:123/geo-alerts"))
+        assertNull(WorkflowDeepLink.parse("quasar://workflow:/geo-alerts"))
         assertNull(WorkflowDeepLink.parse("https://workflow/geo-alerts"))
         assertNull(WorkflowDeepLink.parse("quasar://evil/geo-alerts"))
         assertNull(WorkflowDeepLink.parse("quasar://workflow/geo-alerts/extra"))
