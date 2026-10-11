@@ -61,7 +61,7 @@ internal class SharedPreferencesWorkflowRepository(
         val current = currentState.workflows.firstOrNull { it.id == request.workflowId }
             ?: return@synchronized WorkflowCommandReceipt(false, false, "Unknown workflow")
         if (!WorkflowSnapshotPolicy.canRequest(currentState, now())) {
-            return@synchronized WorkflowCommandReceipt(false, false, "A recent online runtime report is required; open Flow studio to refresh")
+            return@synchronized WorkflowCommandReceipt(false, false, "A recent online runtime report is required; open Flow studio for runtime controls")
         }
         if (current.pendingCommand != null || queued.any { it.workflowId == request.workflowId }) {
             return@synchronized WorkflowCommandReceipt(false, false, "A workflow command is already pending")

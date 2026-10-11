@@ -97,7 +97,7 @@ class WorkflowStatusActivity : Activity() {
                 QuasarDesign.card(this, QuasarDesign.amber).apply {
                     addView(QuasarDesign.title(this@WorkflowStatusActivity, "No workflow state", 18f))
                     addView(
-                        QuasarDesign.body(this@WorkflowStatusActivity, "Open Flow studio to publish a workflow report. Queued controls are handled when Flow studio resumes."),
+                        QuasarDesign.body(this@WorkflowStatusActivity, "Flow studio publishes reports when workflows change. Queued controls are handled when Flow studio resumes."),
                         QuasarDesign.match(top = dp(7)),
                     )
                 },
