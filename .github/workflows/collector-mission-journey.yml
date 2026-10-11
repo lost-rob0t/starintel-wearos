@@ -1,0 +1,75 @@
+name: Collector mission journey
+on:
+  pull_request:
+    paths:
+      - 'collector-app/**'
+      - 'starintel-android/**'
+      - 'starintel-design/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'scripts/test-collector-mission-journey.sh'
+      - '.github/workflows/collector-mission-journey.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'collector-app/**'
+      - 'starintel-android/**'
+      - 'starintel-design/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'scripts/test-collector-mission-journey.sh'
+      - '.github/workflows/collector-mission-journey.yml'
+jobs:
+  collector-apks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Collector tests and emulator APKs
+        run: nix develop --no-update-lock-file --command gradle -Pstarintel.android.abi=x86_64 :collector-app:testDebugUnitTest :collector-app:assembleDebug :collector-app:assembleDebugAndroidTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collector-mission-test-apks
+          path: collector-app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+  collector-emulator:
+    needs: collector-apks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@v4
+        with:
+          name: collector-mission-test-apks
+          path: collector-apks
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash scripts/test-collector-mission-journey.sh
+      - name: Preserve Collector evidence and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collector-mission-evidence
+          path: build/collector-mission-journey
+          if-no-files-found: error

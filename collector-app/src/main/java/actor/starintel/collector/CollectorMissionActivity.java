@@ -15,6 +15,8 @@ import android.os.Looper;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
+import android.text.InputFilter;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -42,6 +44,11 @@ public final class CollectorMissionActivity extends Activity {
     private TextView sync;
     private MissionNetworkView networkView;
     private boolean resumed;
+    private EditText annotationText;
+    private TextView annotationStatus;
+    private TextView annotationHistory;
+    private Button saveNote, startInterval, endInterval;
+
 
     @Override
     protected void onCreate(Bundle state) {
@@ -78,6 +85,8 @@ public final class CollectorMissionActivity extends Activity {
 
         root.addView(evidenceCard(), si.match(SiTokens.SPACE_L));
         root.addView(captureRow(), si.match(SiTokens.SPACE_XL));
+        root.addView(annotationCard(), si.match(SiTokens.SPACE_L));
+        if (state != null) annotationText.setText(state.getString("annotation_draft", ""));
         root.addView(appRail(), si.match(SiTokens.SPACE_L));
 
         ScrollView scroll = new ScrollView(this);
@@ -98,6 +107,90 @@ public final class CollectorMissionActivity extends Activity {
         resumed = false;
         refreshHandler.removeCallbacksAndMessages(null);
         super.onPause();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle state) {
+        state.putString("annotation_draft", annotationText.getText().toString());
+        super.onSaveInstanceState(state);
+    }
+
+    private LinearLayout annotationCard() {
+        LinearLayout card = si.card();
+        card.addView(si.sectionHeader("Mission notes"));
+        card.addView(si.body("Notes and interval markers are saved on this device. They are not uploaded."),
+                si.match(SiTokens.SPACE_S));
+        annotationStatus = si.body("");
+        card.addView(annotationStatus, si.match(SiTokens.SPACE_S));
+        annotationText = new EditText(this);
+        annotationText.setHint("Note or interval label (up to 2000 characters)");
+        annotationText.setContentDescription("Mission note or interval label");
+        annotationText.setTextColor(si.text());
+        annotationText.setHintTextColor(si.muted());
+        annotationText.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        annotationText.setMinLines(2);
+        annotationText.setMaxLines(5);
+        annotationText.setFilters(new InputFilter[] {new InputFilter.LengthFilter(MissionAnnotation.MAX_TEXT_LENGTH)});
+        card.addView(annotationText, si.match(SiTokens.SPACE_S));
+        saveNote = si.primaryButton("SAVE NOTE", () -> saveAnnotation("note"));
+        startInterval = si.secondaryButton("START INTERVAL", () -> saveAnnotation("start"));
+        endInterval = si.secondaryButton("END INTERVAL", () -> saveAnnotation("end"));
+        card.addView(saveNote, si.match(SiTokens.SPACE_S));
+        card.addView(startInterval, si.match(SiTokens.SPACE_S));
+        card.addView(endInterval, si.match(SiTokens.SPACE_S));
+        annotationHistory = si.body("");
+        annotationHistory.setTextIsSelectable(true);
+        card.addView(annotationHistory, si.match(SiTokens.SPACE_L));
+        return card;
+    }
+
+    private void saveAnnotation(String kind) {
+        android.content.SharedPreferences prefs = getSharedPreferences(CollectorService.PREFS, MODE_PRIVATE);
+        String runId = prefs.getString(CollectorService.KEY_RUN_ID, "");
+        boolean active = prefs.getBoolean(CollectorService.KEY_ACTIVE, false);
+        if (runId.isEmpty() || (!active && !"end".equals(kind))) {
+            Toast.makeText(this, "Start a mission before adding notes", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try (StarWirelessStore store = new StarWirelessStore(this)) {
+            store.appendAnnotation(runId, kind, "end".equals(kind) ? "" : annotationText.getText().toString(),
+                    System.currentTimeMillis(), "operator");
+            if (!"end".equals(kind)) annotationText.setText("");
+        } catch (IllegalArgumentException | IllegalStateException invalid) {
+            Toast.makeText(this, invalid.getMessage(), Toast.LENGTH_SHORT).show();
+        } catch (android.database.SQLException failure) {
+            Toast.makeText(this, "Could not save. Your draft is still here.", Toast.LENGTH_LONG).show();
+        }
+        refresh();
+    }
+
+    private void refreshAnnotations(StarWirelessStore store, boolean active) {
+        String runId = getSharedPreferences(CollectorService.PREFS, MODE_PRIVATE)
+                .getString(CollectorService.KEY_RUN_ID, "");
+        MissionAnnotation interval = store.activeAnnotation(runId);
+        saveNote.setEnabled(active && !runId.isEmpty());
+        startInterval.setEnabled(active && !runId.isEmpty() && interval == null);
+        endInterval.setEnabled(interval != null);
+        String mission = runId.isEmpty() ? "No mission yet" : "Mission " + runId;
+        annotationStatus.setText(mission + "\n" + (interval == null
+                ? active ? "No interval open" : "Start a mission to add notes"
+                : "Open interval: " + interval.text + "\nSince " + annotationTime(interval.atMs)));
+        StringBuilder history = new StringBuilder("Recent local events (up to 20)");
+        for (MissionAnnotation event : store.recentAnnotations(runId)) {
+            String label = "note".equals(event.kind) ? "Note"
+                    : "start".equals(event.kind) ? "Interval started"
+                    : "service_stop".equals(event.source) ? "Interval ended · mission stopped" : "Interval ended";
+            history.append("\n\n").append(annotationTime(event.atMs)).append(" · ").append(label);
+            if (!event.text.isEmpty()) history.append("\n").append(event.text);
+        }
+        annotationHistory.setText(history.toString());
+    }
+
+    private String annotationTime(long atMs) {
+        return android.text.format.DateFormat.getDateFormat(this).format(new java.util.Date(atMs)) + " "
+                + android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(atMs));
     }
 
     /** Operator handoff: COLLECT opens the mission; an optional kind jumps straight into a tool. */
@@ -308,6 +401,7 @@ public final class CollectorMissionActivity extends Activity {
     }
 
     private void refresh() {
+        refreshHandler.removeCallbacksAndMessages(null);
         boolean active = getSharedPreferences(CollectorService.PREFS, MODE_PRIVATE)
                 .getBoolean(CollectorService.KEY_ACTIVE, false);
         boolean audio = getSharedPreferences(CollectorService.PREFS, MODE_PRIVATE)
@@ -316,6 +410,7 @@ public final class CollectorMissionActivity extends Activity {
         CollectorMissionSnapshot snapshot;
         try {
             snapshot = CollectorMissionSnapshot.fromStore(active, audio, store);
+            refreshAnnotations(store, active);
         } finally {
             store.close();
         }
