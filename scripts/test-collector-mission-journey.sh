@@ -30,6 +30,10 @@ adb pull /sdcard/Android/data/actor.starintel.collector/files/mission-annotation
 adb logcat -d > "$out/logcat.txt"
 adb logcat -d -b crash > "$out/crashes.txt"
 adb shell dumpsys activity services actor.starintel.collector > "$out/services.txt"
+adb shell dumpsys window > "$out/windows.txt"
+# Bounded emulator-only diagnostics survive artifact download restrictions.
+cat "$out/crashes.txt"
+grep -E 'ANR in|am_anr|mCurrentFocus|mFocusedApp|Application Not Responding|Window\{' "$out/logcat.txt" "$out/windows.txt" | tail -80
 set -e
 # Synthetic fixture PNG/XML only; standard artifact remains the primary evidence.
 if [[ -d "$out/mission-annotations-evidence" ]]; then
