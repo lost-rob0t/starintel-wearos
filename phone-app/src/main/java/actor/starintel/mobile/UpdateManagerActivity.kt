@@ -5,6 +5,8 @@ import actor.starintel.update.UpdateFeed
 import actor.starintel.update.UpdateManifest
 import actor.starintel.update.UpdateRelease
 import actor.starintel.update.UpdateSources
+import actor.starintel.design.Si
+import actor.starintel.design.SiTokens
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
@@ -120,7 +122,7 @@ class UpdateManagerActivity : Activity() {
         }
         root.addView(status, matchWrap(top = 12))
 
-        setContentView(ScrollView(this).apply {
+        Si.install(this, ScrollView(this).apply {
             isFillViewport = true
             addView(root)
         })
@@ -260,9 +262,9 @@ class UpdateManagerActivity : Activity() {
     companion object {
         const val PREFS = "starintel_updates"
         const val KEY_SOURCE = "source"
-        private val BACKGROUND = Color.BLACK
-        private val CYAN = Color.rgb(0, 229, 255)
-        private val MUTED = Color.rgb(176, 187, 199)
-        private val WARNING = Color.rgb(255, 132, 132)
+        private val BACKGROUND = SiTokens.CYAN.background
+        private val CYAN = SiTokens.CYAN.accent
+        private val MUTED = SiTokens.CYAN.muted
+        private val WARNING = SiTokens.CYAN.danger
     }
 }

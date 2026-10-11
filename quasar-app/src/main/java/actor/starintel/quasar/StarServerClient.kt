@@ -26,6 +26,8 @@ internal class StarServerClient(context: Context) {
 
     fun stats(): JSONObject = client.stats()
 
+    fun actors(): JSONArray = client.actors()
+
     fun login(serverUrl: String, username: String, password: String): LoginResult =
         client.login(serverUrl, username, password)
 

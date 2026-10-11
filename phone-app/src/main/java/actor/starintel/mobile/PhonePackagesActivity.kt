@@ -5,6 +5,8 @@ import actor.starintel.update.UpdateArtifact
 import actor.starintel.update.UpdateFeed
 import actor.starintel.update.UpdateManifest
 import actor.starintel.update.UpdateSources
+import actor.starintel.design.Si
+import actor.starintel.design.SiTokens
 import android.app.Activity
 import android.graphics.Color
 import android.graphics.Typeface
@@ -58,7 +60,7 @@ class PhonePackagesActivity : Activity() {
         root.addView(progress, centeredWrap(top = 12))
         status = TextView(this).apply { textSize = 13f; setTextColor(MUTED); gravity = Gravity.CENTER }
         root.addView(status, matchWrap(top = 10))
-        setContentView(ScrollView(this).apply { isFillViewport = true; addView(root) })
+        Si.install(this, ScrollView(this).apply { isFillViewport = true; addView(root) })
         refresh()
     }
 
@@ -149,9 +151,9 @@ class PhonePackagesActivity : Activity() {
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     companion object {
-        private val BACKGROUND = Color.rgb(5, 7, 10)
-        private val CYAN = Color.rgb(0, 229, 255)
-        private val MUTED = Color.rgb(176, 187, 199)
-        private val WARNING = Color.rgb(255, 132, 132)
+        private val BACKGROUND = SiTokens.CYAN.background
+        private val CYAN = SiTokens.CYAN.accent
+        private val MUTED = SiTokens.CYAN.muted
+        private val WARNING = SiTokens.CYAN.danger
     }
 }
