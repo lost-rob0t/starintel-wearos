@@ -8,7 +8,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.text.format.DateUtils
+import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
 import java.util.UUID
@@ -27,6 +27,10 @@ class WorkflowWidgetProvider : AppWidgetProvider() {
             return
         }
         super.onReceive(context, intent)
+    }
+
+    override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, options: Bundle) {
+        WorkflowWidgetRenderer.update(context, manager, id)
     }
 
     override fun onUpdate(
@@ -74,20 +78,8 @@ internal object WorkflowWidgetRenderer {
         )
         val active = workflows.firstOrNull()
         val views = RemoteViews(context.packageName, R.layout.widget_workflow_control)
-        views.setTextViewText(
-            R.id.workflow_widget_connectivity,
-            context.getString(
-                if (state.connectivity == WorkflowConnectivity.ONLINE) R.string.workflow_online
-                else R.string.workflow_offline,
-            ),
-        )
-        views.setTextColor(
-            R.id.workflow_widget_connectivity,
-            context.getColor(
-                if (state.connectivity == WorkflowConnectivity.ONLINE) R.color.quasar_widget_cyan
-                else R.color.quasar_widget_gold,
-            ),
-        )
+        views.setTextViewText(R.id.workflow_widget_connectivity, context.getString(R.string.workflow_cached))
+        views.setTextViewText(R.id.workflow_widget_observation, WorkflowSnapshotText.describe(context, state))
         views.setOnClickPendingIntent(
             R.id.workflow_widget_header,
             statusPendingIntent(context, workflowId = null, widgetId = widgetId),
@@ -96,10 +88,12 @@ internal object WorkflowWidgetRenderer {
         views.setViewVisibility(R.id.workflow_widget_active, if (active == null) View.GONE else View.VISIBLE)
 
         if (active != null) {
-            bindActive(context, views, widgetId, active)
+            bindActive(context, views, widgetId, active, WorkflowSnapshotPolicy.canRequest(state, System.currentTimeMillis()))
         }
-        bindSecondary(context, views, R.id.workflow_widget_row_one, workflows.getOrNull(1), widgetId)
-        bindSecondary(context, views, R.id.workflow_widget_row_two, workflows.getOrNull(2), widgetId)
+        // Leave room for wrapped observation text and 48dp controls at the supported minimum.
+        val expanded = manager.getAppWidgetOptions(widgetId).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT) >= 480
+        bindSecondary(context, views, R.id.workflow_widget_row_one, workflows.getOrNull(1).takeIf { expanded }, widgetId)
+        bindSecondary(context, views, R.id.workflow_widget_row_two, workflows.getOrNull(2).takeIf { expanded }, widgetId)
         manager.updateAppWidget(widgetId, views)
     }
 
@@ -108,6 +102,7 @@ internal object WorkflowWidgetRenderer {
         views: RemoteViews,
         widgetId: Int,
         summary: WorkflowWidgetSummary,
+        canRequest: Boolean,
     ) {
         views.setTextViewText(R.id.workflow_widget_active_name, summary.label)
         views.setTextViewText(
@@ -115,10 +110,10 @@ internal object WorkflowWidgetRenderer {
             summary.pendingCommand?.let { "${it.name} PENDING" } ?: summary.status.name,
         )
         views.setTextColor(R.id.workflow_widget_active_status, context.getColor(statusColor(summary.status)))
-        views.setTextViewText(R.id.workflow_widget_last_run, lastRunText(summary.lastRunEpochMillis))
+        views.setTextViewText(R.id.workflow_widget_last_run, WorkflowSnapshotText.lastRun(summary.lastRunEpochMillis))
         val failure = summary.lastFailure.takeIf { summary.status == WorkflowRunStatus.FAILED }
         views.setViewVisibility(R.id.workflow_widget_failure, if (failure == null) View.GONE else View.VISIBLE)
-        views.setTextViewText(R.id.workflow_widget_failure, failure.orEmpty())
+        views.setTextViewText(R.id.workflow_widget_failure, context.getString(R.string.workflow_failure_details))
         views.setOnClickPendingIntent(
             R.id.workflow_widget_active_name,
             statusPendingIntent(context, summary.id, widgetId),
@@ -131,9 +126,10 @@ internal object WorkflowWidgetRenderer {
             R.id.workflow_widget_stop to WorkflowCommand.STOP,
         )
         controls.forEach { (viewId, command) ->
-            val visible = summary.pendingCommand == null && WorkflowCommandPolicy.isAllowed(summary.status, command)
+            val visible = WorkflowCommandPolicy.isExposedByUi(command) && canRequest && summary.pendingCommand == null && WorkflowCommandPolicy.isAllowed(summary.status, command)
             views.setViewVisibility(viewId, if (visible) View.VISIBLE else View.GONE)
             if (visible) {
+                views.setContentDescription(viewId, "${command.name.lowercase().replaceFirstChar(Char::uppercase)} ${summary.label}")
                 views.setOnClickPendingIntent(
                     viewId,
                     commandPendingIntent(context, widgetId, summary.id, command),
@@ -181,7 +177,7 @@ internal object WorkflowWidgetRenderer {
         val intent = Intent(context, WorkflowStatusActivity::class.java).apply {
             action = Intent.ACTION_VIEW
             workflowId?.let { data = Uri.parse(WorkflowDeepLink.forWorkflow(it)) }
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         return PendingIntent.getActivity(
             context,
@@ -210,9 +206,4 @@ internal object WorkflowWidgetRenderer {
         else -> R.color.quasar_widget_muted
     }
 
-    private fun lastRunText(epochMillis: Long?): CharSequence = if (epochMillis == null) {
-        "Never run"
-    } else {
-        "Last run ${DateUtils.getRelativeTimeSpanString(epochMillis, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)}"
-    }
 }
