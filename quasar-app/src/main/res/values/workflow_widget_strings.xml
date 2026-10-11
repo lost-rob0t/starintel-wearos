@@ -3,7 +3,13 @@
     <string name="workflow_widget_title">Quasar // workflows</string>
     <string name="workflow_widget_description">See and safely control native Quasar workflows</string>
     <string name="workflow_widget_empty">No workflows published by the local control plane</string>
-    <string name="workflow_online">● online</string>
+    <string name="workflow_cached">Cached</string>
+    <string name="workflow_last_report">Last reported %1$s · %2$s</string>
+    <string name="workflow_snapshot_missing">No timestamped runtime report. Open Flow studio for controls.</string>
+    <string name="workflow_snapshot_future">Report time is in the future. Controls unavailable.</string>
+    <string name="workflow_snapshot_stale">Report expired. Open Flow studio for controls.</string>
+    <string name="workflow_snapshot_cached">Cached report; connection not verified live.</string>
+    <string name="workflow_failure_details">Failure reported · open details</string>
     <string name="workflow_offline">○ offline</string>
     <string name="workflow_action_run">Run workflow</string>
     <string name="workflow_action_pause">Pause workflow</string>
