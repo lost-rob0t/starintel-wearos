@@ -120,7 +120,7 @@ internal object WorkflowWidgetRenderer {
             R.id.workflow_widget_stop to WorkflowCommand.STOP,
         )
         controls.forEach { (viewId, command) ->
-            val visible = canRequest && summary.pendingCommand == null && WorkflowCommandPolicy.isAllowed(summary.status, command)
+            val visible = WorkflowCommandPolicy.isExposedByUi(command) && canRequest && summary.pendingCommand == null && WorkflowCommandPolicy.isAllowed(summary.status, command)
             views.setViewVisibility(viewId, if (visible) View.VISIBLE else View.GONE)
             if (visible) {
                 views.setContentDescription(viewId, "${command.name.lowercase().replaceFirstChar(Char::uppercase)} ${summary.label}")

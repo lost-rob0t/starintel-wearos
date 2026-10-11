@@ -1,0 +1,56 @@
+name: Quasar widget journey
+on:
+  pull_request:
+    paths:
+      - 'quasar-app/**'
+      - 'scripts/widget-test.init.gradle'
+      - 'scripts/test-quasar-widget-journey.sh'
+      - '.github/workflows/quasar-widget-journey.yml'
+jobs:
+  widget-apks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build widget instrumentation and target APKs
+        run: nix develop --no-update-lock-file --command gradle --init-script scripts/widget-test.init.gradle :quasar-app:testDebugUnitTest :quasar-app:assembleDebug :quasar-app:assembleDebugAndroidTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quasar-widget-test-apks
+          path: quasar-app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+  widget-emulator:
+    needs: widget-apks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@v4
+        with:
+          name: quasar-widget-test-apks
+          path: widget-apks
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash scripts/test-quasar-widget-journey.sh
+      - name: Preserve widget host screenshots, hierarchy, and instrumentation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quasar-widget-evidence
+          path: build/widget-journey
+          if-no-files-found: error

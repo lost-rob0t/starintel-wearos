@@ -90,6 +90,11 @@ class BoundedWorkflowActionController(
 }
 
 object WorkflowCommandPolicy {
+    // The current Flow Studio adapter maps pause/resume to stop/run. Do not expose
+    // those operations as genuine suspend/continue controls until it supports them.
+    fun isExposedByUi(command: WorkflowCommand): Boolean =
+        command == WorkflowCommand.RUN || command == WorkflowCommand.STOP
+
     fun isAllowed(status: WorkflowRunStatus, command: WorkflowCommand): Boolean = when (command) {
         WorkflowCommand.RUN -> status in setOf(
             WorkflowRunStatus.IDLE,
