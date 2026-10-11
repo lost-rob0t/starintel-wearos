@@ -17,6 +17,8 @@ public class MissionAnnotationStoreTest {
     @Before public void reset() {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         context.deleteDatabase("star-wireless.db");
+        java.io.File directory = context.getDatabasePath("star-wireless.db").getParentFile();
+        assertTrue(directory.isDirectory() || directory.mkdirs());
     }
 
     @After public void cleanup() { context.deleteDatabase("star-wireless.db"); }
