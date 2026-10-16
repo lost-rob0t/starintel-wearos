@@ -43,6 +43,8 @@ internal class StarServerClient(context: Context) {
 
     fun bulkCreate(documents: JSONArray): JSONObject = client.bulkCreate(documents)
 
+    fun openBulkImportSession(): actor.starintel.android.api.BulkImportSession = client.openBulkImportSession()
+
     fun createTarget(actor: String, target: String, dataset: String): JSONObject =
         client.createTarget(actor, target, dataset)
 
