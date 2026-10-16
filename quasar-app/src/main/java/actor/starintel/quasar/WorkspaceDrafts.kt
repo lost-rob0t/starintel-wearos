@@ -58,6 +58,11 @@ internal class WorkspaceDrafts(context: Context) : DraftStorage {
             String(cipher.doFinal(ciphertext.toByteArray()), Charsets.UTF_8).also { DraftLimits.utf8Bytes(it) }
         }
     }
+    override fun delete(key: String) = synchronized(storageLock) {
+        require(key.matches(Regex("[0-9a-f]{64}")))
+        AtomicFile(directory.resolve(key)).delete()
+    }
+
     /** Only after the integration owner has collected ALL live Activity/studio saved-state keys.
      * Never age-evict a referenced unsaved draft. Must run on the coordinator worker.
      */

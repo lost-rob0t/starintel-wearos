@@ -1,18 +1,20 @@
 # Issue 123: serialized Activity integration contract
 
-Base: PR120 `82c2a3ae332fdc42c61e487b2607d81210ea9278`. MainActivity integration
-must follow issue122's paging and issue125's detail integration, through the parent.
-LogicStudioActivity now integrates the coordinator on top of PR131 `92e6ef5`.
-MainActivity remains untouched pending the parent-approved detail head. Do not
-merge yet: MainActivity's legacy synchronous call sites still exist and do not
-catch size/quota rejections. Issue123 is not closed by this PR.
+Base: PR120 `82c2a3ae332fdc42c61e487b2607d81210ea9278`.
+LogicStudioActivity integrates the coordinator on PR131 `92e6ef5`.
+MainActivity now integrates on PR127 `59c0c51228064b0b82ef3845e3b06d775b6b236e`,
+which already includes PR128 paging and PR125 lazy detail. Integration was serialized
+through the parent. No historical Activity patch was applied. This combined head is
+ready for the parent to hand to #126, but remains draft pending Android runtime and
+canonical CI results. No deployment or merge has occurred.
 
 ## Shared interface for 122/124/125/126
 
 Use `WorkspaceDrafts.coordinator(applicationContext)` in both Activities. It owns
 one process-lifetime worker and no Activity references. Do not construct a worker
-per screen or shut it down on rotation. `WorkspaceDrafts.save/read` are retained
-only for source compatibility; integration must eliminate their UI-thread callers.
+per screen or shut it down on rotation. `WorkspaceDrafts.save/read` remain compatibility entry points used by the worker
+and storage tests. Both Activities now use the coordinator rather than invoking
+these disk/encryption operations on main.
 
 - Install `DraftInputFilter { input.error = "Draft exceeds 256 KiB" }` before
   any restored or user text reaches each non-credential Editable. Preserve existing
@@ -46,7 +48,9 @@ only for source compatibility; integration must eliminate their UI-thread caller
   restoration is pending or failed. Missing/corrupt envelopes fail exceptionally,
   never as an empty or default source. Require explicit user discard/reopen before
   re-enabling submission following failure.
-- `release(name)` refuses dirty drafts; `discard(name)` is an explicit discard.
+- `release(name)` refuses dirty drafts; `discard(name)` removes memory only.
+  `discardSaved(name)` serializes explicit named-envelope deletion after in-flight
+  writes and skips deletion if a newer edit has reclaimed the name.
   No automatic LRU eviction of unsaved content. A process has at most 32 entries
   and 2 MiB UTF-16 snapshots, plus one bounded worker snapshot and bounded read tasks.
 - `pruneUnreferenced(allLiveKeys)` is a worker-only operation on WorkspaceDrafts.
@@ -109,3 +113,35 @@ this is not an APK build or resource-link check. Twelve coordinator JVM tests pa
 including restored-clean no-write and stale-restore/new-edit ordering. Thirteen
 IDE language/analysis regression JVM tests also pass. Both Python
 repository gates, shell syntax and diff checks pass. Hosted runs remained queued.
+
+## MainActivity combined handoff
+
+WorkspaceDraftFields owns the isolated binding code; MainActivity changes are the
+remember/restore lifecycle hooks and submission readiness checks. New route methods
+stop if an admission failure would otherwise discard edited text. A route retains
+at most 4096 inline characters; large sources use stable keys. Dirty text is captured
+after 300 ms idle or lifecycle/navigation, unchanged text reuses snapshots. Bound
+filters exclude credential fields. Failures/pending restore disable source actions
+and require explicit discard/review; submitOnce's button guard remains in place.
+There are no automatic network/mutation retries. Explicit screen discard removes
+only the named encrypted envelopes on the worker. Logic Studio does the same on
+explicit discard or after saving its source file. Arbitrary age/LRU cleanup is not
+used because saved tasks may still reference those files.
+
+One inherited compile error in PR127's restored-search Elvis expression was fixed
+by adding `else Unit` to its nested conditional; search behavior is unchanged.
+
+Validation after MainActivity integration: 13 coordinator JVM tests pass, including
+named-envelope cleanup; 13 editor regression tests passed after the editor merge.
+The entire Quasar + shared Android + shared design source tree and selected native
+tests API/type compile with the real pinned Edge binding at f801b024, Android14 and
+AndroidX libraries. Generated R/BuildConfig constants are temporary compiler stubs;
+this remains distinct from an APK build/resource link and Java code generation.
+The dedicated emulator workflow selects 11 tests, then runs
+scripts/test-quasar-draft-process-death.py for an acknowledged >4096-character
+source. The script refuses physical devices, clears disposable fixture app data,
+waits for encrypted AtomicFile replacement, backgrounds/kills the app process and
+checks exact source restoration under a different PID without submitting anything.
+These Android runtime checks are added but unrun locally. Hosted results remain
+pending. Both Python gates, script syntax and diff checks pass. Nix/Gradle/emulator
+limitations from the earlier validation still apply.

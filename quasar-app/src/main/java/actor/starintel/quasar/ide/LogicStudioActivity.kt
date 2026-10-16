@@ -139,7 +139,7 @@ class LogicStudioActivity : Activity() {
             else "Saved draft could not be read. Editing and saving are blocked until you retry or explicitly discard the unavailable draft."))
         if (restoreFailures.isNotEmpty()) content.addView(QuasarDesign.action(this, "Retry draft restore") { restoreDrafts(true) })
         content.addView(QuasarDesign.action(this, if (restoreFailures.isEmpty()) "Review restored drafts" else "Discard unavailable drafts") {
-            restoreFailures.forEach { draftReferences.remove(it); draftStore.discard(it) }
+            restoreFailures.forEach { draftReferences.remove(it); draftStore.discardSaved(it) }
             restoreFailures = emptySet()
             restoreReviewRequired = false
             unreviewedRestore = false
@@ -350,7 +350,7 @@ class LogicStudioActivity : Activity() {
             .onSuccess {
                 drafts[name] = buffer.copy(dirty = false)
                 draftReferences.remove(draftName(name))
-                draftStore.discard(draftName(name))
+                draftStore.discardSaved(draftName(name))
                 toast("Saved $name atomically")
                 showEditor()
             }

@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit
 internal interface DraftStorage {
     fun save(name: String, source: String): String
     fun read(key: String): String
+    fun delete(key: String) = Unit
 }
 
 /** Process-owned, never Activity-owned. Call update on the editor thread after an accepted edit.
@@ -29,6 +30,7 @@ internal class DraftCoordinator(
     private var scheduled: ScheduledFuture<*>? = null
     private var flushing: CompletableFuture<Map<String, Receipt>>? = null
     private var reads = 0
+    private val deletions = mutableMapOf<String, CompletableFuture<Unit>>()
     init { require(debounceMillis >= 0); worker.removeOnCancelPolicy = true }
 
     @Synchronized fun update(name: String, source: CharSequence): Long {
@@ -123,6 +125,27 @@ internal class DraftCoordinator(
                 result.complete(source)
             } catch (error: Exception) { result.completeExceptionally(error) }
             finally { synchronized(this) { reads-- } }
+        }
+        return result
+    }
+
+    /** Explicit user discard only. Serialized after in-flight writes, never evicts another name. */
+    @Synchronized fun discardSaved(name: String): CompletableFuture<Unit> {
+        deletions[name]?.let { return it }
+        if (deletions.size >= DraftLimits.MAX_ENTRIES) return CompletableFuture<Unit>().apply {
+            completeExceptionally(IllegalStateException("Too many pending draft discards"))
+        }
+        val key = entries[name]?.receipt?.key ?: DraftReference.key(name)
+        discard(name)
+        val result = CompletableFuture<Unit>()
+        deletions[name] = result
+        worker.execute {
+            try {
+                // A newer edit reclaims the name; do not delete its envelope.
+                if (synchronized(this) { !entries.containsKey(name) }) storage.delete(key)
+                result.complete(Unit)
+            } catch (error: Exception) { result.completeExceptionally(error) }
+            finally { synchronized(this) { deletions.remove(name) } }
         }
         return result
     }

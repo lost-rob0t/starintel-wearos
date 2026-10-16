@@ -5,6 +5,7 @@ on:
       - 'quasar-app/**'
       - '.github/workflows/quasar-draft-storage.yml'
       - 'scripts/test-quasar-draft-storage.sh'
+      - 'scripts/test-quasar-draft-process-death.py'
 jobs:
   drafts:
     runs-on: ubuntu-latest
