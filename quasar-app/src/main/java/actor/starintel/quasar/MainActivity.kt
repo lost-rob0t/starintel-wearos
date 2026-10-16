@@ -39,6 +39,7 @@ class MainActivity : Activity() {
     private val localRuntime by lazy { LocalRuntimeController(this) }
     private val actorDefinitions by lazy { ActorDefinitionStore(this) }
 
+    private val useRail get() = resources.configuration.screenWidthDp >= 600 && resources.configuration.fontScale <= 1.5f
     private lateinit var workspace: WorkspaceState
     private val requests = Executors.newFixedThreadPool(3)
     private var searchTask: Future<*>? = null
@@ -61,17 +62,17 @@ class MainActivity : Activity() {
         window.navigationBarColor = QuasarDesign.background
 
         val shell = LinearLayout(this).apply {
-            orientation = if (resources.configuration.screenWidthDp >= 600) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+            orientation = if (useRail) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
             setBackgroundColor(QuasarDesign.background)
         }
         viewport = FrameLayout(this)
         shell.addView(
             viewport,
-            if (resources.configuration.screenWidthDp >= 600) LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+            if (useRail) LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
             else LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f),
         )
         val nav = bottomNavigation()
-        if (resources.configuration.screenWidthDp >= 600) shell.addView(nav, 0, LinearLayout.LayoutParams(dp(104), -1))
+        if (useRail) shell.addView(nav, 0, LinearLayout.LayoutParams(dp(104), -1))
         else shell.addView(nav, QuasarDesign.match())
         QuasarDesign.install(this, shell)
         restoreRoute(workspace.route)
@@ -219,13 +220,13 @@ class MainActivity : Activity() {
             description = "Your corpus, field evidence, and actor work in one workspace.",
         )
 
-        body.addView(QuasarDesign.body(this, connectionText()), QuasarDesign.match(top = dp(12)))
+        val connectionSummary = QuasarDesign.body(this, connectionText())
+        body.addView(connectionSummary, QuasarDesign.match(top = dp(12)))
         body.addView(QuasarDesign.action(this, "Connection settings") { showSettings() }, QuasarDesign.match(top = dp(8)))
         val metricRow = LinearLayout(this).apply { orientation = if (resources.configuration.fontScale > 1.3f) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL }
         val documents = metric("DOCUMENTS", "—", QuasarDesign.cyan)
         val targets = metric("TARGETS", "—", QuasarDesign.pink)
-        val server = metric("SERVER", if (config.isConfigured()) "—" else "OFF", QuasarDesign.amber)
-        listOf(documents, targets, server).forEachIndexed { index, view ->
+        listOf(documents, targets).forEachIndexed { index, view ->
             metricRow.addView(view, if (metricRow.orientation == LinearLayout.VERTICAL) QuasarDesign.match(top = dp(8))
                 else weighted(start = if (index == 0) 0 else dp(8)))
         }
@@ -237,8 +238,8 @@ class MainActivity : Activity() {
                     data.optJSONObject("documents")?.optLong("total")?.compact() ?: "—"
                 targets.findViewWithTag<TextView>(VALUE_TAG).text =
                     data.optJSONObject("targets")?.optLong("total")?.compact() ?: "—"
-                server.findViewWithTag<TextView>(VALUE_TAG).text = "REPLIED"
                 serverStatus = "Statistics request succeeded"
+                connectionSummary.text = connectionText()
             }
         }
 
@@ -319,7 +320,7 @@ class MainActivity : Activity() {
             status.text = if (rows.isEmpty()) {
                 if (state.getString("loadedQuery") == "*") "No visible records. The server returned an empty snapshot."
                 else "No matching documents. Broaden the query or change the dtype filter."
-            } else "${rows.size} records loaded · query ${state.getString("loadedQuery", "*")} · snapshot limited to 40 · corpus total unknown"
+            } else "${rows.size} records loaded · limit 40 · total unknown"
         }
         var restoringSearch = false
         val search = QuasarDesign.action(this, "Search", primary = true) {
@@ -712,18 +713,35 @@ class MainActivity : Activity() {
 
     private fun bottomNavigation(): View {
         navigation = LinearLayout(this).apply {
-            orientation = if (resources.configuration.screenWidthDp >= 600) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+            orientation = if (useRail) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(8), dp(7), dp(8), dp(9))
             setBackgroundColor(QuasarDesign.panel)
         }
-        listOf(
+        val destinations = listOf(
             "Home" to ::showHome,
             "Field" to ::showFieldOps,
             "Actors" to ::showActors,
             "Search" to { showSearch("Documents", "*") },
             "Settings" to ::showSettings,
-        ).forEach { (label, action) ->
+        )
+        if (resources.configuration.fontScale > 1.5f) {
+            navigation.orientation = LinearLayout.HORIZONTAL
+            navigation.addView(QuasarDesign.title(this, "Home", 18f).apply {
+                tag = "current-destination"
+                gravity = Gravity.CENTER_VERTICAL
+                minHeight = dp(48)
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            navigation.addView(QuasarDesign.action(this, "Menu") {
+                android.widget.PopupMenu(this, navigation.getChildAt(1)).apply {
+                    destinations.forEachIndexed { index, destination -> menu.add(0, index, index, destination.first) }
+                    setOnMenuItemClickListener { item -> destinations[item.itemId].second(); true }
+                    show()
+                }
+            }.apply { contentDescription = "Primary destinations" }, LinearLayout.LayoutParams(-2, -2))
+            return navigation
+        }
+        destinations.forEach { (label, action) ->
             navigation.addView(TextView(this).apply {
                 text = label
                 tag = label
@@ -738,7 +756,7 @@ class MainActivity : Activity() {
                     selectNavigation(label)
                     action()
                 }
-            }, if (resources.configuration.screenWidthDp >= 600) LinearLayout.LayoutParams(-1, -2)
+            }, if (useRail) LinearLayout.LayoutParams(-1, -2)
                 else LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
         selectNavigation("Home")
@@ -746,6 +764,14 @@ class MainActivity : Activity() {
     }
 
     private fun selectNavigation(selected: String) {
+        if (navigation.getChildAt(0)?.tag == "current-destination") {
+            (navigation.getChildAt(0) as TextView).apply {
+                text = selected
+                isSelected = true
+                contentDescription = "$selected, selected destination"
+            }
+            return
+        }
         for (index in 0 until navigation.childCount) {
             val item = navigation.getChildAt(index) as TextView
             val active = item.tag == selected
