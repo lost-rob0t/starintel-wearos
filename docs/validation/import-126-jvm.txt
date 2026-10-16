@@ -46,4 +46,3 @@ MILLION_RECORD_EVIDENCE source_bytes=123888890 source_sha256=1169554edbb95961bcf
 Time: 11.475
 
 OK (22 tests)
-
