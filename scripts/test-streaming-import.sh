@@ -14,4 +14,5 @@ java com.sun.tools.javac.Main -source 17 -target 17 -cp "$classpath" -d "$classe
 java -Xmx32m -cp "$classes:$classpath" org.junit.runner.JUnitCore \
   actor.starintel.quasar.importing.StreamingImportTest \
   actor.starintel.quasar.importing.Utf8BudgetTest \
-  actor.starintel.quasar.importing.BulkImportTransportTest
+  actor.starintel.quasar.importing.BulkImportTransportTest \
+  actor.starintel.quasar.importing.FileImportStoreTest
