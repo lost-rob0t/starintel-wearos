@@ -17,6 +17,17 @@ object NativeUi {
     val device get() = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     fun click(text: String) {
         dismissFixtureLauncherAnr()
+        val drawerSelector = androidx.test.uiautomator.By.desc("Workspace destinations")
+        val drawer = device.findObject(drawerSelector)
+        if (drawer != null) {
+            var item = drawer.findObject(androidx.test.uiautomator.By.text(text))
+            if (item == null) {
+                UiScrollable(UiSelector().description("Workspace destinations")).scrollTextIntoView(text)
+                item = device.findObject(drawerSelector)?.findObject(androidx.test.uiautomator.By.text(text))
+            }
+            checkNotNull(item) { "Missing drawer control: $text" }.click()
+            return
+        }
         val control = device.findObject(UiSelector().text(text))
         if (text in setOf("Home", "Field", "Actors", "Search", "Settings") && !control.exists()) {
             val rail = device.findObject(UiSelector().descriptionMatches(java.util.regex.Pattern.quote(text) + "(?:, selected)?"))
