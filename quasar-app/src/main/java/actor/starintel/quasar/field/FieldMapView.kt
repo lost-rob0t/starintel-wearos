@@ -254,6 +254,7 @@ internal class FieldMapView(context: Context) : View(context), AutoCloseable {
     private fun notifyViewport() = onViewportChanged(center, zoom)
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        parent.requestDisallowInterceptTouchEvent(event.actionMasked != MotionEvent.ACTION_UP && event.actionMasked != MotionEvent.ACTION_CANCEL)
         val scaleHandled = scales.onTouchEvent(event)
         val gestureHandled = gestures.onTouchEvent(event)
         return scaleHandled || gestureHandled || super.onTouchEvent(event)

@@ -50,7 +50,6 @@ class MainActivity : Activity() {
     private var serverStatus = "Not checked"
     private var authStatus = "Not checked"
     private var syncStatus = "No active transfer"
-    private val pendingMutations = mutableSetOf<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -311,11 +310,12 @@ class MainActivity : Activity() {
             status.text = if (rows.isEmpty()) "No matching documents. Broaden the query or change the dtype filter."
                 else "${rows.size} records loaded · snapshot limited to 40 · corpus total unknown"
         }
+        var restoringSearch = false
         val search = QuasarDesign.action(this, "Search", primary = true) {
             val value = query.text.toString().trim()
             if (value.isBlank() || value.length > 512) { query.error = "Enter a query of 1–512 characters"; return@action }
             state.putBoolean("searched", true)
-            state.remove("list")
+            if (!restoringSearch) state.remove("list")
             val generation = searchGeneration.incrementAndGet()
             searchTask?.cancel(true)
             status.text = "Loading records…"
@@ -334,7 +334,7 @@ class MainActivity : Activity() {
         body.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
         viewport.addView(columns, FrameLayout.LayoutParams(-1, -1))
         progress = ProgressBar(this).apply { visibility = View.GONE }
-        searchSnapshots[route]?.let(::display) ?: if (state.getBoolean("searched")) search.performClick() else Unit
+        searchSnapshots[route]?.let(::display) ?: if (state.getBoolean("searched")) { restoringSearch = true; search.performClick(); restoringSearch = false } else Unit
         if (detail != null) selectedDocument?.let { loadDocument(detail, it) }
     }
 
@@ -366,7 +366,7 @@ class MainActivity : Activity() {
         field.setDataStatus("SYNCING", ready = false)
         fieldProgress.visibility = View.VISIBLE
         Thread({
-            val result = runCatching { client.search(query.ifBlank { "*" }, limit = 100).let { rows -> rows.length() to GeoDocumentParser.parseSearchRows(rows) } }
+            val result = runCatching { client.search(query.ifBlank { "*" }, limit = 100).let { rows -> rows.length() to GeoDocumentParser.parseSearchRows(JSONArray().apply { for (i in 0 until minOf(rows.length(), 100)) put(rows.opt(i)) }) } }
             runOnUiThread {
                 // The field view is replaced on navigation and belongs to this activity instance.
                 if (isFinishing || isDestroyed || viewport.getChildAt(0) !== field || mapGeneration.get() != requestId) return@runOnUiThread

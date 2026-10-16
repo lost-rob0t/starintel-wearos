@@ -57,7 +57,7 @@ internal object MapSyncJourney {
                     instrumentation.waitForIdleSync()
                     instrumentation.runOnMainSync {
                         val expected = if (destination != "Field") "SYNCING"
-                            else if (status == 200) "0 SYNCED" else "DATA DEGRADED"
+                            else if (status == 200) "0 GEO / 0 RECORDS" else "DATA UNAVAILABLE"
                         assertEquals("Late response must not mutate a retired field view", expected, oldStatus.text.toString())
                     }
                     when (destination) {
