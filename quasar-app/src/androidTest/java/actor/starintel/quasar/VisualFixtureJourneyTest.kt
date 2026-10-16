@@ -26,6 +26,21 @@ class VisualFixtureJourneyTest {
             QuasarConfig(instrumentation.targetContext).save(backend.origin, "star_sk_v1_fixture")
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 Ui.waitText("Investigation desk"); Ui.capture("$label-home")
+                if (Ui.device.findObject(androidx.test.uiautomator.UiSelector().description("Expand navigation")).exists()) {
+                    scenario.onActivity { activity ->
+                        val minimum = (48 * activity.resources.displayMetrics.density).toInt()
+                        val rail = all(activity.window.decorView).filterIsInstance<TextView>().filter {
+                            it.tag in setOf("Home", "Field", "Actors", "Search", "Settings") && it.text.isEmpty() && it.isShown
+                        }.toList()
+                        check(rail.size == 5)
+                        rail.forEach { item ->
+                            val visible = android.graphics.Rect()
+                            check(item.getGlobalVisibleRect(visible) && visible.width() >= minimum && visible.height() >= minimum) {
+                                "Rail destination is clipped below 48dp: ${item.tag} $visible"
+                            }
+                        }
+                    }
+                }
                 // The baseline has no side drawer. Keep this fixture source compatible
                 // with both revisions while capturing the new native navigation.
                 val navigation = Ui.device.findObject(androidx.test.uiautomator.UiSelector()
