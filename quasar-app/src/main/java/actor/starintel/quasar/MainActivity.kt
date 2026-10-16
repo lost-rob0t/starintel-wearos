@@ -498,46 +498,21 @@ class MainActivity : Activity() {
     }
 
     private fun loadDocument(content: LinearLayout, id: String) {
-        content.tag = id
+        // Identity token also rejects an older retry for the same document ID.
+        val request = Any()
+        content.tag = request
         content.removeAllViews()
         content.addView(QuasarDesign.body(this, "Loading record…"))
-        runApi({
-            val root = client.document(id)
-            val doc = root.optJSONObject("document") ?: root.optJSONObject("data")?.optJSONObject("document") ?: root.optJSONObject("data") ?: root
-            val data = doc.optJSONObject("data") ?: doc
-            Triple(doc, data, root.toString(2))
-        }, onFailure = {
-            if (content.tag == id) {
+        runApi({ client.document(id) }, onFailure = {
+            if (content.tag === request && content.isAttachedToWindow) {
                 content.removeAllViews()
                 content.addView(emptyState("Record unavailable", failureText(it)))
                 content.addView(QuasarDesign.action(this, "Retry read") { loadDocument(content, id) }, QuasarDesign.match(top = dp(8)))
             }
-        }) { (doc, data, raw) ->
-            if (content.tag != id) return@runApi
+        }) { root ->
+            if (content.tag !== request || !content.isAttachedToWindow) return@runApi
             content.removeAllViews()
-            content.addView(QuasarDesign.eyebrow(this, doc.optString("dtype").ifBlank { "document" }))
-            content.addView(QuasarDesign.title(this, data.optString("name").ifBlank { data.optString("title") }.ifBlank { id }, 22f), QuasarDesign.match(top = dp(8)))
-            content.addView(QuasarDesign.body(this, id), QuasarDesign.match(top = dp(8)))
-            val summary = data.optString("summary").ifBlank { data.optString("description") }.ifBlank { "No summary supplied in this record." }
-            content.addView(QuasarDesign.body(this, summary, QuasarDesign.text, 16f), QuasarDesign.match(top = dp(12)))
-            listOf("source", "dataset", "created_at", "updated_at", "observed_at").forEach { key ->
-                val value = doc.opt(key) ?: data.opt(key)
-                if (value != null && value != JSONObject.NULL) content.addView(QuasarDesign.body(this, "${key.replace('_', ' ')} · $value"), QuasarDesign.match(top = dp(8)))
-            }
-            val fields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-            content.addView(QuasarDesign.action(this, "Structured fields") {
-                if (fields.childCount == 0) data.keys().asSequence().take(100).forEach { key ->
-                    fields.addView(QuasarDesign.body(this, "$key\n${data.opt(key).toString().take(4096)}", QuasarDesign.text), QuasarDesign.match(top = dp(12)))
-                }
-                fields.visibility = if (fields.visibility == View.GONE) View.VISIBLE else View.GONE
-            }, QuasarDesign.match(top = dp(16)))
-            content.addView(fields)
-            val rawView = codeBlock("").apply { visibility = View.GONE }
-            content.addView(QuasarDesign.action(this, "Raw JSON") {
-                rawView.text = raw
-                rawView.visibility = if (rawView.visibility == View.GONE) View.VISIBLE else View.GONE
-            }, QuasarDesign.match(top = dp(8)))
-            content.addView(rawView, QuasarDesign.match(top = dp(8)))
+            content.addView(actor.starintel.quasar.detail.RecordDetailView(this, root, id), QuasarDesign.match())
         }
     }
 

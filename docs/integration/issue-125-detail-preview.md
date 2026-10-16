@@ -1,26 +1,30 @@
 # Issue 125: bounded record detail handoff
 
-Base: PR #120 `82c2a3ae332fdc42c61e487b2607d81210ea9278` on
-main `e80ab4558cc580eff26b13f8f86edf3578143730`. Both were rechecked.
-No changes to PR #120, Quasar PR #110, shared clients, or Lisp stores.
+Integration base: PR #128 `5c2c3975aada72b62f7fba0f686eaebedd076695`,
+which preserves PR #120 `82c2a3ae332fdc42c61e487b2607d81210ea9278` on
+main `e80ab4558cc580eff26b13f8f86edf3578143730`.
+No changes to PR #120/#128 branches, Quasar PR #110, shared clients, or Lisp stores.
 The workspace `.agents` directory is empty; this repository has no `.agents/skills`.
 Repository `AGENTS.md` was read and its independent gates attempted.
 
 ## Integration ownership
 
-Parent assigned #122 the first MainActivity integration; #123/#125/#126 supply
-independent components and separate patches. Accordingly **MainActivity is not
-modified in this branch**. This PR alone does not change the live detail screen
-and must not close #125 until the integration patch is applied and validated.
+Parent released MainActivity integration to #125 after #122 at the exact head
+above. This branch now **wires RecordDetailView through loadDocument**. #123 is
+next; retain the identity-token and attachment checks when integrating its work.
+The historical `issue-125-main-activity.patch` is already applied; do not reapply it.
 
-After #122's approved integration, apply/adapt only
-`docs/integration/issue-125-main-activity.patch`. It replaces `loadDocument` only,
-preserves `client.document(id)` and `runApi`, and creates `RecordDetailView` on
-success. The patch passes `git apply --check` against the exact PR #120 head;
-it has not been checked against #122's future changes. The identity token rejects
+The patch replaces `loadDocument` only, preserves `client.document(id)` and
+`runApi`, and creates `RecordDetailView` on success. The identity token rejects
 older responses even when consecutive requests have the same record ID.
 Detached content rejects responses. Network requests retain the existing client
 response cap and failure handling; this change does not retry mutations.
+
+The hosted native journey now invokes `DetailPreviewJourney` through the real
+MainActivity route. It checks collapsed state, raw/structured expansion, collapse,
+recreation and a 256 KiB response with bounded output. The existing search fixture
+adds padding only to detail responses when this test explicitly enables it;
+paging/search response generation is unchanged. Hosted execution is pending.
 
 Public component contract:
 
@@ -95,12 +99,12 @@ java -cp '/tmp/issue125-classes:/tmp/issue125-deps/*' org.junit.runner.JUnitCore
 `nix flake check --no-update-lock-file --show-trace` and
 `nix run --no-update-lock-file .#build-all` were attempted; both failed because
 `nix` is absent. Gradle, Android SDK/emulator and javac are also absent.
-The Kotlin Android view and the proposed integration patch have not been compiled
-or device-tested. JVM tests compile production Java helpers, not an Android APK.
+The Kotlin Android view and integrated screen await hosted compilation
+and emulator testing. JVM tests compile production Java helpers, not an Android APK.
 Malformed/oversized HTTP response behavior remains the existing client contract,
 not newly verified by these focused preview tests.
 
-Before merging: serialize patch integration through #122/parent; run canonical
+Before merging: run canonical
 gates and `:quasar-app:testDebugUnitTest :quasar-app:assembleDebug`; exercise
 expansion/collapse, navigation while loading, same-ID retries, missing fields,
 malformed/oversized responses, recreation and detach on an emulator. Recreated
