@@ -25,13 +25,29 @@ public class StreamingImportTest {
         try (BufferedWriter writer = Files.newBufferedWriter(f.toPath())) {
             for (int i=0;i<1_000_000;i++) writer.write("{\"n\":" + i + ",\"value\":\"" + "x".repeat(100) + "\"}\n");
         }
-        AtomicInteger calls = new AtomicInteger(), live = new AtomicInteger();
+        AtomicInteger calls = new AtomicInteger(), live = new AtomicInteger(), next = new AtomicInteger();
+        AtomicInteger maxBatchBytes = new AtomicInteger(), maxBatchRecords = new AtomicInteger();
+        long started = System.nanoTime();
         StreamingImport.Result r = run(f, b -> {
             assertEquals(1, live.incrementAndGet()); assertTrue(b.length <= StreamingImport.MAX_BATCH_BYTES);
             JSONArray records = new JSONArray(new String(b, StandardCharsets.UTF_8));
-            assertTrue(records.length() <= 10); calls.incrementAndGet(); live.decrementAndGet(); return ok(records.length());
+            assertTrue(records.length() <= 10);
+            maxBatchBytes.accumulateAndGet(b.length, Math::max);
+            maxBatchRecords.accumulateAndGet(records.length(), Math::max);
+            for (int i = 0; i < records.length(); i++) assertEquals(next.getAndIncrement(), records.getJSONObject(i).getInt("n"));
+            calls.incrementAndGet(); live.decrementAndGet(); return ok(records.length());
         });
         assertEquals("complete", r.state); assertEquals(1_000_000, r.verifiedAccepted); assertEquals(100_000, calls.get());
+        assertEquals(1_000_000, next.get()); assertEquals(f.length() - 1, r.sourceOffset);
+        java.util.Properties journal = new java.util.Properties();
+        try (InputStream input = new FileInputStream(checkpoint())) { journal.load(input); }
+        System.out.println("\nMILLION_RECORD_EVIDENCE source_bytes=" + f.length() +
+            " source_sha256=" + journal.getProperty("source") + " accepted=" + r.verifiedAccepted +
+            " ordered_ids_verified=" + next.get() + " batches=" + calls.get() + " max_in_flight=1" +
+            " max_batch_bytes=" + maxBatchBytes.get() + " max_batch_records=" + maxBatchRecords.get() +
+            " checkpoint_bytes=" + checkpoint().length() + " verified_offset=" + r.sourceOffset +
+            " max_heap_bytes=" + Runtime.getRuntime().maxMemory() +
+            " elapsed_ms=" + ((System.nanoTime() - started) / 1_000_000));
     }
     @Test public void utf8ByteBoundSplitsBatchAndArrayResume() throws Exception {
         File f = source("[ {\"s\":\"éé\"}, {\"s\":\"éé\"}, {\"s\":\"éé\"} ]");
