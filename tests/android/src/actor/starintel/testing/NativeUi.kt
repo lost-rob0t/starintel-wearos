@@ -146,6 +146,15 @@ object NativeUi {
         check(instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == targetPackage) {
             "Fixture lost the active window before hierarchy capture: $name"
         }
-        device.dumpWindowHierarchy(File(directory, "$name.xml"))
+        val hierarchy = File(directory, "$name.xml")
+        device.dumpWindowHierarchy(hierarchy)
+        // Supplemental compositor evidence covers the actual keyboard and system bars.
+        // The fixture-only secure-flag override above is already committed to a frame.
+        val system = checkNotNull(instrumentation.uiAutomation.takeScreenshot()) { "No fixture compositor frame: $name" }
+        File(directory, "$name-system.png").outputStream().use {
+            check(system.compress(Bitmap.CompressFormat.PNG, 100, it))
+        }
+        system.recycle()
+        hierarchy.copyTo(File(directory, "$name-system.xml"), overwrite = true)
     }
 }
