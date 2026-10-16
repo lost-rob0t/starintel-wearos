@@ -199,7 +199,7 @@ internal class FieldOpsView(
             gravity = Gravity.CENTER_VERTICAL
             setPadding(context.dp(10), context.dp(7), context.dp(10), context.dp(7))
             addView(mapMode, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(listMode, LayoutParams(context.dp(64), ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = context.dp(8) })
+            addView(listMode, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = context.dp(8) })
             addView(graphMode, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = context.dp(5) })
             addView(divider(), LayoutParams(context.dp(1), context.dp(24)).apply {
                 marginStart = context.dp(10)
