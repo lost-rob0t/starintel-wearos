@@ -77,6 +77,7 @@ internal object WorkstationJourney {
                     val nodes = all(activity.window.decorView).toList()
                     nodes.filterIsInstance<EditText>().single().setText("record 2")
                     nodes.filterIsInstance<actor.starintel.quasar.field.FieldOpsView>().single().focusOn(51.502, -.118)
+                    assertTrue(nodes.filterIsInstance<actor.starintel.quasar.field.FieldMapView>().single().contentDescription.toString().contains("Selected Fixture record 2"))
                 }
                 Ui.waitText("Fixture record 2")
                 scenario.recreate(); Ui.waitText("100 GEO / 100 RECORDS")
@@ -85,7 +86,8 @@ internal object WorkstationJourney {
                     assertEquals("record 2", nodes.filterIsInstance<EditText>().single().text.toString())
                     val list = nodes.filterIsInstance<RecyclerView>().single()
                     assertTrue("Field list mode must survive recreation", list.isShown)
-                    assertEquals(11, list.adapter!!.itemCount)
+                    // Matching is term-based across title and ID: 2, 12, 20–29, 32, …, 92.
+                    assertEquals(19, list.adapter!!.itemCount)
                     val state = nodes.filterIsInstance<actor.starintel.quasar.field.FieldOpsView>().single().saveWorkspace()
                     assertEquals("fixture-2", state.getString("selected"))
                     assertEquals(51.502, state.getDouble("latitude"), .000001)
