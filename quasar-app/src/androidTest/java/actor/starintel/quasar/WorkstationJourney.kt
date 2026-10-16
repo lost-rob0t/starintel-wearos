@@ -87,6 +87,21 @@ internal object WorkstationJourney {
                     putString("stream", "\nBounded corpus: 1000000 synthetic records, requested=${backend.maxRequested.get()}, initial search+UI=${elapsed}ms, heap=${Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()} bytes. Emulator measurement only.\n")
                 })
                 Ui.capture("quasar-search-reconnected")
+                Ui.click("Next page"); Ui.waitText("Page 2 · 40 records loaded")
+                Ui.waitText("Fixture record 40")
+                scenario.recreate(); Ui.waitText("Page 2 · 40 records loaded")
+                Ui.waitText("Fixture record 40")
+                Ui.click("Fixture record 40"); Ui.waitText("Synthetic field exercise")
+                Ui.device.pressBack(); Ui.waitText("Page 2 · 40 records loaded")
+                backend.searchStatus = 503
+                Ui.click("Next page"); Ui.waitText("Refresh failed; previous results retained")
+                Ui.waitText("Fixture record 40")
+                backend.searchStatus = 200
+                Ui.click("Next page"); Ui.waitText("Page 3 · 40 records loaded")
+                Ui.waitText("Fixture record 80")
+                Ui.click("Previous page"); Ui.waitText("Page 2 · 40 records loaded")
+                Ui.click("Next page"); Ui.waitText("Page 3 · 40 records loaded")
+                Ui.capture("quasar-search-paged-restored")
                 Ui.click("Field"); Ui.waitText("100 GEO / 100 RECORDS")
                 Ui.click("LIST")
                 scenario.onActivity { activity ->
