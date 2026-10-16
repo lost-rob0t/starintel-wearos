@@ -72,8 +72,14 @@ class VisualFixtureJourneyTest {
                 val settleUntil = System.currentTimeMillis() + 5000
                 while (stableFrames < 3 && System.currentTimeMillis() < settleUntil) {
                     var bottom = 0
-                    scenario.onActivity { activity -> bottom = activity.window.decorView.rootWindowInsets.getInsets(android.view.WindowInsets.Type.ime()).bottom }
-                    stableFrames = if (bottom == previousBottom && bottom > 0) stableFrames + 1 else 0
+                    var visible = false
+                    scenario.onActivity { activity ->
+                        val insets = activity.window.decorView.rootWindowInsets
+                        bottom = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom
+                        visible = insets.isVisible(android.view.WindowInsets.Type.ime())
+                    }
+                    // Fullscreen landscape IMEs may report visible with zero app-window occlusion.
+                    stableFrames = if (bottom == previousBottom && visible) stableFrames + 1 else 0
                     previousBottom = bottom
                     Thread.sleep(100)
                 }
