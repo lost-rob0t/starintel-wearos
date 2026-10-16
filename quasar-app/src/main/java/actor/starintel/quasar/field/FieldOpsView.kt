@@ -57,10 +57,14 @@ internal class FieldOpsView(
     init {
         orientation = VERTICAL
         setBackgroundColor(QuasarDesign.background)
-        addView(commandBar(), match())
-        addView(layerBar(), match())
-        addView(surface(), LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        addView(ScrollView(context).apply { addView(detail); isFillViewport = false }, LayoutParams(-1, context.dp(120)))
+        val content = LinearLayout(context).apply {
+            orientation = VERTICAL
+            addView(commandBar(), match())
+            addView(layerBar(), match())
+            addView(surface(), LayoutParams(-1, context.dp(maxOf(200, resources.configuration.screenHeightDp - 360))))
+            addView(detail, match())
+        }
+        addView(ScrollView(context).apply { isFillViewport = true; addView(content) }, LayoutParams(-1, -1))
 
         map.onViewportChanged = { center, zoom ->
             fieldCenter = center
@@ -120,6 +124,7 @@ internal class FieldOpsView(
         putDouble("latitude", fieldCenter.latitude); putDouble("longitude", fieldCenter.longitude)
         putInt("zoom", fieldZoom)
         putParcelable("list", list.layoutManager?.onSaveInstanceState())
+        putInt("scroll", (getChildAt(0) as ScrollView).scrollY)
     }
     fun restoreWorkspace(state: Bundle) {
         search.setText(state.getString("query", ""))
@@ -131,6 +136,7 @@ internal class FieldOpsView(
         when (state.getString("mode")) { "list" -> showList(); "links" -> showGraph(); else -> showMap() }
         list.layoutManager?.onRestoreInstanceState(state.getParcelable<android.os.Parcelable>("list"))
         applyFilter()
+        post { (getChildAt(0) as ScrollView).scrollTo(0, state.getInt("scroll")) }
     }
 
     fun setDataStatus(label: String, ready: Boolean) {
@@ -215,11 +221,11 @@ internal class FieldOpsView(
             marginEnd = context.dp(12)
         })
         addView(LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = VERTICAL
+            gravity = Gravity.START
             setPadding(context.dp(10), context.dp(7), context.dp(10), context.dp(7))
             setBackgroundColor(QuasarDesign.panel)
-            addView(coordinate, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(coordinate, match())
             addView(zoomReadout)
             addView(mapStatus)
             addView(count, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
