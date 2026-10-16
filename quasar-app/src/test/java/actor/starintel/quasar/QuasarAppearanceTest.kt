@@ -46,4 +46,16 @@ class QuasarAppearanceTest {
         val source = QuasarAppearance.defaultCustom().apply { remove("light") }
         assertTrue(runCatching { QuasarAppearance.validateCustom(source.toString()) }.isFailure)
     }
+
+    @Test fun generatedStatusesStayReadableWithUnusualCustomSurfaces() {
+        val source = QuasarAppearance.defaultCustom()
+        source.getJSONObject("dark").put("background", "#757575").put("surface", "#FFFFFF")
+            .put("text", "#000000").put("accent", "#000000")
+        val palette = QuasarAppearance.customPalette(QuasarAppearance.validateCustom(source.toString()), true)
+        for (surface in listOf(palette.background, palette.surface, palette.raised)) {
+            for (color in listOf(palette.good, palette.warning, palette.danger, palette.alternate, palette.muted)) {
+                assertTrue(SiTokens.contrastRatio(color, surface) >= 4.5)
+            }
+        }
+    }
 }
