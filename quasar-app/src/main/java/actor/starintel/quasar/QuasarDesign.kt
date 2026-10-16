@@ -49,17 +49,26 @@ internal object QuasarDesign {
             setBackgroundColor(QuasarDesign.background)
             addView(content)
         }
+        val lightBars = !dark
+        fun updateBars() {
+            androidx.core.view.WindowCompat.getInsetsController(activity.window, frame).apply {
+                if (isAppearanceLightStatusBars != lightBars) isAppearanceLightStatusBars = lightBars
+                if (isAppearanceLightNavigationBars != lightBars) isAppearanceLightNavigationBars = lightBars
+            }
+        }
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(frame) { view, insets ->
+            updateBars()
             val safe = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or
                 androidx.core.view.WindowInsetsCompat.Type.displayCutout() or androidx.core.view.WindowInsetsCompat.Type.ime())
             view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
             androidx.core.view.WindowInsetsCompat.CONSUMED
         }
         activity.setContentView(frame)
-        androidx.core.view.WindowCompat.getInsetsController(activity.window, frame).apply {
-            isAppearanceLightStatusBars = !dark
-            isAppearanceLightNavigationBars = !dark
-        }
+        // Starting-window attachment/focus can replace the early appearance request.
+        // Reassert this window's palette after that handoff, including theme recreation.
+        frame.viewTreeObserver.addOnWindowFocusChangeListener { focused -> if (focused) updateBars() }
+        frame.post { updateBars() }
+        updateBars()
         androidx.core.view.ViewCompat.requestApplyInsets(frame)
     }
 
