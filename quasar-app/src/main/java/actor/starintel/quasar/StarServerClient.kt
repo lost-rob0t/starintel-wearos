@@ -37,6 +37,8 @@ internal class StarServerClient(context: Context) {
 
     fun search(query: String, limit: Int = 40): JSONArray = client.search(query, limit)
 
+    fun searchPage(query: String, limit: Int = 40, cursor: String? = null) = client.searchPage(query, limit, cursor)
+
     fun document(id: String): JSONObject = client.document(id)
 
     fun createDocument(document: JSONObject): JSONObject = client.createDocument(document)

@@ -46,7 +46,7 @@ class MainActivity : Activity() {
     private var searchTask: Future<*>? = null
     private val searchGeneration = AtomicInteger()
     private val mapGeneration = AtomicInteger()
-    private val searchSnapshots = mutableMapOf<String, List<DocumentRow>>()
+    private val searchPages = mutableMapOf<String, actor.starintel.android.api.SearchPager>()
     private var resultList: RecyclerView? = null
     private var selectedDocument: String? = null
     private var isRestoring = false
@@ -342,7 +342,7 @@ class MainActivity : Activity() {
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
         }
         body.addView(query, QuasarDesign.match(top = dp(8)))
-        val status = QuasarDesign.status(this, "Enter a query, then Search. Up to 40 records per snapshot.").apply {
+        val status = QuasarDesign.status(this, "Enter a query, then Search. Up to 40 records per page.").apply {
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
         val adapter = DocumentRows { row ->
@@ -359,49 +359,84 @@ class MainActivity : Activity() {
             setPadding(0, dp(8), 0, dp(16))
         }
         resultList = list
-        fun display(rows: List<DocumentRow>) {
+        val pager = searchPages.getOrPut(route) { actor.starintel.android.api.SearchPager() }
+        lateinit var previous: TextView
+        lateinit var next: TextView
+        fun display(entry: actor.starintel.android.api.SearchPager.Entry) {
+            val rows = DocumentRow.from(entry.page.rows, 40)
             adapter.submitList(rows) {
                 list.layoutManager?.onRestoreInstanceState(state.getParcelable<Parcelable>("list"))
             }
-            status.text = if (rows.isEmpty()) {
-                if (state.getString("loadedQuery") == "*") "No visible records. The server returned an empty snapshot."
-                else "No matching documents. Broaden the query or change the dtype filter."
-            } else "${rows.size} records loaded · limit 40 · total unknown"
+            state.putString("loadedQuery", entry.query)
+            state.putString("pageCursor", entry.cursor)
+            state.putLong("pageNumber", entry.number)
+            val total = entry.page.total?.let { "server total $it" } ?: "total unknown"
+            status.text = "Page ${entry.number} · ${rows.size} records loaded · $total" +
+                if (rows.isEmpty()) " · No matching documents on this page · End of results" else if (entry.page.nextCursor == null) " · No continuation supplied" else " · Next checks for more"
+            if (entry.number > 1 && !pager.canPrevious) status.append("\nEarlier pages evicted; Search restarts from page 1.")
+            previous.isEnabled = pager.canPrevious
+            next.isEnabled = pager.canNext
             state.getString("error")?.let { status.text = "$it\n${status.text}" }
         }
-        var restoringSearch = false
+        fun load(request: actor.starintel.android.api.SearchPager.Request, restore: Boolean = false) {
+            state.putBoolean("searched", true)
+            if (!restore) state.remove("list")
+            val generation = searchGeneration.incrementAndGet()
+            searchTask?.cancel(true)
+            (requests as java.util.concurrent.ThreadPoolExecutor).purge()
+            previous.isEnabled = false; next.isEnabled = false
+            status.text = "Loading page ${request.number}…"
+            searchTask = requests.submit {
+                val response = runCatching { client.searchPage(request.query, 40, request.cursor) }
+                runOnUiThread {
+                    if (isFinishing || isDestroyed || viewport.getChildAt(0) !== columns || searchGeneration.get() != generation) {
+                        pager.fail(request)
+                        return@runOnUiThread
+                    }
+                    response.mapCatching { page -> pager.complete(request, page) }.onSuccess { applied ->
+                        if (applied) { state.remove("error"); pager.current?.let(::display) }
+                    }.onFailure {
+                        pager.fail(request)
+                        noteFailure(it)
+                        val message = "${if (adapter.itemCount > 0) "Refresh failed; previous results retained (query ${state.getString("loadedQuery", "*")}). " else "Search failed. "}${failureText(it)}"
+                        state.putString("error", message)
+                        pager.current?.let(::display) ?: run { status.text = message }
+                    }
+                }
+            }
+        }
         val search = QuasarDesign.action(this, "Search", primary = true) {
             val value = query.text.toString().trim()
             if (value.isBlank() || value.length > 512) { query.error = "Enter a query of 1–512 characters"; return@action }
             if (!config.isConfigured()) { status.text = "Connect a server in Settings before searching."; return@action }
             getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(query.windowToken, 0)
             query.clearFocus()
-            state.putBoolean("searched", true)
-            if (!restoringSearch) state.remove("list")
-            val generation = searchGeneration.incrementAndGet()
-            searchTask?.cancel(true)
-            (requests as java.util.concurrent.ThreadPoolExecutor).purge()
-            status.text = "Loading records…"
-            searchTask = requests.submit {
-                val response = runCatching { DocumentRow.from(client.search(value, 40), 40) }
-                runOnUiThread {
-                    if (isFinishing || isDestroyed || viewport.getChildAt(0) !== columns || searchGeneration.get() != generation) return@runOnUiThread
-                    response.onSuccess { rows -> state.remove("error"); state.putString("loadedQuery", value); searchSnapshots[route] = rows; display(rows) }
-                        .onFailure {
-                            noteFailure(it)
-                            val message = "${if (adapter.itemCount > 0) "Refresh failed; previous results retained (query ${state.getString("loadedQuery", "*")}). " else "Search failed. "}${failureText(it)}"
-                            state.putString("error", message); status.text = message
-                        }
-                }
-            }
+            load(pager.start(value))
         }
+        previous = QuasarDesign.action(this, "Previous page") {
+            state.remove("list")
+            pager.previous()?.let(::display)
+        }.apply { isEnabled = false }
+        next = QuasarDesign.action(this, "Next page") {
+            state.remove("list")
+            val cached = pager.forwardCached()
+            if (cached != null) display(cached) else pager.next()?.let { load(it) }
+        }.apply { isEnabled = false }
         query.setOnEditorActionListener { _, _, _ -> search.performClick(); true }
         body.addView(search, QuasarDesign.match(top = dp(8)))
+        body.addView(LinearLayout(this).apply {
+            addView(previous, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(next, LinearLayout.LayoutParams(0, -2, 1f))
+        }, QuasarDesign.match(top = dp(8)))
         body.addView(status, QuasarDesign.match(top = dp(8)))
         body.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
         viewport.addView(columns, FrameLayout.LayoutParams(-1, -1))
         progress = ProgressBar(this).apply { visibility = View.GONE }
-        searchSnapshots[route]?.let(::display) ?: if (state.getBoolean("searched")) { restoringSearch = true; search.performClick(); restoringSearch = false } else Unit
+        pager.cancel()
+        pager.current?.let(::display) ?: if (state.getBoolean("searched") && config.isConfigured()) {
+            val loadedQuery = state.getString("loadedQuery") ?: query.text.toString().trim()
+            if (loadedQuery.isNotBlank()) load(pager.start(loadedQuery, state.getString("pageCursor"), state.getLong("pageNumber", 1)), restore = true)
+        } else Unit
         if (detail != null) selectedDocument?.let { loadDocument(detail, it) }
     }
 
