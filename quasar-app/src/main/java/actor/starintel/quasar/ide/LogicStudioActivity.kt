@@ -47,7 +47,9 @@ class LogicStudioActivity : Activity() {
         val restoredLanguage = savedInstanceState?.getString("language")?.let { runCatching { IdeLanguage.valueOf(it) }.getOrNull() } ?: IdeLanguage.LISP
         openLanguage(restoredLanguage)
         savedInstanceState?.getBundle("drafts")?.let { saved ->
-            saved.keySet().forEach { name -> saved.getString(name)?.let { source -> drafts[name] = SourceBuffer(name, restoredLanguage, source, dirty = true) } }
+            saved.keySet().forEach { name -> saved.getString(name)?.let { key ->
+                runCatching { actor.starintel.quasar.WorkspaceDrafts(this).read(key) }.onSuccess { source -> drafts[name] = SourceBuffer(name, restoredLanguage, source, dirty = true) }
+            } }
             activeName = savedInstanceState.getString("activeName") ?: activeName
             showEditor()
             editor?.setSelection((savedInstanceState.getInt("cursor")).coerceIn(0, editor?.text?.length ?: 0))
@@ -61,9 +63,8 @@ class LogicStudioActivity : Activity() {
         outState.putInt("cursor", editor?.selectionStart ?: 0)
         // Only unsaved, bounded buffers; persisted sources remain in the private workspace.
         outState.putBundle("drafts", Bundle().apply {
-            var remaining = 128 * 1024
             drafts.values.filter { it.dirty }.forEach { buffer ->
-                if (buffer.source.length <= remaining) { putString(buffer.name, buffer.source); remaining -= buffer.source.length }
+                putString(buffer.name, actor.starintel.quasar.WorkspaceDrafts(this@LogicStudioActivity).save("logic:${language.name}:${buffer.name}", buffer.source))
             }
         })
         super.onSaveInstanceState(outState)

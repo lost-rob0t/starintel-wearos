@@ -316,13 +316,16 @@ class MainActivity : Activity() {
             adapter.submitList(rows) {
                 list.layoutManager?.onRestoreInstanceState(state.getParcelable<Parcelable>("list"))
             }
-            status.text = if (rows.isEmpty()) "No matching documents. Broaden the query or change the dtype filter."
-                else "${rows.size} records loaded · snapshot limited to 40 · corpus total unknown"
+            status.text = if (rows.isEmpty()) {
+                if (state.getString("loadedQuery") == "*") "No visible records. The server returned an empty snapshot."
+                else "No matching documents. Broaden the query or change the dtype filter."
+            } else "${rows.size} records loaded · query ${state.getString("loadedQuery", "*")} · snapshot limited to 40 · corpus total unknown"
         }
         var restoringSearch = false
         val search = QuasarDesign.action(this, "Search", primary = true) {
             val value = query.text.toString().trim()
             if (value.isBlank() || value.length > 512) { query.error = "Enter a query of 1–512 characters"; return@action }
+            if (!config.isConfigured()) { status.text = "Connect a server in Settings before searching."; return@action }
             state.putBoolean("searched", true)
             if (!restoringSearch) state.remove("list")
             val generation = searchGeneration.incrementAndGet()
@@ -333,8 +336,8 @@ class MainActivity : Activity() {
                 val response = runCatching { DocumentRow.from(client.search(value, 40), 40) }
                 runOnUiThread {
                     if (isFinishing || isDestroyed || viewport.getChildAt(0) !== columns || searchGeneration.get() != generation) return@runOnUiThread
-                    response.onSuccess { rows -> searchSnapshots[route] = rows; display(rows) }
-                        .onFailure { status.text = "${if (adapter.itemCount > 0) "Refresh failed; previous results retained. " else "Search failed. "}${failureText(it)}" }
+                    response.onSuccess { rows -> state.putString("loadedQuery", value); searchSnapshots[route] = rows; display(rows) }
+                        .onFailure { status.text = "${if (adapter.itemCount > 0) "Refresh failed; previous results retained (query ${state.getString("loadedQuery", "*")}). " else "Search failed. "}${failureText(it)}" }
                 }
             }
         }
@@ -368,7 +371,10 @@ class MainActivity : Activity() {
         )
         workspace.views.getBundle("field")?.getBundle("field")?.let(field::restoreWorkspace)
         if (config.isConfigured()) loadGeoDocuments(field, fieldProgress, field.query())
-        else field.setDataStatus("LOCAL / NO SERVER", ready = false)
+        else {
+            field.setDataStatus("NO SERVER CONFIGURED", ready = false)
+            field.setSnapshotNotice("Connect in Settings to retrieve records. Basemap availability is independent.")
+        }
     }
 
     private fun loadGeoDocuments(field: FieldOpsView, fieldProgress: ProgressBar, query: String) {
