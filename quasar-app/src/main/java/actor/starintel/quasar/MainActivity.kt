@@ -547,7 +547,7 @@ class MainActivity : Activity() {
             remote.addView(QuasarDesign.body(this, "Loading authorized registry…"))
             runApi({ client.actors() }, onFailure = {
                 remote.removeAllViews()
-                remote.addView(emptyState("Registry unavailable", "Check your connection and actors:read permission, then refresh."))
+                remote.addView(emptyState("Registry unavailable", failureText(it)))
             }) { rows ->
                 remote.removeAllViews()
                 for (index in 0 until rows.length()) {
@@ -813,7 +813,7 @@ class MainActivity : Activity() {
             status.text = message
         }) { receipt ->
             syncStatus = "Server responded; no background sync"
-            val message = if (acceptanceOnly) "Accepted by server. Execution and result status are not tracked here.\n${receipt.toString(2)}"
+            val message = if (acceptanceOnly) targetReceiptText(receipt)
                 else "Server response\n${receipt.toString(2)}"
             state.putString("receipt", message.take(8192))
             status.text = message

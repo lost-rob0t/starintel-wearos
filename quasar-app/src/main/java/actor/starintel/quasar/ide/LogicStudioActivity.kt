@@ -195,6 +195,9 @@ class LogicStudioActivity : Activity() {
                 setTextColor(if (selected) QuasarDesign.background else QuasarDesign.text)
                 setBackgroundColor(if (selected) QuasarDesign.cyan else QuasarDesign.panelRaised)
                 setPadding(dp(13), dp(11), dp(13), dp(11))
+                minHeight = dp(48)
+                isFocusable = true
+                isSelected = selected
                 isClickable = true
                 setOnClickListener {
                     captureDraft()
@@ -435,12 +438,14 @@ class LogicStudioActivity : Activity() {
         typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
         setTextColor(QuasarDesign.text)
         setBackgroundColor(QuasarDesign.panelRaised)
+        minHeight = dp(48)
+        setPadding(dp(8), dp(12), dp(8), dp(12))
         isClickable = true
         isFocusable = true
         setOnClickListener { action() }
     }
 
-    private fun weighted(start: Int = 0) = LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = start }
+    private fun weighted(start: Int = 0) = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = start }
 
     private fun EditText.nonBlankLines(): List<String> = text.lineSequence().map(String::trim).filter(String::isNotEmpty).toList()
 

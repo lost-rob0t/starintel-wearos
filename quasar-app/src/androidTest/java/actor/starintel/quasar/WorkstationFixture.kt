@@ -27,9 +27,10 @@ internal class WorkstationFixture : AutoCloseable {
                     while (!reader.readLine().isNullOrEmpty()) { }
                     val search = path.contains("search?")
                     val params = path.substringAfter('?', "").split('&').associate { pair -> pair.substringBefore('=') to URLDecoder.decode(pair.substringAfter('=', ""), "UTF-8") }
-                    val limit = (params["limit"]?.toIntOrNull() ?: 40).coerceIn(1, 100)
+                    val requestedLimit = params["limit"]?.toIntOrNull() ?: 40
+                    val limit = requestedLimit.coerceIn(1, 100)
                     if (search && params["q"] == "slow") { slowRequested.countDown(); Thread.sleep(700) }
-                    if (search) { maxRequested.updateAndGet { current -> maxOf(current, limit) }; Thread.sleep(delayMillis) }
+                    if (search) { maxRequested.updateAndGet { current -> maxOf(current, requestedLimit) }; Thread.sleep(delayMillis) }
                     val status = if (search) searchStatus else 200
                     val payload = when {
                         search -> JSONObject().put("rows", JSONArray().apply {

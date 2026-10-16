@@ -46,6 +46,7 @@ class VisualFixtureJourneyTest {
                     if (!loading) break
                     Thread.sleep(100)
                 }
+                check(backend.maxRequested.get() <= 100) { "Unbounded map request" }
                 Ui.capture("$label-field")
                 Ui.click("Settings"); Ui.waitText("Credentials are validated"); Ui.capture("$label-settings")
                 Ui.device.findObject(androidx.test.uiautomator.UiSelector().description("STAR SERVER")).click()
