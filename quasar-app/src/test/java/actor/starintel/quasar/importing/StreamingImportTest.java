@@ -60,6 +60,21 @@ public class StreamingImportTest {
         StreamingImport.Result rest = importer.run(f, checkpoint(), "scope", b -> { calls.incrementAndGet(); return ok(1); }, () -> false, r -> {});
         assertEquals(3, rest.verifiedAccepted); assertEquals(3, calls.get());
     }
+    @Test public void nearMaximumRecordsRespectEncodedBatchCeiling() throws Exception {
+        File f = folder.newFile();
+        String object = "{\"s\":\"" + "x".repeat(StreamingImport.MAX_RECORD_BYTES - 10) + "\"}";
+        try (BufferedWriter out = Files.newBufferedWriter(f.toPath())) {
+            for (int i = 0; i < 12; i++) { out.write(object); out.newLine(); }
+        }
+        AtomicInteger calls = new AtomicInteger();
+        StreamingImport.Result result = run(f, bytes -> {
+            calls.incrementAndGet(); assertEquals(262143, bytes.length);
+            assertEquals(2, new JSONArray(new String(bytes, StandardCharsets.UTF_8)).length());
+            return ok(2);
+        });
+        assertEquals(12, result.verifiedAccepted); assertEquals(6, calls.get());
+        System.out.println("NEAR_LIMIT_EVIDENCE record_bytes=131070 batch_bytes=262143 records_per_batch=2 batches=6 accepted=12");
+    }
     @Test public void hugeRecordFailsBeforeSending() throws Exception {
         File f = source("{\"s\":\"" + "é".repeat(70_000) + "\"}");
         assertThrows(IOException.class, () -> run(f, b -> { fail("must not send oversized record"); return null; }));

@@ -519,11 +519,15 @@ class MainActivity : Activity() {
     private fun showImport() {
         if (!enterRoute("import")) return
         val body = screen("Ingest", "Import batch", "Paste a bounded JSON array. The server validates every StarIntel document.")
+        body.addView(QuasarDesign.action(this, "Import JSON / NDJSON file") {
+            if (draftFields.ready) startActivity(Intent(this, FileImportActivity::class.java))
+        }, QuasarDesign.match(top = dp(12)))
         val editor = QuasarDesign.field(this, "[]", lines = 14)
+        editor.filters = editor.filters + actor.starintel.quasar.importing.Utf8ImportFilter(256 * 1024)
         val status = QuasarDesign.status(this, "Nothing imported yet.")
         body.addView(editor, QuasarDesign.match(top = dp(18)))
         addSubmission(body, "Import documents", status, validate = {
-            (editor.text.isNotBlank() && editor.text.length <= 512 * 1024).also { if (!it) editor.error = "Enter a JSON array up to 512 KiB" }
+            (editor.text.isNotBlank() && actor.starintel.quasar.importing.Utf8Budget.fits(editor.text, 256 * 1024)).also { if (!it) editor.error = "Enter a JSON array up to 256 KiB of UTF-8" }
         }) {
             val source = editor.text.toString()
             submitOnce(status, validationInput = editor) { client.bulkCreate(JSONArray(source)) }

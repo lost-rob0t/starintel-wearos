@@ -46,16 +46,33 @@ public final class StreamingImport {
 
     /** Copy SAF input to a new private snapshot with constant memory; never use URI display name as a path. */
     public static File stage(InputStream source, File privateDirectory, BooleanSupplier cancelled) throws IOException {
+        return stage(source, privateDirectory, cancelled, Long.MAX_VALUE);
+    }
+
+    public static File stage(InputStream source, File privateDirectory, BooleanSupplier cancelled, long maximumBytes) throws IOException {
+        if (maximumBytes < 0) throw new IllegalArgumentException("Negative source bound");
         File file = File.createTempFile("import-source-", ".json", privateDirectory);
         boolean complete = false;
         try (InputStream in = source; FileOutputStream out = new FileOutputStream(file)) {
-            byte[] buffer = new byte[8192]; int n;
+            byte[] buffer = new byte[8192]; int n; long copied = 0;
             while ((n = in.read(buffer)) != -1) {
                 if (cancelled.getAsBoolean()) throw new InterruptedIOException("Import staging cancelled");
-                out.write(buffer, 0, n);
+                if (n > maximumBytes - copied) throw new IOException("Import source exceeds file size limit");
+                out.write(buffer, 0, n); copied += n;
             }
             out.getFD().sync(); complete = true; return file;
         } finally { if (!complete) Files.deleteIfExists(file.toPath()); }
+    }
+
+    /** Read bounded metadata for display only. run() independently verifies source and destination. */
+    public static Result inspect(File checkpoint) throws IOException {
+        if (!checkpoint.exists()) return new Result(new ImportCheckpoint());
+        if (checkpoint.length() > 8192) throw new IOException("Checkpoint exceeds bound");
+        java.util.Properties p = new java.util.Properties();
+        try (InputStream in = new FileInputStream(checkpoint)) { p.load(in); }
+        String source = p.getProperty("source", ""), scope = p.getProperty("scope", "");
+        if (!source.matches("[a-f0-9]{64}") || !scope.matches("[a-f0-9]{64}")) throw new IOException("Invalid checkpoint identity");
+        return new Result(ImportCheckpoint.load(checkpoint, source, scope));
     }
 
     /** destinationIdentity binds server origin AND principal; pass a stable non-secret identity. */
