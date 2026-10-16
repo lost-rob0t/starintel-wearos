@@ -9,6 +9,7 @@ classpath=$(find "$KOTLIN_TEST_LIBS" -maxdepth 1 -name '*.jar' -printf '%p:' | s
 java -cp "$classpath" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   -no-stdlib -no-reflect -classpath "$classpath" -d "$output/tests.jar" \
   "$root/quasar-app/src/main/java/actor/starintel/quasar/DraftLimits.kt" \
+  "$root/quasar-app/src/main/java/actor/starintel/quasar/DraftReference.kt" \
   "$root/quasar-app/src/main/java/actor/starintel/quasar/DraftCoordinator.kt" \
   "$root/quasar-app/src/test/java/actor/starintel/quasar/DraftCoordinatorTest.kt"
 java -cp "$output/tests.jar:$classpath" org.junit.runner.JUnitCore actor.starintel.quasar.DraftCoordinatorTest

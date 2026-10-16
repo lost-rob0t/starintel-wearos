@@ -17,6 +17,12 @@ class DraftCoordinatorTest {
         }
         override fun read(key: String) = saved[key] ?: error("missing/corrupt")
     }
+    @Test fun referenceIsStableBeforeFirstSaveAndNamesAreBounded() {
+        assertEquals("ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb", DraftReference.key("a"))
+        assertEquals(DraftReference.key("route:0"), DraftReference.key("route:0"))
+        assertNotEquals(DraftReference.key("route:0"), DraftReference.key("route:1"))
+        assertThrows(IllegalArgumentException::class.java) { DraftReference.key("a".repeat(513)) }
+    }
     @Test fun unchangedNavigationAndRepeatedFlushWriteOnce() {
         val store = Store(); val drafts = DraftCoordinator(store, 60_000)
         val version = drafts.update("route:0", "a".repeat(20_000))
