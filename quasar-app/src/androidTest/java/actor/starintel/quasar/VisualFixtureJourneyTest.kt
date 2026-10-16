@@ -62,6 +62,16 @@ class VisualFixtureJourneyTest {
                 Ui.fieldName("ACTOR", "fixture-reconnaissance")
                 Ui.waitText("Dispatch target"); Ui.capture("$label-target")
                 Ui.click("Settings"); Ui.waitText("Credentials are validated"); Ui.capture("$label-settings")
+                // Focus can move below the fold in a short landscape window.
+                // Ask the real native ScrollView to reveal its actual input;
+                // an accessibility node can exist before it has clickable bounds.
+                scenario.onActivity { activity ->
+                    val input = all(activity.window.decorView).filterIsInstance<android.widget.EditText>()
+                        .single { it.contentDescription?.toString() == "STAR SERVER" }
+                    input.requestFocus()
+                    input.requestRectangleOnScreen(android.graphics.Rect(0, 0, input.width, input.height), true)
+                }
+                instrumentation.waitForIdleSync()
                 val serverField = Ui.device.findObject(androidx.test.uiautomator.UiSelector().description("STAR SERVER"))
                 if (!serverField.exists()) androidx.test.uiautomator.UiScrollable(androidx.test.uiautomator.UiSelector().scrollable(true)).scrollDescriptionIntoView("STAR SERVER")
                 serverField.click()
