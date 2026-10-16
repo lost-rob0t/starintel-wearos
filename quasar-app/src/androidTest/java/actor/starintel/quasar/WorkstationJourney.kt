@@ -40,6 +40,20 @@ internal object WorkstationJourney {
                 }
                 instrumentation.waitForIdleSync()
                 Ui.capture("quasar-search-bounded")
+                Ui.device.findObject(androidx.test.uiautomator.UiSelector().description("Document query")).click()
+                fun awaitIme(expected: Boolean) {
+                    var visible = !expected
+                    val deadline = System.currentTimeMillis() + 5000
+                    while (visible != expected && System.currentTimeMillis() < deadline) {
+                        scenario.onActivity { activity -> visible = activity.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime()) }
+                        if (visible != expected) Thread.sleep(100)
+                    }
+                    assertEquals("Search IME transition", expected, visible)
+                }
+                awaitIme(true)
+                scenario.onActivity { activity -> all(activity.window.decorView).filterIsInstance<EditText>().single()
+                    .onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) }
+                Ui.waitText("40 records loaded"); awaitIme(false)
                 scenario.recreate(); Ui.waitText("40 records loaded")
                 scenario.onActivity { activity ->
                     val list = all(activity.window.decorView).filterIsInstance<RecyclerView>().single()

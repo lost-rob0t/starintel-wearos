@@ -327,6 +327,8 @@ class MainActivity : Activity() {
             val value = query.text.toString().trim()
             if (value.isBlank() || value.length > 512) { query.error = "Enter a query of 1–512 characters"; return@action }
             if (!config.isConfigured()) { status.text = "Connect a server in Settings before searching."; return@action }
+            getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(query.windowToken, 0)
+            query.clearFocus()
             state.putBoolean("searched", true)
             if (!restoringSearch) state.remove("list")
             val generation = searchGeneration.incrementAndGet()
