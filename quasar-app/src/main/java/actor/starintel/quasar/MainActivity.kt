@@ -863,13 +863,15 @@ class MainActivity : Activity() {
         for (index in 0 until navigation.childCount) {
             val item = navigation.getChildAt(index) as TextView
             val active = item.tag == selected
-            item.setTextColor(if (active) QuasarDesign.cyan else QuasarDesign.muted)
+            val selectedFill = QuasarPalette.mix(QuasarDesign.cyan, QuasarDesign.panel, .88)
+            val selectedInk = QuasarPalette.legible(QuasarDesign.cyan, listOf(selectedFill), QuasarDesign.isDark)
+            item.setTextColor(if (active) selectedInk else QuasarDesign.muted)
             item.isSelected = active
             item.contentDescription = "${item.tag}${if (active) ", selected" else ""}"
-            val icon = QuasarIcon(item.tag.toString(), if (active) QuasarDesign.cyan else QuasarDesign.muted, dp(22))
+            val icon = QuasarIcon(item.tag.toString(), if (active) selectedInk else QuasarDesign.muted, dp(22))
             item.setCompoundDrawablesRelativeWithIntrinsicBounds(if (useRail) icon else null, if (useRail) null else icon, null, null)
             item.background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(if (active) QuasarPalette.mix(QuasarDesign.cyan, QuasarDesign.panel, .88) else QuasarDesign.panel)
+                setColor(if (active) selectedFill else QuasarDesign.panel)
                 cornerRadius = dp(14).toFloat()
             }
         }

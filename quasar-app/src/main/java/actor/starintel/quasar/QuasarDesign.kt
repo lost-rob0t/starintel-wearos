@@ -167,8 +167,8 @@ internal object QuasarDesign {
         }, LinearLayout.LayoutParams(context.dp(44), context.dp(44)))
         addView(LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            addView(title(context, label, 18f))
-            addView(body(context, detail, muted, 14f), match(top = context.dp(4)))
+            addView(title(context, label, 18f).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO })
+            addView(body(context, detail, muted, 14f).apply { setTextIsSelectable(false); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, match(top = context.dp(4)))
         }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = context.dp(12) })
         addView(TextView(context).apply { text = "›"; textSize = 26f; setTextColor(muted); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(-2, -2).apply { marginStart = context.dp(8) })
         setOnClickListener { onClick() }

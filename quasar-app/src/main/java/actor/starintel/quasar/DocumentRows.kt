@@ -49,6 +49,7 @@ internal class DocumentRows(private val onSelect: (DocumentRow) -> Unit) : ListA
         val title = QuasarDesign.title(context, "", 19f)
         val meta = QuasarDesign.body(context, "", QuasarDesign.cyan, size = 13f).apply { typeface = android.graphics.Typeface.MONOSPACE }
         val summary = QuasarDesign.body(context, "", QuasarDesign.muted).apply { maxLines = 3; ellipsize = android.text.TextUtils.TruncateAt.END }
+        listOf(title, meta, summary).forEach { it.setTextIsSelectable(false); it.importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO }
         row.addView(title); row.addView(meta, QuasarDesign.match(top = context.dp(4)))
         row.addView(summary, QuasarDesign.match(top = context.dp(4)))
         return Holder(row, title, meta, summary)
