@@ -52,6 +52,40 @@ class MainActivity : Activity() {
     private var serverStatus = "Not checked"
     private var authStatus = "Not checked"
     private var syncStatus = "No active transfer"
+    private val connectionViews = mutableListOf<TextView>()
+    private val connectivity by lazy { getSystemService(android.net.ConnectivityManager::class.java) }
+    private var networkRegistered = false
+    private val networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: android.net.Network) = refreshConnectionViews()
+        override fun onLost(network: android.net.Network) = refreshConnectionViews()
+        override fun onCapabilitiesChanged(network: android.net.Network, capabilities: android.net.NetworkCapabilities) = refreshConnectionViews()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        runCatching { connectivity.registerDefaultNetworkCallback(networkCallback) }.onSuccess { networkRegistered = true }
+    }
+
+    override fun onStop() {
+        if (networkRegistered) runCatching { connectivity.unregisterNetworkCallback(networkCallback) }
+        networkRegistered = false
+        super.onStop()
+    }
+
+    private fun refreshConnectionViews() = runOnUiThread {
+        if (!isDestroyed && !isFinishing && connectionViews.isNotEmpty()) {
+            val value = connectionText()
+            connectionViews.filter { it.isAttachedToWindow }.forEach { if (it.text.toString() != value) it.text = value }
+        }
+    }
+
+    private fun noteFailure(error: Throwable) {
+        if (error is actor.starintel.android.api.StarHttpFailure) {
+            serverStatus = "Responded with HTTP ${error.status}"
+            if (error.status == 401) authStatus = "Recheck required after HTTP 401"
+        } else if (error is java.io.IOException) serverStatus = "No response to last request"
+        refreshConnectionViews()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         QuasarDesign.configure(this)
@@ -184,6 +218,7 @@ class MainActivity : Activity() {
         if (!isRestoring) { rememberView(); workspace.enter(route) }
         workspace.route = route
         resultList = null
+        connectionViews.clear()
         selectedDocument = workspace.views.getBundle(route)?.getString("selected")
         selectNavigation(when {
             route == "field" -> "Field"
@@ -220,7 +255,7 @@ class MainActivity : Activity() {
             description = "Your corpus, field evidence, and actor work in one workspace.",
         )
 
-        val connectionSummary = QuasarDesign.body(this, connectionText())
+        val connectionSummary = QuasarDesign.status(this, connectionText()).also(connectionViews::add)
         body.addView(connectionSummary, QuasarDesign.match(top = dp(12)))
         body.addView(QuasarDesign.action(this, "Connection settings") { showSettings() }, QuasarDesign.match(top = dp(8)))
         val metricRow = LinearLayout(this).apply { orientation = if (resources.configuration.fontScale > 1.3f) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL }
@@ -321,6 +356,7 @@ class MainActivity : Activity() {
                 if (state.getString("loadedQuery") == "*") "No visible records. The server returned an empty snapshot."
                 else "No matching documents. Broaden the query or change the dtype filter."
             } else "${rows.size} records loaded · limit 40 · total unknown"
+            state.getString("error")?.let { status.text = "$it\n${status.text}" }
         }
         var restoringSearch = false
         val search = QuasarDesign.action(this, "Search", primary = true) {
@@ -339,8 +375,12 @@ class MainActivity : Activity() {
                 val response = runCatching { DocumentRow.from(client.search(value, 40), 40) }
                 runOnUiThread {
                     if (isFinishing || isDestroyed || viewport.getChildAt(0) !== columns || searchGeneration.get() != generation) return@runOnUiThread
-                    response.onSuccess { rows -> state.putString("loadedQuery", value); searchSnapshots[route] = rows; display(rows) }
-                        .onFailure { status.text = "${if (adapter.itemCount > 0) "Refresh failed; previous results retained (query ${state.getString("loadedQuery", "*")}). " else "Search failed. "}${failureText(it)}" }
+                    response.onSuccess { rows -> state.remove("error"); state.putString("loadedQuery", value); searchSnapshots[route] = rows; display(rows) }
+                        .onFailure {
+                            noteFailure(it)
+                            val message = "${if (adapter.itemCount > 0) "Refresh failed; previous results retained (query ${state.getString("loadedQuery", "*")}). " else "Search failed. "}${failureText(it)}"
+                            state.putString("error", message); status.text = message
+                        }
                 }
             }
         }
@@ -395,6 +435,7 @@ class MainActivity : Activity() {
                     field.setDataStatus("${features.size} GEO / $recordCount RECORDS", ready = true)
                     field.setSnapshotNotice("Snapshot ≤100 records · corpus total unknown · refine query for other records")
                 }.onFailure { error ->
+                    noteFailure(error)
                     field.showDataError(failureText(error))
                 }
             }
@@ -624,9 +665,9 @@ class MainActivity : Activity() {
     private fun showSettings() {
         enterRoute("settings")
         val body = screen("Connection", "Settings", "Credentials are validated before replacing the working Keystore-encrypted key.")
-        val connection = QuasarDesign.body(this, connectionText()).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
+        val connection = QuasarDesign.body(this, connectionText()).also(connectionViews::add).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
         body.addView(connection, QuasarDesign.match(top = dp(12)))
-        body.addView(QuasarDesign.action(this, "Check connection") {
+        body.addView(QuasarDesign.action(this, "Check saved connection") {
             runApi({
                 val health = runCatching { client.health() }
                 val auth = runCatching { client.authContext(config.serverUrl(), config.apiKey().orEmpty()) }
@@ -636,7 +677,7 @@ class MainActivity : Activity() {
                     val http = health.exceptionOrNull() as? actor.starintel.android.api.StarHttpFailure
                     if (http == null) "No health response" else "Responded with HTTP ${http.status}"
                 }
-                authStatus = if (auth.isSuccess) "Validated now" else failureText(auth.exceptionOrNull()!!)
+                authStatus = if (auth.isSuccess) "Validated at last check" else failureText(auth.exceptionOrNull()!!)
                 connection.text = connectionText()
             }
         }, QuasarDesign.match(top = dp(8)))
@@ -662,6 +703,9 @@ class MainActivity : Activity() {
                 runCatching { config.save(origin, login.apiKey) }
                     .onSuccess {
                         password.text.clear()
+                        authStatus = "Validated at last check"
+                        serverStatus = "Authentication endpoint responded"
+                        refreshConnectionViews()
                         status.text = "API key authenticated${login.username.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()}"
                     }
                     .onFailure { status.text = it.message ?: "Credential save failed" }
@@ -683,7 +727,10 @@ class MainActivity : Activity() {
                 key.error = "Key rejected or server unavailable. Check the key and origin."
             }) {
                 runCatching { config.save(origin, presented) }
-                    .onSuccess { key.text.clear(); status.text = "API key authenticated · saved securely" }
+                    .onSuccess {
+                        key.text.clear(); authStatus = "Validated at last check"; serverStatus = "Authentication endpoint responded"
+                        refreshConnectionViews(); status.text = "API key authenticated · saved securely"
+                    }
                     .onFailure { status.text = it.message ?: "Could not save API key" }
             }
         }, QuasarDesign.match(top = dp(10)))
@@ -814,7 +861,7 @@ class MainActivity : Activity() {
     private fun failureText(error: Throwable): String = when ((error as? actor.starintel.android.api.StarHttpFailure)?.status) {
         400, 422 -> "Input rejected. ${error.message.orEmpty().substringAfter('·', "Check required fields and the document schema.").trim()}"
         401 -> "Authentication expired or rejected. Authenticate in Settings."
-        403 -> "Permission denied. Check account scopes in Settings."
+        403 -> "Permission denied. Check server-side account permissions."
         404, 405 -> "This operation is unavailable on this server."
         409 -> "Conflict. Inspect the existing server record before creating another request."
         429 -> "Server rate limit reached. Wait before refreshing."
@@ -942,7 +989,7 @@ class MainActivity : Activity() {
                 if (isFinishing || isDestroyed || viewport.getChildAt(0) !== generation) return@runOnUiThread
                 requestedProgress.visibility = View.GONE
                 generation?.let { root -> descendants(root).filter { it.isClickable && it !is EditText }.forEach { it.isEnabled = true } }
-                value.onSuccess(result).onFailure(onFailure)
+                value.onSuccess(result).onFailure { noteFailure(it); onFailure(it) }
                 if (workspace.views.getBundle(workspace.route)?.getBoolean("attempted") == true) {
                     generation?.let { root -> descendants(root).filterIsInstance<TextView>().filter { it.text.toString() in listOf("Dispatch", "Import documents", "Create document") }.forEach { it.isEnabled = false } }
                 }
