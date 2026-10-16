@@ -630,7 +630,10 @@ class MainActivity : Activity() {
                 val auth = runCatching { client.authContext(config.serverUrl(), config.apiKey().orEmpty()) }
                 health to auth
             }) { (health, auth) ->
-                serverStatus = if (health.isSuccess) "Responded to health check" else "Health check failed"
+                serverStatus = if (health.isSuccess) "Responded to health check" else {
+                    val http = health.exceptionOrNull() as? actor.starintel.android.api.StarHttpFailure
+                    if (http == null) "No health response" else "Responded with HTTP ${http.status}"
+                }
                 authStatus = if (auth.isSuccess) "Validated now" else failureText(auth.exceptionOrNull()!!)
                 connection.text = connectionText()
             }
@@ -807,9 +810,13 @@ class MainActivity : Activity() {
     }
 
     private fun failureText(error: Throwable): String = when ((error as? actor.starintel.android.api.StarHttpFailure)?.status) {
+        400, 422 -> "Input rejected. ${error.message.orEmpty().substringAfter('·', "Check required fields and the document schema.").trim()}"
         401 -> "Authentication expired or rejected. Authenticate in Settings."
         403 -> "Permission denied. Check account scopes in Settings."
         404, 405 -> "This operation is unavailable on this server."
+        409 -> "Conflict. Inspect the existing server record before creating another request."
+        429 -> "Server rate limit reached. Wait before refreshing."
+        in 500..599 -> "Server responded with HTTP ${(error as actor.starintel.android.api.StarHttpFailure).status}. Retry the read after checking server health."
         else -> if (error is IllegalArgumentException) error.message ?: "Check the input."
             else "Connection or server failure. Check Settings, then retry the read."
     }
@@ -851,6 +858,7 @@ class MainActivity : Activity() {
                 syncStatus = "No active transfer"
                 return@runApi
             }
+            if ((it as? actor.starintel.android.api.StarHttpFailure)?.status in listOf(400, 422)) validationInput?.error = failureText(it)
             syncStatus = "Submission outcome unknown"
             val message = "${failureText(it)} Submission not retried. Inspect server records before starting another."
             state.putString("receipt", message)

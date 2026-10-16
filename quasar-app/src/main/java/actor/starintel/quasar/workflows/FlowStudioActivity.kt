@@ -28,6 +28,7 @@ class FlowStudioActivity : Activity() {
     private lateinit var status: TextView
     private var active: FlowRunHandle? = null
     private var activeGraphId: String? = null
+    private var lastRunStart = Long.MIN_VALUE
     private var restoredSource: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -144,7 +145,7 @@ class FlowStudioActivity : Activity() {
         editor.setText(graph.toJson().toString(2))
         status.text = "VALID · ${graph.id} · ${graph.processes.size} processes · ${graph.connections.size} connections"
         status.setTextColor(QuasarDesign.lime)
-        publish(graph.id, WorkflowRunStatus.IDLE)
+        if (projection.state().workflows.none { it.id.value == graph.id }) publish(graph.id, WorkflowRunStatus.IDLE)
         graph
     }.getOrElse { error ->
         status.text = "INVALID · ${error.message ?: "Graph validation failed"}"
@@ -153,8 +154,14 @@ class FlowStudioActivity : Activity() {
     }
 
     private fun runGraph() {
+        if (active != null) {
+            status.text = "A workflow is already running. Stop it before starting another."
+            return
+        }
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (lastRunStart != Long.MIN_VALUE && now - lastRunStart < 1000) return
         val graph = validateAndSave() ?: return
-        active?.cancel()
+        lastRunStart = now
         activeGraphId = graph.id
         active = runCatching { runtime.startFlow(graph) }.getOrElse { error ->
             status.text = "BLOCKED · ${error.message ?: "Runtime unavailable"}"
@@ -165,16 +172,22 @@ class FlowStudioActivity : Activity() {
         status.text = "RUNNING · ${graph.id}"
         status.setTextColor(QuasarDesign.cyan)
         publish(graph.id, WorkflowRunStatus.RUNNING)
-        active?.completion?.whenComplete { snapshot, error ->
+        val run = active ?: return
+        val reportedAt = projection.state().workflows.firstOrNull { it.id.value == graph.id }?.lastRunEpochMillis
+        run.completion.whenComplete { snapshot, error ->
             runOnUiThread {
+                if (active !== run) return@runOnUiThread
                 val finalStatus = when {
                     error != null -> FlowRunStatus.FAILED
                     snapshot != null -> snapshot.status
                     else -> FlowRunStatus.FAILED
                 }
-                status.text = "${finalStatus.name} · ${graph.id}${snapshot?.failure?.let { " · $it" }.orEmpty()}"
-                status.setTextColor(if (finalStatus == FlowRunStatus.COMPLETED) QuasarDesign.lime else QuasarDesign.coral)
-                publish(
+                if (!isDestroyed && !isFinishing) {
+                    status.text = "${finalStatus.name} · ${graph.id}${snapshot?.failure?.let { " · $it" }.orEmpty()}"
+                    status.setTextColor(if (finalStatus == FlowRunStatus.COMPLETED) QuasarDesign.lime else QuasarDesign.coral)
+                }
+                // A retired activity's completion must not overwrite a newer run report.
+                if (projection.state().workflows.firstOrNull { it.id.value == graph.id }?.lastRunEpochMillis == reportedAt) publish(
                     graph.id,
                     when (finalStatus) {
                         FlowRunStatus.COMPLETED -> WorkflowRunStatus.SUCCEEDED
@@ -193,7 +206,7 @@ class FlowStudioActivity : Activity() {
         if (active?.cancel() == true) {
             status.text = "STOPPING · $id"
             status.setTextColor(QuasarDesign.amber)
-            publish(id, WorkflowRunStatus.STOPPED)
+            // Cancellation is a request; completion publishes the observed final state.
         }
     }
 
