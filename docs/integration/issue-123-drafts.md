@@ -129,7 +129,9 @@ explicit discard or after saving its source file. Arbitrary age/LRU cleanup is n
 used because saved tasks may still reference those files.
 
 One inherited compile error in PR127's restored-search Elvis expression was fixed
-by adding `else Unit` to its nested conditional; search behavior is unchanged.
+with an explicit Unit result; search behavior is unchanged. The parent-requested
+PR128 corrective commit `329a2b02f0b837ea81778ba987c1b8fb40a76e23` is now
+incorporated, using its trailing `Unit` form instead of the equivalent local fix.
 
 Validation after MainActivity integration: 13 coordinator JVM tests pass, including
 named-envelope cleanup; 13 editor regression tests passed after the editor merge.
