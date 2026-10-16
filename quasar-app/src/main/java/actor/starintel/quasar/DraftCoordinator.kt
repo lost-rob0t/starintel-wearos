@@ -46,6 +46,27 @@ internal class DraftCoordinator(
         return entry.version
     }
 
+    @Synchronized fun canAcceptLength(name: String, characters: Int): Boolean =
+        name.length in 1..512 && characters in 0..DraftLimits.MAX_BYTES &&
+            (entries.containsKey(name) || entries.size < DraftLimits.MAX_ENTRIES) &&
+            memoryBytes.toLong() - (entries[name]?.source?.length ?: 0) * 2 + characters.toLong() * 2 <= DraftLimits.MAX_MEMORY_BYTES
+
+    /** Restores cleanly without re-encrypting, never overwriting a newer process-local edit. */
+    @Synchronized fun restoreInto(name: String, key: String): CompletableFuture<String> {
+        entries[name]?.let { return CompletableFuture.completedFuture(it.source) }
+        return restore(key).thenApply { source ->
+            synchronized(this) {
+                entries[name]?.source ?: run {
+                    require(canAcceptLength(name, source.length)) { "Open drafts exceed memory limit" }
+                    val restoredVersion = ++version
+                    entries[name] = Entry(source, restoredVersion, Receipt(key, restoredVersion))
+                    memoryBytes += source.length * 2
+                    source
+                }
+            }
+        }
+    }
+
     @Synchronized fun current(name: String): String? = entries[name]?.source
     @Synchronized fun acknowledged(name: String): Receipt? = entries[name]?.receipt
     @Synchronized fun failure(name: String): Exception? = entries[name]?.failure
