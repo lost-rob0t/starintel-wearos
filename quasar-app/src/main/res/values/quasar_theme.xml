@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Match the app-local roles before the activity's first frame, including
+         the system-owned starting window. Runtime insets have a single owner. -->
+    <style name="Theme.Quasar" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#F3F5F7</item>
+        <item name="android:statusBarColor">#F3F5F7</item>
+        <item name="android:navigationBarColor">#F3F5F7</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>
