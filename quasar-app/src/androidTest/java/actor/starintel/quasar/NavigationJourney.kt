@@ -32,6 +32,8 @@ internal object NavigationJourney {
                     val nav = all(activity.window.decorView).filterIsInstance<WorkspaceNavigation>().single()
                     assertTrue("Open drawer survives recreation", nav.isExpanded)
                     assertEquals("search", nav.selectedDestination)
+                    assertEquals("Covered content is excluded from accessibility focus",
+                        View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, nav.getChildAt(0).importantForAccessibility)
                 }
                 Ui.capture("quasar-navigation-restored")
                 Ui.device.pressBack()
