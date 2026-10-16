@@ -28,7 +28,7 @@ class VisualFixtureJourneyTest {
                     all(activity.window.decorView).filterIsInstance<TextView>()
                         .single { it.text.toString() == "Search" && it.tag != "Search" }.performClick()
                 }
-                Ui.waitText("Fixture record 0")
+                reveal("Fixture record 0")
                 val searchMillis = android.os.SystemClock.elapsedRealtime() - searchStart
                 scenario.onActivity { activity ->
                     val nodes = all(activity.window.decorView).toList()
@@ -38,7 +38,7 @@ class VisualFixtureJourneyTest {
                 }
                 Ui.capture("$label-search")
                 Ui.click("Fixture record 0")
-                Ui.waitText("Synthetic field exercise"); Ui.capture("$label-document")
+                reveal("Synthetic field exercise"); Ui.capture("$label-document")
                 Ui.click("Field"); Ui.waitText("Quasar tactical")
                 // Wait for the snapshot, rather than screenshotting the in-flight spinner.
                 val end = System.currentTimeMillis() + 10_000
@@ -51,6 +51,7 @@ class VisualFixtureJourneyTest {
                 check(backend.maxRequested.get() <= 100) { "Unbounded map request" }
                 Ui.capture("$label-field")
                 Ui.click("Settings"); Ui.waitText("Credentials are validated"); Ui.capture("$label-settings")
+                androidx.test.uiautomator.UiScrollable(androidx.test.uiautomator.UiSelector().scrollable(true)).scrollDescriptionIntoView("STAR SERVER")
                 Ui.device.findObject(androidx.test.uiautomator.UiSelector().description("STAR SERVER")).click()
                 var imeShown = false
                 val imeDeadline = System.currentTimeMillis() + 5000
@@ -63,6 +64,13 @@ class VisualFixtureJourneyTest {
                 Ui.device.pressBack()
             }
         }
+    }
+    private fun reveal(text: String) {
+        val selector = androidx.test.uiautomator.UiSelector().textContains(text)
+        if (!Ui.device.findObject(selector).waitForExists(500)) {
+            androidx.test.uiautomator.UiScrollable(androidx.test.uiautomator.UiSelector().scrollable(true)).scrollIntoView(selector)
+        }
+        Ui.waitText(text)
     }
     private fun all(view: View): Sequence<View> = sequence {
         yield(view)
