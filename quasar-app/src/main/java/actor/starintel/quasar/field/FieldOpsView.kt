@@ -115,7 +115,7 @@ internal class FieldOpsView(
             val deltaLat = feature.point.latitude - latitude
             val deltaLon = feature.point.longitude - longitude
             deltaLat * deltaLat + deltaLon * deltaLon
-        }?.let { selectedFeature -> select(selectedFeature, fromMap = true) }
+        }?.let { selectedFeature -> select(selectedFeature) }
     }
 
     fun query(): String = search.text.toString().trim()
