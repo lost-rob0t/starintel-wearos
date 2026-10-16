@@ -162,6 +162,9 @@ object NativeUi {
             if (focused == null) Thread.sleep(100)
         }
         check(focused != null) { "Fixture activity did not receive focus within 10s: $name" }
+        // A committed app frame does not mean SystemUI finished its launch-window
+        // handoff. Require a quiet UI before capturing the app and system bars.
+        instrumentation.uiAutomation.waitForIdle(500, 5_000)
         val committed = CountDownLatch(1)
         lateinit var activity: android.app.Activity
         lateinit var screenshot: Bitmap
