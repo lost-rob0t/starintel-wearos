@@ -353,6 +353,7 @@ internal class FieldOpsView(
         isClickable = true
         isFocusable = true
         minHeight = context.dp(48)
+        minWidth = context.dp(48)
         styleCompact(this, active)
     }
 
