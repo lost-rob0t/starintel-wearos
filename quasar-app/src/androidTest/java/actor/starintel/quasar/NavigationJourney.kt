@@ -52,6 +52,18 @@ internal object NavigationJourney {
                 scenario.onActivity { activity ->
                     assertEquals("navigation-fixture", all(activity.window.decorView).filterIsInstance<EditText>().single().text.toString())
                 }
+                expand()
+                scenario.onActivity { activity ->
+                    activity.startActivity(android.content.Intent(activity, MainActivity::class.java)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        .setAction(actor.starintel.android.config.OperatorContracts.ACTION_OPEN_MAP))
+                }
+                Ui.waitText("Quasar tactical")
+                scenario.onActivity { activity ->
+                    val nav = all(activity.window.decorView).filterIsInstance<WorkspaceNavigation>().single()
+                    assertFalse("Deep links reveal their destination", nav.isExpanded)
+                    assertEquals("field", nav.selectedDestination)
+                }
             }
         }
     }

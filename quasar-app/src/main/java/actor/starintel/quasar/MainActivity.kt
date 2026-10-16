@@ -128,9 +128,13 @@ class MainActivity : Activity() {
                 val documentId = actor.starintel.android.config.OperatorContracts.normalizeDocumentId(
                     intent.getStringExtra(actor.starintel.android.config.OperatorContracts.EXTRA_DOCUMENT_ID),
                 )
-                if (documentId.isNotEmpty()) showDocument(documentId)
+                if (documentId.isNotEmpty()) {
+                    sideNavigation.collapse()
+                    showDocument(documentId)
+                }
             }
             actor.starintel.android.config.OperatorContracts.ACTION_OPEN_MAP -> {
+                sideNavigation.collapse()
                 val latitude = intent.getDoubleExtra(actor.starintel.android.config.OperatorContracts.EXTRA_LATITUDE, Double.NaN)
                 val longitude = intent.getDoubleExtra(actor.starintel.android.config.OperatorContracts.EXTRA_LONGITUDE, Double.NaN)
                 showFieldOps()
