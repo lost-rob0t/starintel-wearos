@@ -46,6 +46,8 @@ internal object WorkstationJourney {
                 scenario.onActivity { activity -> assertEquals(40, all(activity.window.decorView).filterIsInstance<RecyclerView>().single().adapter!!.itemCount) }
                 backend.searchStatus = 401
                 search("*"); Ui.waitText("Authentication expired")
+                backend.searchStatus = 403
+                search("*"); Ui.waitText("Permission denied")
                 backend.searchStatus = 200
                 search("empty"); Ui.waitText("No matching documents")
                 search("*"); Ui.waitText("40 records loaded")
