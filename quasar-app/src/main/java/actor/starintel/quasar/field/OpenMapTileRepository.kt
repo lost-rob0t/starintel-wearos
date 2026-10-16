@@ -14,11 +14,10 @@ import android.util.LruCache
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 enum class BasemapState(val label: String) {
-    ONLINE("MAP LIVE"),
+    ONLINE("MAP AVAILABLE"),
     CACHED_ONLY("CACHED MAP"),
     UNAVAILABLE("NO BASEMAP"),
 }
@@ -30,17 +29,19 @@ enum class BasemapState(val label: String) {
  */
 internal class OpenMapTileRepository(
     context: Context,
+    private val openConnection: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection },
+    private val networkAvailable: (() -> Boolean)? = null,
+    private val tileTemplate: (() -> String)? = null,
     private val onChanged: (BasemapState) -> Unit,
 ) : AutoCloseable {
     private val applicationContext = context.applicationContext
     private val sharedConfig = StarIntelSharedConfig(applicationContext)
     private val main = Handler(Looper.getMainLooper())
-    private val executor = Executors.newFixedThreadPool(2)
+    private val work = TileWorkQueue(load = ::load)
     private val closed = AtomicBoolean(false)
-    private val inFlight = mutableSetOf<String>()
-    private val failedUntil = mutableMapOf<String, Long>()
+    private val failures = TileFailureCache()
     private val memory = object : LruCache<String, Bitmap>(12 * 1024) {
-        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024
+        override fun sizeOf(key: String, value: Bitmap): Int = (value.byteCount + 1023) / 1024
     }
 
     init {
@@ -54,30 +55,37 @@ internal class OpenMapTileRepository(
         }
     }
 
+    private fun template(): String = tileTemplate?.invoke()
+        ?: sharedConfig.get(StarIntelSharedConfig.KEY_MAP_TILES_BASE_URL, "")
+
+    private fun url(zoom: Int, x: Int, y: Int, template: String = template()): String? = OpenMapTilePolicy.tileUrl(
+        template = template,
+        zoom = zoom, x = x, y = y, allowCleartext = BuildConfig.DEBUG,
+    )
+
+    /** Call once before drawing each viewport. Only visible tiles may be requested. */
+    fun setViewport(zoom: Int, xs: IntRange, ys: IntRange) {
+        if (closed.get()) return
+        val template = template()
+        val visible = mutableSetOf<String>()
+        for (y in ys) for (x in xs) url(zoom, x, y, template)?.let(visible::add)
+        work.retain(visible)
+    }
+
     fun tile(zoom: Int, x: Int, y: Int): Bitmap? {
-        val template = sharedConfig.get(StarIntelSharedConfig.KEY_MAP_TILES_BASE_URL, "")
-        val url = OpenMapTilePolicy.tileUrl(
-            template = template,
-            zoom = zoom,
-            x = x,
-            y = y,
-            allowCleartext = BuildConfig.DEBUG,
-        ) ?: return null
+        if (closed.get()) return null
+        val url = url(zoom, x, y) ?: return null
         memory.get(url)?.let { return it }
-        synchronized(inFlight) {
-            if ((failedUntil[url] ?: 0L) > System.currentTimeMillis()) return null
-            if (closed.get() || !inFlight.add(url)) return null
-        }
-        executor.execute { load(url) }
+        if (!failures.contains(url)) work.request(url)
         return null
     }
 
-    private fun load(url: String) {
+    private fun load(url: String, ticket: TileWorkQueue.Ticket) {
         var connection: HttpURLConnection? = null
         var state = BasemapState.UNAVAILABLE
         try {
             val online = hasNetwork()
-            connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            connection = openConnection(url).apply {
                 connectTimeout = 7_000
                 readTimeout = 8_000
                 useCaches = true
@@ -90,6 +98,9 @@ internal class OpenMapTileRepository(
                     )
                 }
             }
+            val transport = connection
+            ticket.attach { transport.disconnect() }
+            if (ticket.cancelled) return
             val code = connection.responseCode
             if (code == HttpURLConnection.HTTP_OK) {
                 val declared = connection.contentLengthLong
@@ -99,6 +110,7 @@ internal class OpenMapTileRepository(
                     val buffer = ByteArray(8 * 1024)
                     var total = 0L
                     while (true) {
+                        if (ticket.cancelled) return
                         val read = input.read(buffer)
                         if (read < 0) break
                         total += read
@@ -107,25 +119,44 @@ internal class OpenMapTileRepository(
                     }
                     output.toByteArray()
                 }
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.let { memory.put(url, it) }
-                synchronized(inFlight) { failedUntil.remove(url) }
+                if (ticket.cancelled) return
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                require(TileDecodeLimits.valid(bounds.outWidth, bounds.outHeight)) { "Invalid tile dimensions" }
+                val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                val bitmap = requireNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)) {
+                    "Tile decoding failed"
+                }
+                var published = false
+                work.publish(ticket) {
+                    memory.put(url, bitmap)
+                    failures.remove(url)
+                    published = true
+                }
+                if (!published) bitmap.recycle()
                 state = if (online) BasemapState.ONLINE else BasemapState.CACHED_ONLY
+            } else {
+                throw java.io.IOException("Tile response $code")
             }
         } catch (_: Exception) {
-            synchronized(inFlight) { failedUntil[url] = System.currentTimeMillis() + RETRY_DELAY_MILLIS }
+            work.publish(ticket) { failures.record(url) }
             state = if (memory.size() > 0) {
-                if (hasNetwork()) BasemapState.ONLINE else BasemapState.CACHED_ONLY
+                BasemapState.CACHED_ONLY
             } else {
                 BasemapState.UNAVAILABLE
             }
         } finally {
+            ticket.detach()
             connection?.disconnect()
-            synchronized(inFlight) { inFlight.remove(url) }
-            if (!closed.get()) main.post { onChanged(state) }
+            // Also wake the viewport after cancellation: a tile may have become
+            // visible again while its cancelled transport still held a slot.
+            if (ticket.cancelled) state = if (memory.size() > 0) BasemapState.CACHED_ONLY else BasemapState.UNAVAILABLE
+            if (!closed.get()) main.post { if (!closed.get()) onChanged(state) }
         }
     }
 
     private fun hasNetwork(): Boolean {
+        networkAvailable?.let { return it() }
         val manager = applicationContext.getSystemService(ConnectivityManager::class.java) ?: return false
         val network = manager.activeNetwork ?: return false
         val capabilities = manager.getNetworkCapabilities(network) ?: return false
@@ -133,11 +164,11 @@ internal class OpenMapTileRepository(
     }
 
     override fun close() {
-        if (closed.compareAndSet(false, true)) executor.shutdownNow()
-        memory.evictAll()
-    }
-
-    private companion object {
-        const val RETRY_DELAY_MILLIS = 30_000L
+        if (closed.compareAndSet(false, true)) {
+            work.close()
+            main.removeCallbacksAndMessages(null)
+            failures.clear()
+            memory.evictAll()
+        }
     }
 }

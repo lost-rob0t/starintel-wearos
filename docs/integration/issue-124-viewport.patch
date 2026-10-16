@@ -1,0 +1,10 @@
+--- a/quasar-app/src/main/java/actor/starintel/quasar/field/FieldMapView.kt
++++ b/quasar-app/src/main/java/actor/starintel/quasar/field/FieldMapView.kt
+@@ -167,6 +167,7 @@
+         val lastX = floor((left + width) / WebMercator.TILE_SIZE).toInt()
+         val firstY = floor(top / WebMercator.TILE_SIZE).toInt()
+         val lastY = floor((top + height) / WebMercator.TILE_SIZE).toInt()
++        tiles.setViewport(zoom, firstX..lastX, firstY..lastY)
+         for (tileY in firstY..lastY) {
+             for (tileX in firstX..lastX) {
+                 val bitmap = tiles.tile(zoom, tileX, tileY) ?: continue
