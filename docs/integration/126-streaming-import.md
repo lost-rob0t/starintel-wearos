@@ -6,7 +6,7 @@ editor PR131 and asynchronous drafts PR130 are preserved. MainActivity changes
 are confined to the Import route: a native file-import link and early UTF-8 paste
 admission. Existing `draftFields` lifecycle and submission readiness guards remain.
 `searchPage` and the backwards-compatible `search` wrapper remain unchanged.
-Quasar PR110 and transaction draft115 are untouched. Keep issue #126 open until
+Parent follow-up detail fixes 40136d5 (checked JSON exceptions) and 99d6385 (off-screen preview timing) are incorporated; the already-present paging Unit fix is not duplicated. Quasar PR110 and transaction draft115 are untouched. Keep issue #126 open until
 hosted Android/runtime validation completes; no deployment or merge is performed.
 
 ## User flow and lifecycle
@@ -126,6 +126,7 @@ python3 scripts/test-release-contract.py
   receipts, interrupted staging, restart, source/principal mismatch, concurrent runs,
   simulated process death, immutable selection recovery, corrupt pointer failure,
   safe orphan cleanup and blocked snapshot preservation.
+- All 22 import/storage tests also compile and pass against Android36’s checked JSON API on the JVM. The 14 inherited detail tests pass against that API after the parent-requested fix.
 - Both repository Python gates and shell/diff checks passed.
 - The complete Quasar/shared Android/shared design tree plus the new Android journey
   type-compiled using Kotlin 2.2.0, real Android36/AndroidX APIs and the pinned
