@@ -25,10 +25,10 @@ jobs:
         run: |
           mkdir -p /tmp/workstation-harness
           cp quasar-app/src/androidTest/java/actor/starintel/quasar/{VisualFixtureJourneyTest,WorkstationFixture}.kt /tmp/workstation-harness/
-          cp scripts/test-quasar-workstation-visuals.sh /tmp/workstation-harness/
+          cp scripts/test-quasar-workstation-visuals.sh scripts/test-quasar-process-restoration.py /tmp/workstation-harness/
           if [[ "$REVISION" == before ]]; then git checkout --detach "$BASE_SHA"; fi
           cp /tmp/workstation-harness/*.kt quasar-app/src/androidTest/java/actor/starintel/quasar/
-          cp /tmp/workstation-harness/test-quasar-workstation-visuals.sh scripts/
+          cp /tmp/workstation-harness/test-quasar-workstation-visuals.sh /tmp/workstation-harness/test-quasar-process-restoration.py scripts/
           git rev-parse HEAD
       - uses: cachix/install-nix-action@v31
         with:

@@ -35,6 +35,7 @@ class MainActivity : Activity() {
     private lateinit var navigation: LinearLayout
     private val client by lazy { StarServerClient(this) }
     private val config by lazy { QuasarConfig(this) }
+    private val drafts by lazy { WorkspaceDrafts(this) }
     private val localRuntime by lazy { LocalRuntimeController(this) }
     private val actorDefinitions by lazy { ActorDefinitionStore(this) }
 
@@ -157,9 +158,17 @@ class MainActivity : Activity() {
     private fun rememberView() {
         val root = viewport.getChildAt(0) ?: return
         val state = workspace.views.getBundle(workspace.route) ?: Bundle()
-        // Bound editor drafts; password/key views explicitly disable saving.
+        // Credential fields explicitly disable saving. Large drafts stay out of Binder state.
         val inputs = descendants(root).filterIsInstance<EditText>().filter { it.isSaveEnabled }.toList()
-        state.putStringArrayList("inputs", ArrayList(inputs.map { it.text.toString().take(16_384) }))
+        val draftKeys = arrayListOf<String>()
+        val values = inputs.mapIndexed { index, input ->
+            val value = input.text.toString()
+            if (value.length > 4096) {
+                draftKeys.add(drafts.save("${workspace.route}:$index", value)); ""
+            } else { draftKeys.add(""); value }
+        }
+        state.putStringArrayList("draftKeys", draftKeys)
+        state.putStringArrayList("inputs", ArrayList(values))
         state.putIntArray("selection", inputs.map { it.selectionStart.coerceAtLeast(0) }.toIntArray())
         state.putInt("scroll", (root as? ScrollView)?.scrollY ?: 0)
         resultList?.let { state.putParcelable("list", it.layoutManager?.onSaveInstanceState()) }
@@ -189,7 +198,14 @@ class MainActivity : Activity() {
             val values = state.getStringArrayList("inputs") ?: arrayListOf()
             val selections = state.getIntArray("selection") ?: intArrayOf()
             descendants(root).filterIsInstance<EditText>().filter { it.isSaveEnabled }.forEachIndexed { i, input ->
-                values.getOrNull(i)?.let { input.setText(it); input.setSelection((selections.getOrNull(i) ?: it.length).coerceAtMost(it.length)) }
+                values.getOrNull(i)?.let { saved ->
+                    val key = state.getStringArrayList("draftKeys")?.getOrNull(i).orEmpty()
+                    val value = if (key.isBlank()) saved else runCatching { drafts.read(key) }.getOrElse {
+                        input.error = "Saved draft could not be read. Reopen your source before submitting."
+                        input.text.toString()
+                    }
+                    input.setText(value); input.setSelection((selections.getOrNull(i) ?: value.length).coerceAtMost(value.length))
+                }
             }
             (root as? ScrollView)?.scrollTo(0, state.getInt("scroll"))
         }
@@ -311,6 +327,7 @@ class MainActivity : Activity() {
             if (!restoringSearch) state.remove("list")
             val generation = searchGeneration.incrementAndGet()
             searchTask?.cancel(true)
+            (requests as java.util.concurrent.ThreadPoolExecutor).purge()
             status.text = "Loading records…"
             searchTask = requests.submit {
                 val response = runCatching { DocumentRow.from(client.search(value, 40), 40) }
@@ -359,7 +376,7 @@ class MainActivity : Activity() {
         field.setDataStatus("SYNCING", ready = false)
         fieldProgress.visibility = View.VISIBLE
         Thread({
-            val result = runCatching { client.search(query.ifBlank { "*" }, limit = 100).let { rows -> rows.length() to GeoDocumentParser.parseSearchRows(JSONArray().apply { for (i in 0 until minOf(rows.length(), 100)) put(rows.opt(i)) }) } }
+            val result = runCatching { client.search(query.ifBlank { "*" }, limit = 100).let { rows -> minOf(rows.length(), 100) to GeoDocumentParser.parseSearchRows(JSONArray().apply { for (i in 0 until minOf(rows.length(), 100)) put(rows.opt(i)) }) } }
             runOnUiThread {
                 // The field view is replaced on navigation and belongs to this activity instance.
                 if (isFinishing || isDestroyed || viewport.getChildAt(0) !== field || mapGeneration.get() != requestId) return@runOnUiThread

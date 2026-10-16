@@ -148,7 +148,7 @@ class WorkflowWidgetJourneyTest {
             await { text(scenario).contains("Only alpha details") }
             scenario.onActivity { activity ->
                 assertTrue("Production status screen must remain secure", activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
-                val labels = descendants(activity.window.decorView).filterIsInstance<TextView>().filter { it.text.toString() == "Alpha workflow" }
+                val labels = descendants(activity.window.decorView).filterIsInstance<TextView>().filter { it.text.toString() == "Alpha workflow" }.toList()
                 assertTrue("Workflow name must be present", labels.isNotEmpty())
                 assertTrue("Workflow names must wrap at large font sizes", labels.all { it.maxLines > 1 })
             }

@@ -146,7 +146,7 @@ internal class FieldOpsView(
 
     fun showDataError(label: String) {
         dataStatus.text = if (allFeatures.isEmpty()) "DATA UNAVAILABLE" else "REFRESH FAILED"
-        notice.text = if (allFeatures.isEmpty()) "No records loaded. Check connection or permissions, then Sync." else "Refresh failed; previous snapshot retained. Tap Sync to retry."
+        notice.text = if (allFeatures.isEmpty()) "No records loaded. Check connection or permissions, then Sync." else "Refresh failed; previous snapshot retained. $label Tap Sync to retry."
         dataStatus.setTextColor(QuasarDesign.coral)
         if (allFeatures.isEmpty()) {
             detail.removeAllViews()
