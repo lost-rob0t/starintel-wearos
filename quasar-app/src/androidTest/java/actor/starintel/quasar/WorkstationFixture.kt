@@ -47,6 +47,8 @@ internal class WorkstationFixture : AutoCloseable {
     }.apply { name = "quasar-workstation-fixture"; start() }
     private fun document(index: Int) = JSONObject().put("_id", "fixture-$index").put("dtype", "location")
         .put("name", "Fixture record $index").put("source", "Synthetic field exercise")
+        .put("latitude", 51.5 + index * .001).put("longitude", -.12 + index * .001)
+        .put("summary", "Synthetic observation for response planning. Confirm provenance before acting.")
         .put("data", JSONObject().put("name", "Fixture record $index")
             .put("summary", "Synthetic observation for response planning. Confirm provenance before acting.")
             .put("latitude", 51.5 + index * .001).put("longitude", -.12 + index * .001))
