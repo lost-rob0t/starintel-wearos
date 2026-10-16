@@ -36,7 +36,7 @@ class MainActivity : Activity() {
     private lateinit var sideNavigation: WorkspaceNavigation
     private val client by lazy { StarServerClient(this) }
     private val config by lazy { QuasarConfig(this) }
-    private val drafts by lazy { WorkspaceDrafts(this) }
+    private val draftFields by lazy { WorkspaceDraftFields(WorkspaceDrafts.coordinator(applicationContext)) }
     private val localRuntime by lazy { LocalRuntimeController(this) }
     private val actorDefinitions by lazy { ActorDefinitionStore(this) }
 
@@ -68,6 +68,8 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        if (::viewport.isInitialized) rememberView()
+        draftFields.flush()
         if (networkRegistered) runCatching { connectivity.unregisterNetworkCallback(networkCallback) }
         networkRegistered = false
         super.onStop()
@@ -148,6 +150,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        draftFields.detach()
         searchTask?.cancel(true)
         requests.shutdownNow()
         if (::viewport.isInitialized) runCatching { localRuntime.close() }
@@ -166,7 +169,7 @@ class MainActivity : Activity() {
 
     private fun goBack() {
         if (sideNavigation.collapse()) return
-        rememberView()
+        if (!rememberView()) return
         val previous = workspace.back()
         if (previous == null) finish() else restoreRoute(previous)
     }
@@ -196,21 +199,10 @@ class MainActivity : Activity() {
         if (view is ViewGroup) for (i in 0 until view.childCount) yieldAll(descendants(view.getChildAt(i)))
     }
 
-    private fun rememberView() {
-        val root = viewport.getChildAt(0) ?: return
+    private fun rememberView(): Boolean {
+        val root = viewport.getChildAt(0) ?: return true
         val state = workspace.views.getBundle(workspace.route) ?: Bundle()
-        // Credential fields explicitly disable saving. Large drafts stay out of Binder state.
-        val inputs = descendants(root).filterIsInstance<EditText>().filter { it.isSaveEnabled }.toList()
-        val draftKeys = arrayListOf<String>()
-        val values = inputs.mapIndexed { index, input ->
-            val value = input.text.toString()
-            if (value.length > 4096) {
-                draftKeys.add(drafts.save("${workspace.route}:$index", value)); ""
-            } else { draftKeys.add(""); value }
-        }
-        state.putStringArrayList("draftKeys", draftKeys)
-        state.putStringArrayList("inputs", ArrayList(values))
-        state.putIntArray("selection", inputs.map { it.selectionStart.coerceAtLeast(0) }.toIntArray())
+        if (!draftFields.saveInto(state)) return false
         state.putInt("scroll", (root as? ScrollView)?.scrollY ?: 0)
         resultList?.let { state.putParcelable("list", it.layoutManager?.onSaveInstanceState()) }
         state.putString("selected", selectedDocument)
@@ -219,10 +211,12 @@ class MainActivity : Activity() {
         workspace.views.putBundle(workspace.route, state)
         val retained = workspace.history.toSet() + workspace.route + setOf("home", "search", "datasets", "field", "actors", "settings")
         workspace.views.keySet().toList().filter { it !in retained }.forEach(workspace.views::remove)
+        return true
     }
 
-    private fun enterRoute(route: String) {
-        if (!isRestoring) { rememberView(); workspace.enter(route) }
+    private fun enterRoute(route: String): Boolean {
+        if (!isRestoring) { if (!rememberView()) return false; workspace.enter(route) }
+        draftFields.detach()
         workspace.route = route
         resultList = null
         connectionViews.clear()
@@ -236,26 +230,16 @@ class MainActivity : Activity() {
         })
         viewport.post {
             if (workspace.route != route) return@post
-            val state = workspace.views.getBundle(route) ?: return@post
+            val state = workspace.views.getBundle(route) ?: Bundle().also { workspace.views.putBundle(route, it) }
             val root = viewport.getChildAt(0) ?: return@post
-            val values = state.getStringArrayList("inputs") ?: arrayListOf()
-            val selections = state.getIntArray("selection") ?: intArrayOf()
-            descendants(root).filterIsInstance<EditText>().filter { it.isSaveEnabled }.forEachIndexed { i, input ->
-                values.getOrNull(i)?.let { saved ->
-                    val key = state.getStringArrayList("draftKeys")?.getOrNull(i).orEmpty()
-                    val value = if (key.isBlank()) saved else runCatching { drafts.read(key) }.getOrElse {
-                        input.error = "Saved draft could not be read. Reopen your source before submitting."
-                        input.text.toString()
-                    }
-                    input.setText(value); input.setSelection((selections.getOrNull(i) ?: value.length).coerceAtMost(value.length))
-                }
-            }
+            draftFields.bind(root, route, state)
             // ScrollView restoration waits for asynchronous content in screen().
         }
+        return true
     }
 
     private fun showHome() {
-        enterRoute("home")
+        if (!enterRoute("home")) return
         val body = screen(
             eyebrow = "StarIntel // Quasar",
             title = "Investigation desk",
@@ -320,7 +304,7 @@ class MainActivity : Activity() {
 
     private fun showSearch(title: String, initial: String) {
         val route = if (title == "Datasets") "datasets" else "search"
-        enterRoute(route)
+        if (!enterRoute(route)) return
         viewport.removeAllViews()
         val state = workspace.views.getBundle(route) ?: Bundle().also { workspace.views.putBundle(route, it) }
         val columns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -435,13 +419,13 @@ class MainActivity : Activity() {
         pager.cancel()
         pager.current?.let(::display) ?: if (state.getBoolean("searched") && config.isConfigured()) {
             val loadedQuery = state.getString("loadedQuery") ?: query.text.toString().trim()
-            if (loadedQuery.isNotBlank()) load(pager.start(loadedQuery, state.getString("pageCursor"), state.getLong("pageNumber", 1)), restore = true)
+            if (loadedQuery.isNotBlank()) load(pager.start(loadedQuery, state.getString("pageCursor"), state.getLong("pageNumber", 1)), restore = true) else Unit
         } else Unit
         if (detail != null) selectedDocument?.let { loadDocument(detail, it) }
     }
 
     private fun showFieldOps() {
-        enterRoute("field")
+        if (!enterRoute("field")) return
         viewport.removeAllViews()
         lateinit var field: FieldOpsView
         lateinit var fieldProgress: ProgressBar
@@ -489,7 +473,7 @@ class MainActivity : Activity() {
     }
 
     private fun showDocument(id: String) {
-        enterRoute("document:$id")
+        if (!enterRoute("document:$id")) return
         val body = screen("Document", "Record details", id)
         body.addView(QuasarDesign.action(this, "Back to results") { goBack() }, QuasarDesign.match(top = dp(8)))
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -517,7 +501,7 @@ class MainActivity : Activity() {
     }
 
     private fun showCreateDocument() {
-        enterRoute("create")
+        if (!enterRoute("create")) return
         val body = screen("Mutation", "Add record", "The Star server remains the schema authority for connected writes.")
         val editor = QuasarDesign.field(this, "{\n  \"dtype\": \"document\",\n  \"data\": {}\n}", lines = 14)
         val status = QuasarDesign.status(this, "Ready for server validation.")
@@ -532,7 +516,7 @@ class MainActivity : Activity() {
     }
 
     private fun showImport() {
-        enterRoute("import")
+        if (!enterRoute("import")) return
         val body = screen("Ingest", "Import batch", "Paste a bounded JSON array. The server validates every StarIntel document.")
         val editor = QuasarDesign.field(this, "[]", lines = 14)
         val status = QuasarDesign.status(this, "Nothing imported yet.")
@@ -547,7 +531,7 @@ class MainActivity : Activity() {
     }
 
     private fun showTarget(initialActor: String = "") {
-        enterRoute("target:$initialActor")
+        if (!enterRoute("target:$initialActor")) return
         val body = screen("Orchestration", "Dispatch target", "Create one idempotent actor request against a named dataset.")
         val actor = labeledField(body, "ACTOR", initialActor)
         val target = labeledField(body, "TARGET", "")
@@ -567,7 +551,7 @@ class MainActivity : Activity() {
     }
 
     private fun showAgent() {
-        enterRoute("agent")
+        if (!enterRoute("agent")) return
         val body = screen(
             "Prolog-RLM",
             "Reasoning console",
@@ -603,7 +587,7 @@ class MainActivity : Activity() {
     }
 
     private fun showActors() {
-        enterRoute("actors")
+        if (!enterRoute("actors")) return
         val body = screen("StarIntel // Fleet", "Actors", "Server actors remain private. This view shows the registry your account can read; execution is authorized on the server.")
         val remote = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         body.addView(QuasarDesign.eyebrow(this, "Server fleet"), QuasarDesign.match(top = dp(18)))
@@ -658,7 +642,7 @@ class MainActivity : Activity() {
     }
 
     private fun showActorEditor() {
-        enterRoute("actor-editor")
+        if (!enterRoute("actor-editor")) return
         val body = screen("Actor config", "Define local actor", "The manifest describes input types and capabilities. Executable Lisp must already exist in the trusted mobile image.")
         val template = """
             {
@@ -676,6 +660,7 @@ class MainActivity : Activity() {
         val status = QuasarDesign.status(this, "Manifest not saved.")
         body.addView(editor, QuasarDesign.match(top = dp(18)))
         body.addView(QuasarDesign.action(this, "Validate and save", primary = true) {
+            if (!draftFields.ready) return@action
             runCatching { actorDefinitions.saveCustom(editor.text.toString()) }
                 .onSuccess { status.text = "Saved ${it.id}. Restarting the trusted Lisp image is required before first execution." }
                 .onFailure { status.text = it.message ?: "Manifest validation failed" }
@@ -684,7 +669,7 @@ class MainActivity : Activity() {
     }
 
     private fun showSettings() {
-        enterRoute("settings")
+        if (!enterRoute("settings")) return
         val body = screen("Connection", "Settings", "Credentials are validated before replacing the working Keystore-encrypted key.")
         val appearance = QuasarAppearance(this)
         body.addView(QuasarDesign.routeCard(this, "Appearance & themes", "${when (appearance.theme) { "synthwave" -> "Synthwave"; "custom" -> appearance.custom().optString("name", "Custom"); else -> "StarIntel" }} · ${appearance.mode}", QuasarDesign.pink) { showAppearance() }, QuasarDesign.match(top = dp(16)))
@@ -761,7 +746,7 @@ class MainActivity : Activity() {
     }
 
     private fun showAppearance() {
-        enterRoute("appearance")
+        if (!enterRoute("appearance")) return
         viewport.removeAllViews()
         viewport.addView(AppearanceView(this, workspace.views.getBundle("appearance")?.getBundle("appearance")) { recreate() }, FrameLayout.LayoutParams(-1, -1))
     }
@@ -940,7 +925,7 @@ class MainActivity : Activity() {
         val state = workspace.views.getBundle(workspace.route) ?: Bundle().also { workspace.views.putBundle(workspace.route, it) }
         lateinit var reset: TextView
         val button = QuasarDesign.action(this, label, primary = true) {
-            if (!state.getBoolean("attempted") && validate()) {
+            if (draftFields.ready && !state.getBoolean("attempted") && validate()) {
                 state.putBoolean("attempted", true)
                 reset.visibility = View.VISIBLE
                 submit()

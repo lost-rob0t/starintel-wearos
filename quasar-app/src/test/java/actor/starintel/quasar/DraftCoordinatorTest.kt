@@ -16,6 +16,15 @@ class DraftCoordinatorTest {
             writes++; saved[name] = source; return name
         }
         override fun read(key: String) = saved[key] ?: error("missing/corrupt")
+        override fun delete(key: String) { saved.remove(key) }
+    }
+    @Test fun explicitDiscardRemovesOnlyItsSavedEnvelope() {
+        val store = Store(); val drafts = DraftCoordinator(store, 60_000)
+        drafts.update("a", "first"); drafts.update("b", "second")
+        drafts.flush().get(2, TimeUnit.SECONDS)
+        drafts.discardSaved("a").get(2, TimeUnit.SECONDS)
+        assertNull(store.saved["a"]); assertNull(drafts.current("a"))
+        assertEquals("second", store.saved["b"])
     }
     @Test fun restoredDraftIsCleanAndDoesNotReencryptOnNavigation() {
         val store = Store(); store.saved["key"] = "restored"
