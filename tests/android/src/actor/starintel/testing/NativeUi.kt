@@ -18,7 +18,7 @@ object NativeUi {
     fun click(text: String) {
         val control = device.findObject(UiSelector().text(text))
         val destinations = device.findObject(UiSelector().description("Primary destinations"))
-        if (!control.exists() && destinations.exists()) destinations.click()
+        if (text in setOf("Home", "Field", "Actors", "Search", "Settings") && !control.exists() && destinations.exists()) destinations.click()
         if (!control.waitForExists(1000)) UiScrollable(UiSelector().scrollable(true)).scrollTextIntoView(text)
         check(control.waitForExists(10000)) { "Missing control: $text" }
         control.click()
