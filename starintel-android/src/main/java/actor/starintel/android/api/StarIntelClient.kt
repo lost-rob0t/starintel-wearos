@@ -66,21 +66,23 @@ class StarIntelClient(
         }
     }
 
-    fun search(query: String, limit: Int = 40): JSONArray {
+    /** Compatibility snapshot API. Use searchPage to preserve pagination metadata. */
+    fun search(query: String, limit: Int = 40): JSONArray = searchPage(query, limit).rows
+
+    fun searchPage(query: String, limit: Int = 40, cursor: String? = null): SearchPage {
         require(query.isNotBlank()) { "Search query required" }
         require(query.length <= 512) { "Search query too long" }
+        SearchPage.validateCursor(cursor)
         val encoded = URLEncoder.encode(query.trim(), StandardCharsets.UTF_8.name())
         val bounded = limit.coerceIn(1, 100)
+        val bookmark = cursor?.let { "&bookmark=" + URLEncoder.encode(it, StandardCharsets.UTF_8.name()) }.orEmpty()
         val root = runCatching {
-            request("GET", "/api/v1/documents/search?q=$encoded&limit=$bounded")
+            request("GET", "/api/v1/documents/search?q=$encoded&limit=$bounded$bookmark")
         }.recoverCatching { failure ->
             if (failure !is StarHttpFailure || failure.status !in listOf(404, 405)) throw failure
-            request("GET", "/api/v1/search?q=$encoded&limit=$bounded")
+            request("GET", "/api/v1/search?q=$encoded&limit=$bounded$bookmark")
         }.getOrThrow()
-        return root.optJSONArray("rows")
-            ?: root.optJSONObject("data")?.optJSONArray("rows")
-            ?: root.optJSONArray("documents")
-            ?: JSONArray()
+        return SearchPage.fromJson(root, bounded, cursor)
     }
 
     fun document(id: String): JSONObject {
