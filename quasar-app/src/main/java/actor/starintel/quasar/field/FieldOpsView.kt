@@ -178,7 +178,7 @@ internal class FieldOpsView(
             addView(search, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(compactControl("SYNC", active = true).apply {
                 contentDescription = "Search Star server for geo documents"
-                setOnClickListener { onServerSearch(search.text.toString().trim()) }
+                setOnClickListener { if (dataStatus.text.toString() != "SYNCING") onServerSearch(search.text.toString().trim()) }
             }, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = context.dp(7) })
         }
         addView(searchRow, QuasarDesign.match(top = context.dp(8)))
