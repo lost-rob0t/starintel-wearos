@@ -22,6 +22,7 @@ class WorkflowStatusActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        QuasarDesign.configure(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         window.statusBarColor = QuasarDesign.background
         window.navigationBarColor = QuasarDesign.background
@@ -121,9 +122,8 @@ class WorkflowStatusActivity : Activity() {
             }
         }
 
-        setContentView(ScrollView(this).apply {
+        QuasarDesign.install(this, ScrollView(this).apply {
             isFillViewport = true
-            fitsSystemWindows = true
             setBackgroundColor(QuasarDesign.background)
             addView(
                 content,
@@ -178,17 +178,15 @@ class WorkflowStatusActivity : Activity() {
 
     private fun statusLine(summary: WorkflowWidgetSummary): LinearLayout = LinearLayout(this).apply {
         gravity = Gravity.CENTER_VERTICAL
-        orientation = LinearLayout.HORIZONTAL
+        orientation = LinearLayout.VERTICAL
         addView(
             TextView(this@WorkflowStatusActivity).apply {
                 text = summary.label
                 textSize = 16f
                 typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
                 setTextColor(QuasarDesign.text)
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
             },
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+            LinearLayout.LayoutParams(-1, -2),
         )
         addView(
             QuasarDesign.eyebrow(

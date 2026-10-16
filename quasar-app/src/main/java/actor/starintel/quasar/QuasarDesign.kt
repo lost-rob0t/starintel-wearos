@@ -16,21 +16,46 @@ import android.widget.TextView
 import actor.starintel.design.SiTokens
 
 internal object QuasarDesign {
-    private val palette = SiTokens.CYAN
-    val background = palette.background
-    val panel = palette.surface
-    val panelRaised = palette.raised
-    val border = palette.border
-    val cyan = palette.accent
-    // Small labels, syntax keywords and map markers need the brighter text accent.
-    val pink = SiTokens.ELECTRIC.accentAlt
-    val amber = palette.warn
-    val lime = palette.ok
-    val coral = palette.danger
-    val text = palette.text
-    val muted = palette.muted
+    // App-local roles: changing Quasar must not recolor Companion or Operator.
+    private var dark = true
+    fun configure(context: Context) {
+        dark = context.resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+    }
+    val background get() = Color.parseColor(if (dark) "#101820" else "#F3F5F7")
+    val panel get() = Color.parseColor(if (dark) "#19232D" else "#FFFFFF")
+    val panelRaised get() = Color.parseColor(if (dark) "#23313E" else "#E7EDF2")
+    val border get() = Color.parseColor(if (dark) "#526271" else "#738493")
+    val cyan get() = Color.parseColor(if (dark) "#81CEEA" else "#005D7A")
+    val pink get() = cyan
+    val amber get() = Color.parseColor(if (dark) "#F6CC80" else "#765000")
+    val lime get() = Color.parseColor(if (dark) "#9DD6AF" else "#22603B")
+    val coral get() = Color.parseColor(if (dark) "#FFB4AA" else "#A62F28")
+    val text get() = Color.parseColor(if (dark) "#E5EDF3" else "#18232C")
+    val muted get() = Color.parseColor(if (dark) "#B2C1CD" else "#465C6C")
 
-    fun title(context: Context, value: String, size: Float = 30f) = TextView(context).apply {
+    /** One inset owner for all Quasar windows, including cutouts and the IME. */
+    fun install(activity: android.app.Activity, content: View) {
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(activity.window, false)
+        val frame = android.widget.FrameLayout(activity).apply {
+            setBackgroundColor(background)
+            addView(content)
+        }
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(frame) { view, insets ->
+            val safe = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or
+                androidx.core.view.WindowInsetsCompat.Type.displayCutout() or androidx.core.view.WindowInsetsCompat.Type.ime())
+            view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
+            androidx.core.view.WindowInsetsCompat.CONSUMED
+        }
+        activity.setContentView(frame)
+        androidx.core.view.WindowCompat.getInsetsController(activity.window, frame).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
+        androidx.core.view.ViewCompat.requestApplyInsets(frame)
+    }
+
+    fun title(context: Context, value: String, size: Float = 26f) = TextView(context).apply {
         this.text = value
         textSize = size
         typeface = Typeface.create("sans-serif", Typeface.BOLD)
@@ -40,10 +65,10 @@ internal object QuasarDesign {
 
     fun eyebrow(context: Context, value: String, color: Int = cyan) = TextView(context).apply {
         text = value.uppercase()
-        textSize = 11f
+        textSize = 12f
         typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
         setTextColor(color)
-        letterSpacing = .18f
+        letterSpacing = .06f
     }
 
     fun body(context: Context, value: String, color: Int = muted, size: Float = 14f) = TextView(context).apply {
@@ -56,7 +81,7 @@ internal object QuasarDesign {
 
     fun pill(context: Context, value: String, color: Int) = TextView(context).apply {
         text = value
-        textSize = 11f
+        textSize = 12f
         typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
         setTextColor(color)
         setPadding(context.dp(10), context.dp(6), context.dp(10), context.dp(6))
@@ -66,7 +91,7 @@ internal object QuasarDesign {
     fun card(context: Context, accent: Int? = null) = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(context.dp(16), context.dp(16), context.dp(16), context.dp(16))
-        background = rounded(panel, accent ?: border, context.dp(18).toFloat())
+        background = rounded(panel, accent ?: border, context.dp(8).toFloat())
     }
 
     fun action(context: Context, label: String, primary: Boolean = false, onClick: () -> Unit) =
@@ -76,6 +101,12 @@ internal object QuasarDesign {
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             gravity = Gravity.CENTER
             setTextColor(if (primary) QuasarDesign.background else QuasarDesign.text)
+            accessibilityDelegate = object : View.AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.className = "android.widget.Button"
+                }
+            }
             setPadding(context.dp(16), context.dp(15), context.dp(16), context.dp(15))
             minHeight = context.dp(52)
             isClickable = true
@@ -84,7 +115,7 @@ internal object QuasarDesign {
                 context,
                 if (primary) cyan else panelRaised,
                 if (primary) cyan else border,
-                context.dp(15).toFloat(),
+                context.dp(8).toFloat(),
             )
             setOnClickListener { onClick() }
         }
@@ -96,13 +127,14 @@ internal object QuasarDesign {
         accent: Int,
         onClick: () -> Unit,
     ) = card(context, border).apply {
-        minimumHeight = context.dp(112)
+        minimumHeight = context.dp(64)
         isClickable = true
         isFocusable = true
-        background = ripple(context, panel, border, context.dp(18).toFloat())
-        addView(View(context).apply { setBackgroundColor(accent) }, LinearLayout.LayoutParams(context.dp(28), context.dp(3)))
-        addView(title(context, label, 18f), match(top = context.dp(18)))
-        addView(body(context, detail, muted, 12f), match(top = context.dp(6)))
+        descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        contentDescription = "$label. $detail"
+        background = ripple(context, panel, border, context.dp(8).toFloat())
+        addView(title(context, label, 18f))
+        addView(body(context, detail, muted, 14f), match(top = context.dp(4)))
         setOnClickListener { onClick() }
     }
 
@@ -113,6 +145,7 @@ internal object QuasarDesign {
         setTextColor(QuasarDesign.text)
         setHintTextColor(muted)
         setPadding(context.dp(14), context.dp(13), context.dp(14), context.dp(13))
+        minHeight = context.dp(52)
         setSingleLine(lines == 1)
         minLines = lines
         if (lines > 1) {
@@ -120,7 +153,7 @@ internal object QuasarDesign {
             typeface = Typeface.MONOSPACE
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         }
-        background = rounded(panelRaised, border, context.dp(14).toFloat())
+        background = rounded(panelRaised, border, context.dp(8).toFloat())
     }
 
     fun match(top: Int = 0, bottom: Int = 0) = LinearLayout.LayoutParams(
