@@ -180,6 +180,7 @@ class MainActivity : Activity() {
             route == "agent" -> showAgent()
             route == "actor-editor" -> showActorEditor()
             route == "settings" -> showSettings()
+            route == "appearance" -> showAppearance()
             else -> showHome()
         }
         isRestoring = false
@@ -209,6 +210,7 @@ class MainActivity : Activity() {
         resultList?.let { state.putParcelable("list", it.layoutManager?.onSaveInstanceState()) }
         state.putString("selected", selectedDocument)
         (root as? FieldOpsView)?.let { state.putBundle("field", it.saveWorkspace()) }
+        (root as? AppearanceView)?.let { state.putBundle("appearance", it.saveWorkspace()) }
         workspace.views.putBundle(workspace.route, state)
         val retained = workspace.history.toSet() + workspace.route + setOf("home", "search", "datasets", "field", "actors", "settings")
         workspace.views.keySet().toList().filter { it !in retained }.forEach(workspace.views::remove)
@@ -224,7 +226,7 @@ class MainActivity : Activity() {
             route == "field" -> "Field"
             route == "search" || route == "datasets" || route.startsWith("document:") -> "Search"
             route == "actors" || route.startsWith("target:") || route == "agent" || route == "actor-editor" -> "Actors"
-            route == "settings" -> "Settings"
+            route == "settings" || route == "appearance" -> "Settings"
             else -> "Home"
         })
         viewport.post {
@@ -256,8 +258,6 @@ class MainActivity : Activity() {
         )
 
         val connectionSummary = QuasarDesign.status(this, connectionText()).also(connectionViews::add)
-        body.addView(connectionSummary, QuasarDesign.match(top = dp(12)))
-        body.addView(QuasarDesign.action(this, "Connection settings") { showSettings() }, QuasarDesign.match(top = dp(8)))
         val metricRow = LinearLayout(this).apply { orientation = if (resources.configuration.fontScale > 1.3f) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL }
         val documents = metric("DOCUMENTS", "—", QuasarDesign.cyan)
         val targets = metric("TARGETS", "—", QuasarDesign.pink)
@@ -284,6 +284,12 @@ class MainActivity : Activity() {
         body.addView(QuasarDesign.eyebrow(this, "Investigate"), QuasarDesign.match(top = dp(20)))
         route("Documents", "Search and inspect canonical records") { showSearch("Documents", "*") }
         route("Field map", "Switch between map, accessible list and links") { showFieldOps() }
+        val connectionPanel = QuasarDesign.card(this).apply {
+            addView(QuasarDesign.eyebrow(this@MainActivity, "CONNECTION & TRANSFER"))
+            addView(connectionSummary, QuasarDesign.match(top = dp(10)))
+            addView(QuasarDesign.action(this@MainActivity, "Connection settings") { showSettings() }, QuasarDesign.match(top = dp(12)))
+        }
+        body.addView(connectionPanel, QuasarDesign.match(top = dp(16)))
         route("Datasets", "Search investigation scopes") { showSearch("Datasets", "dtype:dataset") }
         body.addView(QuasarDesign.eyebrow(this, "Capture and dispatch"), QuasarDesign.match(top = dp(20)))
         route("Add record", "Validate and submit one document") { showCreateDocument() }
@@ -665,6 +671,8 @@ class MainActivity : Activity() {
     private fun showSettings() {
         enterRoute("settings")
         val body = screen("Connection", "Settings", "Credentials are validated before replacing the working Keystore-encrypted key.")
+        val appearance = QuasarAppearance(this)
+        body.addView(QuasarDesign.routeCard(this, "Appearance & themes", "${when (appearance.theme) { "synthwave" -> "Synthwave"; "custom" -> appearance.custom().optString("name", "Custom"); else -> "StarIntel" }} · ${appearance.mode}", QuasarDesign.pink) { showAppearance() }, QuasarDesign.match(top = dp(16)))
         val connection = QuasarDesign.body(this, connectionText()).also(connectionViews::add).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
         body.addView(connection, QuasarDesign.match(top = dp(12)))
         body.addView(QuasarDesign.action(this, "Check saved connection") {
@@ -737,6 +745,12 @@ class MainActivity : Activity() {
         body.addView(status, QuasarDesign.match(top = dp(12)))
     }
 
+    private fun showAppearance() {
+        enterRoute("appearance")
+        viewport.removeAllViews()
+        viewport.addView(AppearanceView(this, workspace.views.getBundle("appearance")?.getBundle("appearance")) { recreate() }, FrameLayout.LayoutParams(-1, -1))
+    }
+
     private fun screen(eyebrow: String, title: String, description: String): LinearLayout {
         viewport.removeAllViews()
         val body = LinearLayout(this).apply {
@@ -801,6 +815,8 @@ class MainActivity : Activity() {
                 tag = "current-destination"
                 gravity = Gravity.CENTER_VERTICAL
                 minHeight = dp(48)
+                compoundDrawablePadding = dp(12)
+                setCompoundDrawablesRelativeWithIntrinsicBounds(QuasarIcon("Home", QuasarDesign.cyan, dp(24)), null, null, null)
             }, LinearLayout.LayoutParams(0, -2, 1f))
             navigation.addView(QuasarDesign.action(this, "Menu") {
                 android.widget.PopupMenu(this, navigation.getChildAt(1)).apply {
@@ -818,8 +834,9 @@ class MainActivity : Activity() {
                 textSize = 12f
                 typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
                 gravity = Gravity.CENTER
-                setPadding(dp(2), dp(13), dp(2), dp(13))
-                minHeight = dp(48)
+                compoundDrawablePadding = dp(5)
+                setPadding(dp(if (useRail) 8 else 2), dp(if (useRail) 12 else 10), dp(if (useRail) 8 else 2), dp(if (useRail) 12 else 10))
+                minHeight = dp(if (useRail) 48 else 68)
                 isClickable = true
                 isFocusable = true
                 setOnClickListener {
@@ -839,6 +856,7 @@ class MainActivity : Activity() {
                 text = selected
                 isSelected = true
                 contentDescription = "$selected, selected destination"
+                setCompoundDrawablesRelativeWithIntrinsicBounds(QuasarIcon(selected, QuasarDesign.cyan, dp(24)), null, null, null)
             }
             return
         }
@@ -848,7 +866,12 @@ class MainActivity : Activity() {
             item.setTextColor(if (active) QuasarDesign.cyan else QuasarDesign.muted)
             item.isSelected = active
             item.contentDescription = "${item.tag}${if (active) ", selected" else ""}"
-            item.setBackgroundColor(if (active) QuasarDesign.panelRaised else QuasarDesign.panel)
+            val icon = QuasarIcon(item.tag.toString(), if (active) QuasarDesign.cyan else QuasarDesign.muted, dp(22))
+            item.setCompoundDrawablesRelativeWithIntrinsicBounds(if (useRail) icon else null, if (useRail) null else icon, null, null)
+            item.background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(if (active) QuasarPalette.mix(QuasarDesign.cyan, QuasarDesign.panel, .88) else QuasarDesign.panel)
+                cornerRadius = dp(14).toFloat()
+            }
         }
     }
 
@@ -921,17 +944,17 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun metric(label: String, value: String, accent: Int) = QuasarDesign.card(this, QuasarDesign.border).apply {
-        setPadding(dp(12), dp(13), dp(12), dp(13))
+    private fun metric(label: String, value: String, accent: Int) = QuasarDesign.card(this).apply {
+        setPadding(dp(16), dp(16), dp(16), dp(16))
         addView(QuasarDesign.eyebrow(this@MainActivity, label, accent))
-        addView(QuasarDesign.title(this@MainActivity, value, 22f).apply { tag = VALUE_TAG }, QuasarDesign.match(top = dp(5)))
+        addView(QuasarDesign.title(this@MainActivity, value, 28f).apply { tag = VALUE_TAG }, QuasarDesign.match(top = dp(6)))
     }
 
     private fun sectionHeader(label: String, state: String) = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.START
-        addView(QuasarDesign.eyebrow(this@MainActivity, label), QuasarDesign.match())
-        addView(QuasarDesign.pill(this@MainActivity, state, statusColor(state)))
+        orientation = if (resources.configuration.fontScale > 1.3f) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        addView(QuasarDesign.title(this@MainActivity, label, 18f), if (orientation == LinearLayout.HORIZONTAL) LinearLayout.LayoutParams(0, -2, 1f) else QuasarDesign.match())
+        addView(QuasarDesign.pill(this@MainActivity, state, statusColor(state)), LinearLayout.LayoutParams(-2, -2).apply { if (orientation == LinearLayout.HORIZONTAL) marginStart = dp(8) else topMargin = dp(8) })
     }
 
     private fun runtimeLine(label: String, detail: String, ready: Boolean) = LinearLayout(this).apply {
