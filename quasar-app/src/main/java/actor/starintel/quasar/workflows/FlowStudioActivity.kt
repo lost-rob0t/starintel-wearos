@@ -28,13 +28,21 @@ class FlowStudioActivity : Activity() {
     private lateinit var status: TextView
     private var active: FlowRunHandle? = null
     private var activeGraphId: String? = null
+    private var restoredSource: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        QuasarDesign.configure(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         window.statusBarColor = QuasarDesign.background
         window.navigationBarColor = QuasarDesign.background
+        restoredSource = savedInstanceState?.getString("source")
         render()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("source", editor.text.toString().take(65_536))
+        super.onSaveInstanceState(outState)
     }
 
     override fun onResume() {
@@ -65,7 +73,7 @@ class FlowStudioActivity : Activity() {
         }
         body.addView(runtimeCard(), QuasarDesign.match(top = dp(18)))
         body.addView(QuasarDesign.eyebrow(this, "GRAPH SOURCE"), QuasarDesign.match(top = dp(22)))
-        editor = QuasarDesign.field(this, initialSource(), lines = 24).apply {
+        editor = QuasarDesign.field(this, restoredSource ?: initialSource(), lines = 16).apply {
             typeface = Typeface.MONOSPACE
             contentDescription = "FBP graph JSON editor"
         }
@@ -88,7 +96,7 @@ class FlowStudioActivity : Activity() {
             },
             QuasarDesign.match(top = dp(14)),
         )
-        setContentView(ScrollView(this).apply {
+        QuasarDesign.install(this, ScrollView(this).apply {
             isFillViewport = true
             addView(body, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         })

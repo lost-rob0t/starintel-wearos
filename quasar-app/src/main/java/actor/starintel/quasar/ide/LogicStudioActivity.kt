@@ -35,6 +35,7 @@ class LogicStudioActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        QuasarDesign.configure(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         window.statusBarColor = QuasarDesign.background
         window.navigationBarColor = QuasarDesign.background
@@ -77,7 +78,7 @@ class LogicStudioActivity : Activity() {
             ScrollView(this).apply { isFillViewport = true; addView(content) },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f),
         )
-        setContentView(shell)
+        QuasarDesign.install(this, shell)
     }
 
     private fun modeBar(): View {
