@@ -53,7 +53,7 @@ internal class AppearanceView(context: Context, saved: Bundle?, private val appl
         body.addView(preview, QuasarDesign.match(top = context.dp(20)))
         custom.visibility = if (theme == "custom") View.VISIBLE else View.GONE
         custom.addView(QuasarDesign.eyebrow(context, "CUSTOM PALETTE"), QuasarDesign.match(top = context.dp(24)))
-        custom.addView(QuasarDesign.body(context, "Save both variants. Text and accents need 4.5:1 contrast; status colors adapt to your surfaces."), QuasarDesign.match(top = context.dp(8)))
+        custom.addView(QuasarDesign.body(context, "Save both variants. Text and the primary accent need 4.5:1 contrast. Secondary and status colors adapt for readability."), QuasarDesign.match(top = context.dp(8)))
         name = QuasarDesign.field(context, draft.optString("name", "My theme")).apply { contentDescription = "Theme name"; filters = arrayOf(InputFilter.LengthFilter(60)); watch(this) }
         custom.addView(QuasarDesign.body(context, "Theme name", QuasarDesign.text), QuasarDesign.match(top = context.dp(16)))
         custom.addView(name, QuasarDesign.match(top = context.dp(6)))

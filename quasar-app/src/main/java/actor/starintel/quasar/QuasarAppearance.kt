@@ -21,21 +21,25 @@ internal data class QuasarPalette(
             fun part(shift: Int) = (((a ushr shift and 255) * (1 - amount) + (b ushr shift and 255) * amount).toInt()).coerceIn(0, 255)
             return (0xFF shl 24) or (part(16) shl 16) or (part(8) shl 8) or part(0)
         }
-        fun legible(color: Int, surfaces: List<Int>, dark: Boolean): Int {
+        fun legible(color: Int, surfaces: List<Int>, dark: Boolean, fallback: Int = if (dark) -1 else 0xFF000000.toInt()): Int {
             for (step in 0..100) {
-                val adjusted = mix(color, if (dark) -1 else 0xFF000000.toInt(), step / 100.0)
-                if (surfaces.all { SiTokens.contrastRatio(adjusted, it) >= 4.5 }) return adjusted
+                for (target in if (dark) listOf(-1, 0xFF000000.toInt()) else listOf(0xFF000000.toInt(), -1)) {
+                    val adjusted = mix(color, target, step / 100.0)
+                    if (surfaces.all { SiTokens.contrastRatio(adjusted, it) >= 4.5 }) return adjusted
+                }
             }
-            return if (dark) -1 else 0xFF000000.toInt()
+            require(surfaces.all { SiTokens.contrastRatio(fallback, it) >= 4.5 }) { "The surfaces need a common readable foreground" }
+            return fallback
         }
         fun create(background: Int, surface: Int, raised: Int, accent: Int, alternate: Int, text: Int, muted: Int, dark: Boolean): QuasarPalette {
             val surfaces = listOf(background, surface, raised)
+            val readableText = legible(text, surfaces, dark, text)
             return QuasarPalette(background, surface, raised, mix(text, surface, .57),
-                legible(accent, surfaces, dark), legible(alternate, surfaces, dark),
-                legible(text, surfaces, dark), legible(muted, surfaces, dark),
-                legible(if (dark) hex("#8FE36B") else hex("#286339"), surfaces, dark),
-                legible(if (dark) hex("#FBC56B") else hex("#805000"), surfaces, dark),
-                legible(if (dark) hex("#FF91AA") else hex("#AA2349"), surfaces, dark))
+                legible(accent, surfaces, dark, readableText), legible(alternate, surfaces, dark, readableText),
+                readableText, legible(muted, surfaces, dark, readableText),
+                legible(if (dark) hex("#8FE36B") else hex("#286339"), surfaces, dark, readableText),
+                legible(if (dark) hex("#FBC56B") else hex("#805000"), surfaces, dark, readableText),
+                legible(if (dark) hex("#FF91AA") else hex("#AA2349"), surfaces, dark, readableText))
         }
         fun starintel(dark: Boolean): QuasarPalette {
             if (dark) return SiTokens.CYAN.let { p ->
