@@ -71,7 +71,7 @@ class MainActivity : Activity() {
             else LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f),
         )
         val nav = bottomNavigation()
-        if (resources.configuration.screenWidthDp >= 600) shell.addView(nav, LinearLayout.LayoutParams(dp(104), -1))
+        if (resources.configuration.screenWidthDp >= 600) shell.addView(nav, 0, LinearLayout.LayoutParams(dp(104), -1))
         else shell.addView(nav, QuasarDesign.match())
         QuasarDesign.install(this, shell)
         restoreRoute(workspace.route)
@@ -772,23 +772,27 @@ class MainActivity : Activity() {
 
     private fun addSubmission(body: LinearLayout, label: String, status: TextView, validate: () -> Boolean, submit: () -> Unit) {
         val state = workspace.views.getBundle(workspace.route) ?: Bundle().also { workspace.views.putBundle(workspace.route, it) }
+        lateinit var reset: TextView
         val button = QuasarDesign.action(this, label, primary = true) {
             if (!state.getBoolean("attempted") && validate()) {
                 state.putBoolean("attempted", true)
+                reset.visibility = View.VISIBLE
                 submit()
             }
         }
         button.isEnabled = !state.getBoolean("attempted")
         if (!button.isEnabled) status.text = state.getString("receipt") ?: "Submission attempted. Outcome unknown; inspect server records before creating another request."
         body.addView(button, QuasarDesign.match(top = dp(12)))
-        body.addView(QuasarDesign.action(this, "Start a new submission") {
+        reset = QuasarDesign.action(this, "Start a new submission") {
             android.app.AlertDialog.Builder(this).setTitle("Create another request?")
                 .setMessage("An earlier request may have been accepted. Check server records first; a new submission can create another mutation.")
                 .setNegativeButton("Keep current", null)
                 .setPositiveButton("New submission") { _, _ ->
-                    state.remove("attempted"); state.remove("receipt"); button.isEnabled = true; status.text = "Ready for a new submission."
+                    state.remove("attempted"); state.remove("receipt"); button.isEnabled = true; reset.visibility = View.GONE; status.text = "Ready for a new submission."
                 }.show()
-        }, QuasarDesign.match(top = dp(8)))
+        }
+        reset.visibility = if (state.getBoolean("attempted")) View.VISIBLE else View.GONE
+        body.addView(reset, QuasarDesign.match(top = dp(8)))
     }
 
     private fun submitOnce(status: TextView, acceptanceOnly: Boolean = false, validationInput: EditText? = null, operation: () -> JSONObject) {
