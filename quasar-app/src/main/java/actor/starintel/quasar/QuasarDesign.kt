@@ -90,7 +90,12 @@ internal object QuasarDesign {
         typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
         setTextColor(color)
         setPadding(context.dp(10), context.dp(6), context.dp(10), context.dp(6))
-        background = rounded(Color.argb(25, Color.red(color), Color.green(color), Color.blue(color)), color, context.dp(99).toFloat())
+        stylePill(context, this, color)
+    }
+
+    fun stylePill(context: Context, view: TextView, color: Int) {
+        view.setTextColor(color)
+        view.background = rounded(panelRaised, color, context.dp(99).toFloat())
     }
 
     fun card(context: Context, accent: Int? = null) = LinearLayout(context).apply {
@@ -98,6 +103,12 @@ internal object QuasarDesign {
         setPadding(context.dp(16), context.dp(16), context.dp(16), context.dp(16))
         background = rounded(panel, accent ?: border, context.dp(8).toFloat())
     }
+
+    fun rowBackground(context: Context, selected: Boolean) = rounded(
+        if (selected) panelRaised else panel,
+        if (selected) cyan else border,
+        context.dp(8).toFloat(),
+    )
 
     fun action(context: Context, label: String, primary: Boolean = false, onClick: () -> Unit) =
         TextView(context).apply {

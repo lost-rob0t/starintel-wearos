@@ -56,10 +56,11 @@ internal class DocumentRows(private val onSelect: (DocumentRow) -> Unit) : ListA
     override fun onBindViewHolder(holder: Holder, position: Int) {
         val item = getItem(position)
         holder.title.text = item.title
-        holder.meta.text = "${item.kind} · ${item.id}"
+        holder.meta.text = "${item.kind} · ${item.id}${if (item.id == selectedId) " · Selected" else ""}"
         holder.summary.text = item.summary
         holder.summary.visibility = if (item.summary.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
         holder.row.isSelected = item.id == selectedId
+        holder.row.background = QuasarDesign.rowBackground(holder.row.context, item.id == selectedId)
         holder.row.contentDescription = "${item.title}. ${item.kind}. ${item.id}${if (item.id == selectedId) ". Selected" else ""}"
         holder.row.setOnClickListener { selectedId = item.id; onSelect(item) }
     }

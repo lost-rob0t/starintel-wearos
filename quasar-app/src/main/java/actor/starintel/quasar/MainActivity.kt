@@ -969,7 +969,7 @@ class MainActivity : Activity() {
     }
 
     private fun statusColor(status: String): Int = when (status.lowercase()) {
-        "ok", "completed", "success" -> QuasarDesign.lime
+        "ok", "completed", "success", "online", "ready" -> QuasarDesign.lime
         "blocked", "denied", "error", "failed" -> QuasarDesign.coral
         else -> QuasarDesign.amber
     }

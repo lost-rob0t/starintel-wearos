@@ -102,6 +102,7 @@ internal object WorkstationJourney {
                     assertEquals("record 2", nodes.filterIsInstance<EditText>().single().text.toString())
                     val list = nodes.filterIsInstance<RecyclerView>().single()
                     assertTrue("Field list mode must survive recreation", list.isShown)
+                    assertFalse("Map controls must not cover list rows", nodes.filterIsInstance<TextView>().single { it.contentDescription?.toString() == "Zoom in" }.isShown)
                     // Matching is term-based across title and ID: 2, 12, 20–29, 32, …, 92.
                     assertEquals(19, list.adapter!!.itemCount)
                     val state = nodes.filterIsInstance<actor.starintel.quasar.field.FieldOpsView>().single().saveWorkspace()
