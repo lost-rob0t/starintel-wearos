@@ -6,19 +6,17 @@ Quasar PR110 is modified. No deployment or mutation retries.
 
 ## Integration status / ownership
 
-`IdeLanguage.kt`, `EditorAnalysis.kt`, `SourceEditorAnalysis.kt`, and their JVM
-tests are implemented. **Activity wiring is pending parent coordination.**
-The supplied parent thread ID could not be addressed by this worker's messaging
-tool. Do not close #121 until the integration patch is coordinated, applied and
-validated against the lifecycle worker's latest activity.
+Parent explicitly assigned highlighting/editor wiring to #121 and directed issue
+#123's draft-storage owner to integrate after these changes settle. The activity
+wiring is now applied; the temporary integration patch is removed.
 
-`issue121-activity-integration.patch` passes `git apply --check` against this base.
-It replaces only source-editor watcher/highlighting code, removes the old
-synchronous highlighter, and captures the current draft before opening New buffer.
-Draft text is captured by existing save, validate, search, tab/language navigation
-and instance-save operations instead of copying the whole source each keystroke.
-The lifecycle owner must check any new navigation paths also capture the draft.
-No `onCreate`, save/restore, `MainActivity.kt`, workspace or backend files are edited.
+The watcher marks the active buffer dirty without copying its source on every
+keystroke. Existing `captureDraft()` calls in save, validate, search, tab/language
+navigation and instance-save still snapshot the current text. Opening New buffer
+now captures the current draft before the dialog can switch editors. The issue
+#123 owner must preserve this contract for any additional navigation/restoration
+paths. The onCreate/onSaveInstanceState draft-storage implementation is unchanged.
+No MainActivity.kt, workspace store or backend files are edited.
 
 Integration interface: construct `SourceEditorAnalysis(field, language, tokenColor,
 rejected, changed)` once per newly created field, including restored fields.
@@ -72,14 +70,19 @@ operation-count assertions, **not timing or memory performance measurements**.
   only a compile check, not an Android runtime or SDK36/Gradle build.
 - `python3 scripts/test-update-manifest.py`: passed.
 - `python3 scripts/test-release-contract.py`: passed (9 APK contracts).
-- `git apply --check docs/issue121-activity-integration.patch`: passed.
+- Activity integration applied after explicit parent ownership assignment.
+- `bash -n scripts/test-native-journeys.sh`: passed.
 - `git diff --check`: passed.
 - `nix flake check --no-update-lock-file --show-trace` and
   `nix run --no-update-lock-file .#build-all`: attempted, unavailable (`nix` absent).
 
 No Gradle, Android SDK, emulator or physical-device execution was available.
-Android watcher/filter/IME/span behavior, real activity recreation, persisted draft
-restoration, APK assembly and the shared-file integration remain unverified.
+A new `LogicEditorJourneyTest` is wired into the hosted native journey script. It
+covers large paste rejection, exact 256 KiB input, multibyte replacement, setText
+replacement accounting, latest-token spans, real activity recreation with draft
+restoration, and plain-text fallback. It is not yet run locally. Android IME/span
+behavior, real activity recreation, persisted draft restoration and APK assembly
+remain unverified until hosted checks complete.
 The pure session restoration test does not claim Android lifecycle coverage.
 
 Standalone reproduction (jars outside repository in `/workspace/issue121-tools`):

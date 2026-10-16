@@ -7,10 +7,6 @@ import android.app.AlertDialog
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
-import android.text.Editable
-import android.text.Spanned
-import android.text.TextWatcher
-import android.text.style.ForegroundColorSpan
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -31,7 +27,6 @@ class LogicStudioActivity : Activity() {
     private val drafts = linkedMapOf<String, SourceBuffer>()
     private var activeName: String? = null
     private var editor: EditText? = null
-    private var applyingHighlight = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         QuasarDesign.configure(this)
@@ -159,19 +154,14 @@ class LogicStudioActivity : Activity() {
             typeface = Typeface.MONOSPACE
             textSize = 13f
             setHorizontallyScrolling(true)
-            addTextChangedListener(object : TextWatcher {
-                override fun beforeTextChanged(value: CharSequence?, start: Int, count: Int, after: Int) = Unit
-                override fun onTextChanged(value: CharSequence?, start: Int, before: Int, count: Int) = Unit
-                override fun afterTextChanged(value: Editable?) {
-                    if (applyingHighlight || value == null) return
-                    val name = activeName ?: return
-                    drafts[name] = SourceBuffer(name, language, value.toString(), dirty = true)
-                    highlight(value, language)
-                }
-            })
         }
         editor?.let { field ->
-            highlight(field.text, language)
+            SourceEditorAnalysis(field, language, ::tokenColor,
+                rejected = { toast("Source limit is 256 KiB; edit was not inserted") },
+                changed = {
+                    activeName?.let { name -> drafts[name]?.let { drafts[name] = it.copy(dirty = true) } }
+                },
+            )
             content.addView(field, QuasarDesign.match(top = dp(12)))
         }
 
@@ -270,6 +260,7 @@ class LogicStudioActivity : Activity() {
     }
 
     private fun promptNewBuffer() {
+        captureDraft()
         val input = QuasarDesign.field(this, hint = if (language == IdeLanguage.LISP) "policy.lisp" else "rules.pl")
         AlertDialog.Builder(this)
             .setTitle("New ${language.displayName} buffer")
@@ -394,23 +385,6 @@ class LogicStudioActivity : Activity() {
         val name = activeName ?: return
         val field = editor ?: return
         drafts[name] = SourceBuffer(name, language, field.text.toString(), dirty = drafts[name]?.dirty == true || field.text.toString() != drafts[name]?.source)
-    }
-
-    private fun highlight(editable: Editable, targetLanguage: IdeLanguage) {
-        applyingHighlight = true
-        try {
-            editable.getSpans(0, editable.length, ForegroundColorSpan::class.java).forEach(editable::removeSpan)
-            LanguageRegistry.implementation(targetLanguage).tokenize(editable.toString()).forEach { token ->
-                editable.setSpan(
-                    ForegroundColorSpan(tokenColor(token.kind)),
-                    token.start.coerceAtMost(editable.length),
-                    token.endExclusive.coerceAtMost(editable.length),
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
-                )
-            }
-        } finally {
-            applyingHighlight = false
-        }
     }
 
     private fun tokenColor(kind: TokenKind): Int = when (kind) {
