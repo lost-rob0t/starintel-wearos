@@ -91,6 +91,7 @@ class FlowStudioActivity : Activity() {
         }
         body.addView(actions, QuasarDesign.match(top = dp(10)))
         status = QuasarDesign.body(this, "Ready. ${definitions.list().size} saved workflow(s).", QuasarDesign.muted, 12f)
+        status.accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE
         body.addView(status, QuasarDesign.match(top = dp(10)))
         body.addView(nodeCatalog(), QuasarDesign.match(top = dp(22)))
         body.addView(
