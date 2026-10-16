@@ -1,4 +1,4 @@
-# Issue 124: bounded map requests (integration pending)
+# Issue 124: bounded map requests and viewport cancellation
 
 Baseline: main e80ab4558cc580eff26b13f8f86edf3578143730.
 Rechecked native redesign PR120 at 82c2a3ae332fdc42c61e487b2607d81210ea9278.
@@ -6,16 +6,13 @@ Quasar PR110 remains untouched at 852bb4be300096f1ea006e9145aa992db1aead56.
 No `.agents/skills` files exist in this checkout or the workspace `.agents` directory.
 Read and followed repository AGENTS.md.
 
-## Parent integration handoff
+## Integrated viewport callback
 
-This work owns OpenMapTileRepository.kt, TileWorkQueue.kt and their tests.
-The parent must coordinate the one-line FieldMapView.drawTiles change in
-`issue-124-viewport.patch` with its shared-file owner, then apply it before merge.
-It calls `tiles.setViewport(zoom, firstX..lastX, firstY..lastY)` before the tile
-loop. No MainActivity or FieldMapView source was edited here. The callback is
-required for obsolete viewport cancellation; without it only backpressure,
-close cancellation, failure expiry and decoding limits are active. Do not close
-issue 124 until this integration and Android validation are complete.
+Parent authorized FieldMapView integration on follow-up. drawTiles now calls
+`tiles.setViewport(zoom, firstX..lastX, firstY..lastY)` before its tile loop.
+Obsolete viewport cancellation is wired to the actual UI. The standalone patch
+was removed. This one-line hunk applies cleanly to PR120's FieldMapView without
+altering its native-design changes. No MainActivity changes.
 
 The repository retains `tile()` and the trailing onChanged constructor lambda.
 This draft preserves PR120's MAP AVAILABLE wording, decode-null failure behavior
@@ -85,3 +82,14 @@ Blocked/unrun:
   or Java-bytecode build pass is claimed.
 
 No deploy, merge, installation or production service changes.
+
+## Follow-up validation
+
+The viewport integration is now in the source, not a proposed patch. A dedicated
+Quasar tile bounds workflow builds the app and test APK and runs the seven tile
+instrumentation tests on API 35; existing native/widget journey scripts select
+only their own classes and would not run these tests automatically.
+
+Hosted checks for the initial commit were inspected: Android build was queued,
+Nix evaluation and widget build were running, with no completed failure yet.
+The environment still has no Nix, Gradle, Android SDK, ADB or /dev/kvm.
