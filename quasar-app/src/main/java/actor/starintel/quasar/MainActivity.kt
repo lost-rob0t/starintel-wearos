@@ -436,6 +436,7 @@ class MainActivity : Activity() {
         pager.current?.let(::display) ?: if (state.getBoolean("searched") && config.isConfigured()) {
             val loadedQuery = state.getString("loadedQuery") ?: query.text.toString().trim()
             if (loadedQuery.isNotBlank()) load(pager.start(loadedQuery, state.getString("pageCursor"), state.getLong("pageNumber", 1)), restore = true)
+            Unit
         } else Unit
         if (detail != null) selectedDocument?.let { loadDocument(detail, it) }
     }
