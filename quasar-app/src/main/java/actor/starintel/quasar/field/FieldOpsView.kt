@@ -28,7 +28,9 @@ internal class FieldOpsView(
     private val map = FieldMapView(context)
     private val graph = GeoGraphView(context)
     private val mapStatus = QuasarDesign.pill(context, BasemapState.UNAVAILABLE.label, QuasarDesign.coral)
-    private val dataStatus = QuasarDesign.pill(context, "LOCAL ONLY", QuasarDesign.amber)
+    private val dataStatus = QuasarDesign.pill(context, "LOCAL ONLY", QuasarDesign.amber).apply {
+        accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+    }
     private val coordinate = QuasarDesign.body(context, GeoMath.coordinateReadout(GeoPoint(0.0, 0.0)), QuasarDesign.text, 11f)
     private val zoomReadout = QuasarDesign.eyebrow(context, "Z3", QuasarDesign.amber)
     private val count = QuasarDesign.eyebrow(context, "0 GEO DOCS", QuasarDesign.muted)

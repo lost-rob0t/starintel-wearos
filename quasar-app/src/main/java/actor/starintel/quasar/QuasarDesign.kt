@@ -80,6 +80,10 @@ internal object QuasarDesign {
         setTextIsSelectable(true)
     }
 
+    fun status(context: Context, value: String) = body(context, value).apply {
+        accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+    }
+
     fun pill(context: Context, value: String, color: Int) = TextView(context).apply {
         text = value
         textSize = 12f

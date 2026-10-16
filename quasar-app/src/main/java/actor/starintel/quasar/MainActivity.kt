@@ -296,7 +296,7 @@ class MainActivity : Activity() {
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
         }
         body.addView(query, QuasarDesign.match(top = dp(8)))
-        val status = QuasarDesign.body(this, "Enter a query, then Search. Up to 40 records per snapshot.").apply {
+        val status = QuasarDesign.status(this, "Enter a query, then Search. Up to 40 records per snapshot.").apply {
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
         val adapter = DocumentRows { row ->
@@ -456,7 +456,7 @@ class MainActivity : Activity() {
         enterRoute("create")
         val body = screen("Mutation", "Add record", "The Star server remains the schema authority for connected writes.")
         val editor = QuasarDesign.field(this, "{\n  \"dtype\": \"document\",\n  \"data\": {}\n}", lines = 14)
-        val status = QuasarDesign.body(this, "Ready for server validation.")
+        val status = QuasarDesign.status(this, "Ready for server validation.")
         body.addView(editor, QuasarDesign.match(top = dp(18)))
         addSubmission(body, "Create document", status, validate = {
             (editor.text.isNotBlank() && editor.text.length <= 512 * 1024).also { if (!it) editor.error = "Enter a JSON object up to 512 KiB" }
@@ -471,7 +471,7 @@ class MainActivity : Activity() {
         enterRoute("import")
         val body = screen("Ingest", "Import batch", "Paste a bounded JSON array. The server validates every StarIntel document.")
         val editor = QuasarDesign.field(this, "[]", lines = 14)
-        val status = QuasarDesign.body(this, "Nothing imported yet.")
+        val status = QuasarDesign.status(this, "Nothing imported yet.")
         body.addView(editor, QuasarDesign.match(top = dp(18)))
         addSubmission(body, "Import documents", status, validate = {
             (editor.text.isNotBlank() && editor.text.length <= 512 * 1024).also { if (!it) editor.error = "Enter a JSON array up to 512 KiB" }
@@ -488,7 +488,7 @@ class MainActivity : Activity() {
         val actor = labeledField(body, "ACTOR", initialActor)
         val target = labeledField(body, "TARGET", "")
         val dataset = labeledField(body, "DATASET", "investigation")
-        val status = QuasarDesign.body(this, "Ready.")
+        val status = QuasarDesign.status(this, "Ready.")
         addSubmission(body, "Dispatch", status, validate = {
             listOf(actor, target, dataset).map { field ->
                 field.text.isNotBlank().also { if (!it) field.error = "Required" }
@@ -609,7 +609,7 @@ class MainActivity : Activity() {
             }
         """.trimIndent()
         val editor = QuasarDesign.field(this, template, lines = 17)
-        val status = QuasarDesign.body(this, "Manifest not saved.")
+        val status = QuasarDesign.status(this, "Manifest not saved.")
         body.addView(editor, QuasarDesign.match(top = dp(18)))
         body.addView(QuasarDesign.action(this, "Validate and save", primary = true) {
             runCatching { actorDefinitions.saveCustom(editor.text.toString()) }
@@ -644,7 +644,7 @@ class MainActivity : Activity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             isSaveEnabled = false
         }
-        val status = QuasarDesign.body(this, if (config.isConfigured()) "Encrypted credential available." else "Not configured.")
+        val status = QuasarDesign.status(this, if (config.isConfigured()) "Encrypted credential available." else "Not configured.")
         body.addView(QuasarDesign.action(this, "Login", primary = true) {
             val origin = server.text.toString()
             val name = username.text.toString()

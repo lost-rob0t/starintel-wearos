@@ -26,7 +26,7 @@ class VisualFixtureJourneyTest {
                 val searchStart = android.os.SystemClock.elapsedRealtime()
                 scenario.onActivity { activity ->
                     all(activity.window.decorView).filterIsInstance<TextView>()
-                        .single { it.text.toString() == "Search" && it.tag != "Search" }.performClick()
+                        .single { it.text.toString() == "Search" && it.tag != "Search" && it.tag != "current-destination" }.performClick()
                 }
                 reveal("Fixture record 0")
                 val searchMillis = android.os.SystemClock.elapsedRealtime() - searchStart

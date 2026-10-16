@@ -26,7 +26,7 @@ internal object WorkstationJourney {
                     scenario.onActivity { activity ->
                         val nodes = all(activity.window.decorView).toList()
                         nodes.filterIsInstance<EditText>().single().setText(value)
-                        nodes.filterIsInstance<TextView>().single { it.text.toString() == "Search" && it.tag != "Search" }.performClick()
+                        nodes.filterIsInstance<TextView>().single { it.text.toString() == "Search" && it.tag != "Search" && it.tag != "current-destination" }.performClick()
                     }
                 }
                 val start = System.nanoTime()
