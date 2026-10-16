@@ -41,6 +41,7 @@ internal class FieldOpsView(
     private val notice = QuasarDesign.body(context, "Snapshot ≤100 records · corpus total unknown", size = 12f)
     private var mode = "map"
     private var pendingSelected: String? = null
+    private var pendingListState: android.os.Parcelable? = null
     private var fieldZoom = 3
     private val layerControls = linkedMapOf<GeoLayer, TextView>()
     private val visibleLayers = GeoLayer.entries.toMutableSet()
@@ -134,7 +135,7 @@ internal class FieldOpsView(
         pendingSelected = state.getString("selected")
         map.focus(GeoPoint(state.getDouble("latitude"), state.getDouble("longitude")), state.getInt("zoom", 3))
         when (state.getString("mode")) { "list" -> showList(); "links" -> showGraph(); else -> showMap() }
-        list.layoutManager?.onRestoreInstanceState(state.getParcelable<android.os.Parcelable>("list"))
+        pendingListState = state.getParcelable<android.os.Parcelable>("list")
         applyFilter()
         post { (getChildAt(0) as ScrollView).scrollTo(0, state.getInt("scroll")) }
     }
@@ -240,7 +241,12 @@ internal class FieldOpsView(
 
     private fun applyFilter() {
         val visible = GeoFeatureFilter.apply(allFeatures, search.text.toString(), visibleLayers)
-        listAdapter.submitList(visible.map { DocumentRow(it.id, it.title, it.dtype, it.summary) })
+        listAdapter.submitList(visible.map { DocumentRow(it.id, it.title, it.dtype, it.summary) }) {
+            if (allFeatures.isNotEmpty()) pendingListState?.let { saved ->
+                list.layoutManager?.onRestoreInstanceState(saved)
+                pendingListState = null
+            }
+        }
         map.setFeatures(visible)
         graph.setFeatures(visible)
         count.text = "${visible.size} GEO DOC${if (visible.size == 1) "" else "S"}"

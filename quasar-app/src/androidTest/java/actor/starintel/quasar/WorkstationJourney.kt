@@ -71,6 +71,26 @@ internal object WorkstationJourney {
                     putString("stream", "\nBounded corpus: 1000000 synthetic records, requested=${backend.maxRequested.get()}, initial search+UI=${elapsed}ms, heap=${Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()} bytes. Emulator measurement only.\n")
                 })
                 Ui.capture("quasar-search-reconnected")
+                Ui.click("Field"); Ui.waitText("100 GEO / 100 RECORDS")
+                Ui.click("LIST")
+                scenario.onActivity { activity ->
+                    val nodes = all(activity.window.decorView).toList()
+                    nodes.filterIsInstance<EditText>().single().setText("record 2")
+                    nodes.filterIsInstance<actor.starintel.quasar.field.FieldOpsView>().single().focusOn(51.502, -.118)
+                }
+                Ui.waitText("Fixture record 2")
+                scenario.recreate(); Ui.waitText("100 GEO / 100 RECORDS")
+                scenario.onActivity { activity ->
+                    val nodes = all(activity.window.decorView).toList()
+                    assertEquals("record 2", nodes.filterIsInstance<EditText>().single().text.toString())
+                    val list = nodes.filterIsInstance<RecyclerView>().single()
+                    assertTrue("Field list mode must survive recreation", list.isShown)
+                    assertEquals(11, list.adapter!!.itemCount)
+                    val state = nodes.filterIsInstance<actor.starintel.quasar.field.FieldOpsView>().single().saveWorkspace()
+                    assertEquals("fixture-2", state.getString("selected"))
+                    assertEquals(51.502, state.getDouble("latitude"), .000001)
+                }
+                Ui.capture("quasar-field-list-restored")
             }
         }
     }
