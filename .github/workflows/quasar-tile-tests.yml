@@ -1,0 +1,48 @@
+name: Quasar tile bounds
+on:
+  pull_request:
+    paths:
+      - 'quasar-app/src/main/java/actor/starintel/quasar/field/**'
+      - 'quasar-app/src/test/java/actor/starintel/quasar/field/**'
+      - 'quasar-app/src/androidTest/java/actor/starintel/quasar/field/**'
+      - '.github/workflows/quasar-tile-tests.yml'
+jobs:
+  tile-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and unit test Quasar
+        run: nix develop --no-update-lock-file --command gradle :quasar-app:testDebugUnitTest :quasar-app:assembleDebug :quasar-app:assembleDebugAndroidTest
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - name: Test tile transport and decoding on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            adb install -r quasar-app/build/outputs/apk/debug/quasar-app-debug.apk
+            adb install -r quasar-app/build/outputs/apk/androidTest/debug/quasar-app-debug-androidTest.apk
+            adb shell am instrument -w -e class actor.starintel.quasar.field.OpenMapTileRepositoryTest actor.starintel.quasar.test/androidx.test.runner.AndroidJUnitRunner | tee tile-instrumentation.log
+            grep -F 'OK (7 tests)' tile-instrumentation.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quasar-tile-results
+          path: |
+            tile-instrumentation.log
+            quasar-app/build/reports/tests/**
+            quasar-app/build/test-results/**
+          if-no-files-found: warn

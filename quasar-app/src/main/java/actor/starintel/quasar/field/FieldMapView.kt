@@ -167,6 +167,7 @@ internal class FieldMapView(context: Context) : View(context), AutoCloseable {
         val lastX = floor((left + width) / WebMercator.TILE_SIZE).toInt()
         val firstY = floor(top / WebMercator.TILE_SIZE).toInt()
         val lastY = floor((top + height) / WebMercator.TILE_SIZE).toInt()
+        tiles.setViewport(zoom, firstX..lastX, firstY..lastY)
         for (tileY in firstY..lastY) {
             for (tileX in firstX..lastX) {
                 val bitmap = tiles.tile(zoom, tileX, tileY) ?: continue
