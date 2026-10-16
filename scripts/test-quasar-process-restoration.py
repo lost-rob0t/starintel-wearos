@@ -33,6 +33,14 @@ adb('shell', 'input', 'keyevent', '111')
 before = nodes()
 assert any(n.get('text') == 'process-fixture' for n in before.iter('node'))
 ET.ElementTree(before).write(out/'process-before.xml')
+# Restore the open native drawer as well as the underlying route/query. This
+# script only runs for the redesigned app; older heads have no drawer control.
+has_drawer = any(n.get('content-desc') in ('Open navigation', 'Expand navigation') for n in before.iter('node'))
+if has_drawer:
+    tap(lambda n: n.get('content-desc') in ('Open navigation', 'Expand navigation'))
+    drawer_before = nodes()
+    assert any(n.get('text') == 'Your workspace' for n in drawer_before.iter('node'))
+    ET.ElementTree(drawer_before).write(out/'process-drawer-before.xml')
 pid_before = adb('shell', 'pidof', 'actor.starintel.quasar')
 adb('shell', 'input', 'keyevent', '3')
 time.sleep(1)  # Let Android save the stopped task state before killing its process.
@@ -41,8 +49,13 @@ time.sleep(1)
 assert not adb('shell', 'pidof', 'actor.starintel.quasar'), 'Background process did not die'
 launch()
 after = nodes()
+if has_drawer:
+    assert any(n.get('text') == 'Your workspace' for n in after.iter('node')), 'Open drawer lost after process death'
+    ET.ElementTree(after).write(out/'process-drawer-after.xml')
+    adb('shell', 'input', 'keyevent', '4')
+    after = nodes()
 assert any(n.get('text') == 'process-fixture' for n in after.iter('node')), 'Query/route lost after process death'
 pid_after = adb('shell', 'pidof', 'actor.starintel.quasar')
 assert pid_before != pid_after
 ET.ElementTree(after).write(out/'process-after.xml')
-(out/'process-restoration.txt').write_text(f'Background process death and task restore passed; PID {pid_before} -> {pid_after}. Query process-fixture retained. No PNG capture: production FLAG_SECURE remains enabled.\n')
+(out/'process-restoration.txt').write_text(f'Background process death and task restore passed; PID {pid_before} -> {pid_after}. Query process-fixture retained. Open drawer restored: {has_drawer}. No PNG capture: production FLAG_SECURE remains enabled.\n')

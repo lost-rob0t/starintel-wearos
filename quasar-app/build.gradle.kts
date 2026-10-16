@@ -43,6 +43,7 @@ dependencies {
     implementation(project(":starintel-design"))
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.recyclerview:recyclerview:1.4.0")
+    implementation("androidx.drawerlayout:drawerlayout:1.2.0")
     androidTestImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

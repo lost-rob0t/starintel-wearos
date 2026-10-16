@@ -26,6 +26,14 @@ class VisualFixtureJourneyTest {
             QuasarConfig(instrumentation.targetContext).save(backend.origin, "star_sk_v1_fixture")
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 Ui.waitText("Investigation desk"); Ui.capture("$label-home")
+                // The baseline has no side drawer. Keep this fixture source compatible
+                // with both revisions while capturing the new native navigation.
+                val navigation = Ui.device.findObject(androidx.test.uiautomator.UiSelector()
+                    .descriptionMatches("Open navigation|Expand navigation"))
+                if (navigation.exists()) {
+                    navigation.click(); Ui.waitText("Your workspace"); Ui.capture("$label-navigation")
+                    Ui.device.pressBack(); Ui.device.waitForIdle()
+                }
                 var primarySearch = false
                 scenario.onActivity { activity -> primarySearch = all(activity.window.decorView).any { it.tag == "Search" || it.contentDescription == "Primary destinations" } }
                 Ui.click(if (primarySearch) "Search" else "Documents")

@@ -33,6 +33,7 @@ class MainActivity : Activity() {
     private lateinit var viewport: FrameLayout
     private lateinit var progress: ProgressBar
     private lateinit var navigation: LinearLayout
+    private lateinit var sideNavigation: WorkspaceNavigation
     private val client by lazy { StarServerClient(this) }
     private val config by lazy { QuasarConfig(this) }
     private val drafts by lazy { WorkspaceDrafts(this) }
@@ -96,19 +97,17 @@ class MainActivity : Activity() {
         window.navigationBarColor = QuasarDesign.background
 
         val shell = LinearLayout(this).apply {
-            orientation = if (useRail) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+            orientation = LinearLayout.VERTICAL
             setBackgroundColor(QuasarDesign.background)
         }
         viewport = FrameLayout(this)
         shell.addView(
             viewport,
-            if (useRail) LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
-            else LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f),
         )
-        val nav = bottomNavigation()
-        if (useRail) shell.addView(nav, 0, LinearLayout.LayoutParams(dp(104), -1))
-        else shell.addView(nav, QuasarDesign.match())
-        QuasarDesign.install(this, shell)
+        if (!useRail) shell.addView(bottomNavigation(), QuasarDesign.match())
+        sideNavigation = WorkspaceNavigation(this, useRail, shell, sideDestinations(), savedInstanceState?.getBundle("sideNavigation"))
+        QuasarDesign.install(this, sideNavigation)
         restoreRoute(workspace.route)
         if (savedInstanceState == null) handleOperatorIntent(intent)
         if (android.os.Build.VERSION.SDK_INT >= 33) {
@@ -154,6 +153,7 @@ class MainActivity : Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         rememberView()
         outState.putBundle("workspace", workspace.save())
+        outState.putBundle("sideNavigation", sideNavigation.saveWorkspace())
         super.onSaveInstanceState(outState)
     }
 
@@ -161,6 +161,7 @@ class MainActivity : Activity() {
     override fun onBackPressed() = goBack()
 
     private fun goBack() {
+        if (sideNavigation.collapse()) return
         rememberView()
         val previous = workspace.back()
         if (previous == null) finish() else restoreRoute(previous)
@@ -819,11 +820,7 @@ class MainActivity : Activity() {
                 setCompoundDrawablesRelativeWithIntrinsicBounds(QuasarIcon("Home", QuasarDesign.cyan, dp(24)), null, null, null)
             }, LinearLayout.LayoutParams(0, -2, 1f))
             navigation.addView(QuasarDesign.action(this, "Menu") {
-                android.widget.PopupMenu(this, navigation.getChildAt(1)).apply {
-                    destinations.forEachIndexed { index, destination -> menu.add(0, index, index, destination.first) }
-                    setOnMenuItemClickListener { item -> destinations[item.itemId].second(); true }
-                    show()
-                }
+                sideNavigation.expand()
             }.apply { contentDescription = "Primary destinations" }, LinearLayout.LayoutParams(-2, -2))
             return navigation
         }
@@ -851,6 +848,8 @@ class MainActivity : Activity() {
     }
 
     private fun selectNavigation(selected: String) {
+        if (::sideNavigation.isInitialized) sideNavigation.select(workspace.route, selected)
+        if (!::navigation.isInitialized) return
         if (navigation.getChildAt(0)?.tag == "current-destination") {
             (navigation.getChildAt(0) as TextView).apply {
                 text = selected
@@ -875,6 +874,34 @@ class MainActivity : Activity() {
                 cornerRadius = dp(14).toFloat()
             }
         }
+    }
+
+    private fun sideDestinations(): List<WorkspaceNavigation.Destination> {
+        fun destination(route: String, label: String, group: String = "Workspace", action: () -> Unit) =
+            WorkspaceNavigation.Destination(route, label, group, action)
+        return listOf(
+            destination("home", "Home", action = ::showHome),
+            destination("field", "Field", action = ::showFieldOps),
+            destination("actors", "Actors", action = ::showActors),
+            destination("search", "Search") { showSearch("Documents", "*") },
+            destination("settings", "Settings", action = ::showSettings),
+            destination("datasets", "Datasets", "Tools") { showSearch("Datasets", "dtype:dataset") },
+            destination("create", "Add record", "Tools", ::showCreateDocument),
+            destination("import", "Import", "Tools", ::showImport),
+            destination("target:", "Targets", "Tools") { showTarget() },
+            destination("agent", "Reasoning agent", "Tools", ::showAgent),
+            destination("actor-editor", "Actor definitions", "Tools", ::showActorEditor),
+            destination("appearance", "Appearance", "Tools", ::showAppearance),
+            destination("workflows", "Workflow status", "Studios") {
+                startActivity(Intent(this, actor.starintel.quasar.workflows.WorkflowStatusActivity::class.java))
+            },
+            destination("logic", "Logic studio", "Studios") {
+                startActivity(Intent(this, actor.starintel.quasar.ide.LogicStudioActivity::class.java))
+            },
+            destination("flow", "Flow studio", "Studios") {
+                startActivity(Intent(this, actor.starintel.quasar.workflows.FlowStudioActivity::class.java))
+            },
+        )
     }
 
     private fun connectionText(): String {

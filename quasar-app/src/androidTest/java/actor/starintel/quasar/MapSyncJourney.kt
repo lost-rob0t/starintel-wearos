@@ -38,14 +38,14 @@ internal object MapSyncJourney {
                     val request = Thread.getAllStackTraces().keys.single { it.name == "quasar-geo-search" }
                     lateinit var oldStatus: TextView
                     scenario.onActivity { activity ->
-                        assertTrue("Direct map entry must select Field", descendants(activity.window.decorView).filterIsInstance<TextView>().single { it.text.toString() == "Field" }.isSelected)
+                        assertTrue("Direct map entry must select Field", descendants(activity.window.decorView).filterIsInstance<TextView>().first { it.tag == "Field" }.isSelected)
                         oldStatus = descendants(activity.window.decorView)
                             .filterIsInstance<TextView>().single { it.text.toString() == "SYNCING" }
                     }
                     when (destination) {
                         "Settings" -> scenario.onActivity { activity ->
                             descendants(activity.window.decorView).filterIsInstance<TextView>()
-                                .single { it.text.toString() == "Settings" }.performClick()
+                                .first { it.tag == "Settings" }.performClick()
                         }
                         "recreate" -> scenario.recreate()
                     }

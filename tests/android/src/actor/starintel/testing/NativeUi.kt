@@ -18,6 +18,10 @@ object NativeUi {
     fun click(text: String) {
         dismissFixtureLauncherAnr()
         val control = device.findObject(UiSelector().text(text))
+        if (text in setOf("Home", "Field", "Actors", "Search", "Settings") && !control.exists()) {
+            val rail = device.findObject(UiSelector().descriptionMatches(java.util.regex.Pattern.quote(text) + "(?:, selected)?"))
+            if (rail.exists()) { rail.click(); return }
+        }
         val destinations = device.findObject(UiSelector().description("Primary destinations"))
         if (text in setOf("Home", "Field", "Actors", "Search", "Settings") && !control.exists() && destinations.exists()) destinations.click()
         if (!control.waitForExists(1000)) UiScrollable(UiSelector().scrollable(true)).scrollTextIntoView(text)
