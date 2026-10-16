@@ -5,6 +5,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class StarServerClientTest {
+    @Test fun receiptDoesNotInventAcceptanceOrExecution() {
+        assertEquals(true, targetReceiptText(JSONObject("{}" )).contains("Acceptance and execution are unconfirmed"))
+        val receipt = JSONObject().put("target_id", "target-fixture").put("status", "duplicate")
+        assertEquals(true, targetReceiptText(receipt).contains("existing accepted request"))
+        assertEquals(true, targetReceiptText(receipt).contains("not tracked"))
+    }
+
     @Test
     fun searchRowPrefersEmbeddedDocumentIdentity() {
         val row = JSONObject("""{"doc":{"_id":"person:alice","dtype":"person"}}""")

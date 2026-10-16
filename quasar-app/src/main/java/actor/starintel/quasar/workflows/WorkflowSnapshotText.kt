@@ -10,7 +10,7 @@ internal object WorkflowSnapshotText {
         DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(epochMillis))
 
     fun lastRun(epochMillis: Long?): String =
-        if (epochMillis == null) "Never run" else "Last run ${absoluteTime(epochMillis)}"
+        if (epochMillis == null) "No run timestamp reported" else "Last run ${absoluteTime(epochMillis)}"
 
     fun describe(context: Context, state: WorkflowWidgetState, now: Long = System.currentTimeMillis()): String {
         val freshness = WorkflowSnapshotPolicy.freshness(state, now)

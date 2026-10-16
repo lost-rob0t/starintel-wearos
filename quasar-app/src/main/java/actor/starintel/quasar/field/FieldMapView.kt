@@ -34,7 +34,7 @@ internal class FieldMapView(context: Context) : View(context), AutoCloseable {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-        textSize = context.dp(10).toFloat()
+        textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 10f, resources.displayMetrics)
     }
     private var features: List<GeoFeature> = emptyList()
     private var selected: GeoFeature? = null
@@ -180,7 +180,7 @@ internal class FieldMapView(context: Context) : View(context), AutoCloseable {
     }
 
     private fun drawGrid(canvas: Canvas) {
-        paint.color = Color.rgb(30, 31, 38)
+        paint.color = QuasarDesign.border
         paint.strokeWidth = 1f
         val step = context.dp(48)
         var x = (width / 2) % step
@@ -197,7 +197,7 @@ internal class FieldMapView(context: Context) : View(context), AutoCloseable {
             if (active) {
                 paint.style = Paint.Style.STROKE
                 paint.strokeWidth = context.dp(2).toFloat()
-                paint.color = Color.WHITE
+                paint.color = QuasarDesign.text
                 canvas.drawCircle(point.first, point.second, radius + context.dp(6), paint)
             }
             paint.style = Paint.Style.FILL
@@ -223,7 +223,7 @@ internal class FieldMapView(context: Context) : View(context), AutoCloseable {
     }
 
     private fun drawCrosshair(canvas: Canvas) {
-        paint.color = Color.argb(180, 255, 255, 255)
+        paint.color = QuasarDesign.text
         paint.strokeWidth = 1f
         val arm = context.dp(8).toFloat()
         canvas.drawLine(width / 2f - arm, height / 2f, width / 2f + arm, height / 2f, paint)
@@ -231,8 +231,8 @@ internal class FieldMapView(context: Context) : View(context), AutoCloseable {
     }
 
     private fun drawAttribution(canvas: Canvas) {
-        labelPaint.textSize = context.dp(9).toFloat()
-        labelPaint.color = Color.argb(220, 230, 230, 230)
+        labelPaint.textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 9f, resources.displayMetrics)
+        labelPaint.color = QuasarDesign.text
         val attribution = sharedConfig.get(StarIntelSharedConfig.KEY_MAP_ATTRIBUTION, "StarIntel Maps")
         val label = "$attribution  ·  z$zoom"
         canvas.drawText(label, context.dp(8).toFloat(), height - context.dp(8).toFloat(), labelPaint)
@@ -254,6 +254,7 @@ internal class FieldMapView(context: Context) : View(context), AutoCloseable {
     private fun notifyViewport() = onViewportChanged(center, zoom)
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        parent.requestDisallowInterceptTouchEvent(event.actionMasked != MotionEvent.ACTION_UP && event.actionMasked != MotionEvent.ACTION_CANCEL)
         val scaleHandled = scales.onTouchEvent(event)
         val gestureHandled = gestures.onTouchEvent(event)
         return scaleHandled || gestureHandled || super.onTouchEvent(event)

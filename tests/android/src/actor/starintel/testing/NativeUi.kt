@@ -16,16 +16,69 @@ import java.io.File
 object NativeUi {
     val device get() = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     fun click(text: String) {
+        dismissFixtureLauncherAnr()
+        val drawerSelector = androidx.test.uiautomator.By.desc("Workspace destinations")
+        val drawer = device.findObject(drawerSelector)
+        if (drawer != null) {
+            var item = drawer.findObject(androidx.test.uiautomator.By.text(text))
+            if (item == null) {
+                UiScrollable(UiSelector().description("Workspace destinations")).scrollTextIntoView(text)
+                item = device.findObject(drawerSelector)?.findObject(androidx.test.uiautomator.By.text(text))
+            }
+            checkNotNull(item) { "Missing drawer control: $text" }.click()
+            return
+        }
         val control = device.findObject(UiSelector().text(text))
+        if (text in setOf("Home", "Field", "Actors", "Search", "Settings") && !control.exists()) {
+            val rail = device.findObject(UiSelector().descriptionMatches(java.util.regex.Pattern.quote(text) + "(?:, selected)?"))
+            if (rail.exists()) { rail.click(); return }
+        }
+        val destinations = device.findObject(UiSelector().description("Primary destinations"))
+        if (text in setOf("Home", "Field", "Actors", "Search", "Settings") && !control.exists() && destinations.exists()) destinations.click()
         if (!control.waitForExists(1000)) UiScrollable(UiSelector().scrollable(true)).scrollTextIntoView(text)
         check(control.waitForExists(10000)) { "Missing control: $text" }
         control.click()
     }
     fun waitText(text: String) {
+        dismissFixtureLauncherAnr()
         if (!device.findObject(UiSelector().textContains(text)).waitForExists(10000)) {
-            runCatching { reportWaitFailure(text) }
-            error("Missing state: $text")
+            dismissFixtureLauncherAnr()
+            if (!device.findObject(UiSelector().textContains(text)).waitForExists(2000)) {
+                runCatching { reportWaitFailure(text) }
+                error("Missing state: $text")
+            }
         }
+    }
+
+    /** Same bounded external-launcher repair as the existing widget fixture. Never dismiss app failures. */
+    private fun dismissFixtureLauncherAnr() {
+        val dialog = device.findObject(UiSelector().text("Pixel Launcher isn't responding"))
+        if (!dialog.exists()) return
+        check(device.executeShellCommand("getprop ro.kernel.qemu").trim() == "1") { "Launcher repair requires a disposable emulator" }
+        val close = device.findObject(UiSelector().resourceId("android:id/aerr_close"))
+        check(close.exists()) { "Named launcher error has no close control" }
+        close.click()
+        check(dialog.waitUntilGone(5000)) { "Launcher error remained visible" }
+        InstrumentationRegistry.getInstrumentation().sendStatus(0, android.os.Bundle().apply {
+            putString("stream", "\nDismissed the disposable emulator's named Pixel Launcher ANR; app errors remain fatal.\n")
+        })
+    }
+
+    /** The IME is a separate window and may own focus in landscape; record the visible compositor. */
+    fun captureKeyboard(name: String) {
+        dismissFixtureLauncherAnr()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val ime = android.provider.Settings.Secure.getString(context.contentResolver,
+            android.provider.Settings.Secure.DEFAULT_INPUT_METHOD).orEmpty().substringBefore('/')
+        val active = instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString()
+        check(active == context.packageName || active == ime) { "Unexpected window over fixture keyboard: $active" }
+        val directory = File(context.getExternalFilesDir(null), "e2e").apply { mkdirs() }
+        val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+        File(directory, "$name.png").outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        bitmap.recycle()
+        device.dumpWindowHierarchy(File(directory, "$name.xml"))
+        File(directory, "$name.capture.txt").writeText("Compositor capture of the synthetic IME/window state; PixelCopy cannot include a separate IME window.\n")
     }
 
     /** Fixture-only diagnostics run before ActivityScenario tears down the failed window. */
@@ -91,12 +144,18 @@ object NativeUi {
     }
     fun field(index: Int, value: String) { device.findObject(UiSelector().className("android.widget.EditText").instance(index)).setText(value) }
     fun fieldName(label: String, value: String) {
+        dismissFixtureLauncherAnr()
         val field = device.findObject(UiSelector().description(label))
-        if (!field.exists()) UiScrollable(UiSelector().scrollable(true)).scrollDescriptionIntoView(label)
+        if (!field.waitForExists(3000)) {
+            val scroll = UiScrollable(UiSelector().scrollable(true))
+            if (scroll.exists()) scroll.scrollDescriptionIntoView(label)
+        }
+        check(field.waitForExists(10000)) { "Missing input: $label" }
         field.setText(value)
         device.executeShellCommand("input keyevent 111")
     }
     fun capture(name: String) {
+        dismissFixtureLauncherAnr()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         // Read the resumed activity's actual rendered window, not a compositor frame
         // that may still belong to the previous activity or its secure surface.
@@ -105,9 +164,23 @@ object NativeUi {
         check(device.wait(androidx.test.uiautomator.Until.hasObject(
             androidx.test.uiautomator.By.pkg(targetPackage).depth(0)), 10_000)) { "Fixture window is not foreground: $name" }
         check(instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == targetPackage)
+        // Accessibility can expose a newly resumed activity before WindowManager
+        // transfers focus. Wait for readiness without relaunching or replaying actions.
+        var focused: android.app.Activity? = null
+        val focusDeadline = android.os.SystemClock.uptimeMillis() + 10_000
+        while (focused == null && android.os.SystemClock.uptimeMillis() < focusDeadline) {
+            instrumentation.runOnMainSync {
+                focused = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).singleOrNull()
+                    ?.takeIf { it.hasWindowFocus() && it.window.decorView.isAttachedToWindow }
+            }
+            if (focused == null) Thread.sleep(100)
+        }
+        check(focused != null) { "Fixture activity did not receive focus within 10s: $name" }
+        // A committed app frame does not mean SystemUI finished its launch-window
+        // handoff. Require a quiet UI before capturing the app and system bars.
+        instrumentation.uiAutomation.waitForIdle(500, 5_000)
         val committed = CountDownLatch(1)
-        val copied = CountDownLatch(1)
-        val copyResult = AtomicInteger(-1)
         lateinit var activity: android.app.Activity
         lateinit var screenshot: Bitmap
         instrumentation.runOnMainSync {
@@ -122,28 +195,73 @@ object NativeUi {
             decor.invalidate()
         }
         check(committed.await(10, TimeUnit.SECONDS)) { "No committed fixture frame: $name" }
-        instrumentation.runOnMainSync {
-            check(activity in androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
-                .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED)) { "Fixture activity changed: $name" }
-            check(activity.hasWindowFocus()) { "Fixture activity lost focus: $name" }
-            val decor = activity.window.decorView
-            screenshot = Bitmap.createBitmap(decor.width, decor.height, Bitmap.Config.ARGB_8888)
-            PixelCopy.request(activity.window, screenshot, { result ->
-                copyResult.set(result)
-                copied.countDown()
-            }, Handler(Looper.getMainLooper()))
+        fun copyFrame(): Bitmap {
+            val copied = CountDownLatch(1)
+            val copyResult = AtomicInteger(-1)
+            lateinit var frame: Bitmap
+            instrumentation.runOnMainSync {
+                check(activity in androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED)) { "Fixture activity changed: $name" }
+                check(activity.hasWindowFocus()) { "Fixture activity lost focus: $name" }
+                val decor = activity.window.decorView
+                frame = Bitmap.createBitmap(decor.width, decor.height, Bitmap.Config.ARGB_8888)
+                PixelCopy.request(activity.window, frame, { result ->
+                    copyResult.set(result); copied.countDown()
+                }, Handler(Looper.getMainLooper()))
+            }
+            check(copied.await(10, TimeUnit.SECONDS)) { "Fixture window copy timed out: $name" }
+            check(copyResult.get() == PixelCopy.SUCCESS) { "Fixture window copy failed: ${copyResult.get()} ($name)" }
+            return frame
         }
-        check(copied.await(10, TimeUnit.SECONDS)) { "Fixture window copy timed out: $name" }
-        check(copyResult.get() == PixelCopy.SUCCESS) { "Fixture window copy failed: ${copyResult.get()} ($name)" }
+        screenshot = copyFrame()
         val context = instrumentation.targetContext
         val directory = File(context.getExternalFilesDir(null), "e2e").apply { mkdirs() }
+        check(instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == targetPackage) {
+            "Fixture lost the active window before hierarchy capture: $name"
+        }
+        val hierarchy = File(directory, "$name.xml")
+        // Supplemental compositor evidence covers the actual keyboard and system bars.
+        // The fixture-only secure-flag override above is already committed to a frame.
+        // Window frame commitment can precede SurfaceFlinger applying the test-only
+        // secure flag transaction. Require the compositor to contain this frame,
+        // rather than saving a black protected surface as valid evidence.
+        val deadline = android.os.SystemClock.uptimeMillis() + 10_000
+        var system: Bitmap
+        while (true) {
+            system = checkNotNull(instrumentation.uiAutomation.takeScreenshot()) { "No fixture compositor frame: $name" }
+            var matched = 0
+            var sampled = 0
+            if (system.width == screenshot.width && system.height == screenshot.height) {
+                for (y in screenshot.height / 4 until screenshot.height * 3 / 4 step 16) {
+                    for (x in screenshot.width / 4 until screenshot.width * 3 / 4 step 16) {
+                        val expected = screenshot.getPixel(x, y)
+                        val actual = system.getPixel(x, y)
+                        if (kotlin.math.abs(android.graphics.Color.red(expected) - android.graphics.Color.red(actual)) < 16 &&
+                            kotlin.math.abs(android.graphics.Color.green(expected) - android.graphics.Color.green(actual)) < 16 &&
+                            kotlin.math.abs(android.graphics.Color.blue(expected) - android.graphics.Color.blue(actual)) < 16) matched++
+                        sampled++
+                    }
+                }
+            }
+            if (sampled > 0 && matched.toDouble() / sampled >= 0.9) break
+            system.recycle()
+            check(android.os.SystemClock.uptimeMillis() < deadline) { "Compositor did not show the fixture frame: $name" }
+            android.os.SystemClock.sleep(50)
+            // A read-only screen can finish loading while capture is in progress.
+            // Compare against its current window, not an obsolete loading frame.
+            screenshot.recycle()
+            screenshot = copyFrame()
+        }
         File(directory, "$name.png").outputStream().use {
             check(screenshot.compress(Bitmap.CompressFormat.PNG, 100, it))
         }
         screenshot.recycle()
-        check(instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == targetPackage) {
-            "Fixture lost the active window before hierarchy capture: $name"
+        File(directory, "$name-system.png").outputStream().use {
+            check(system.compress(Bitmap.CompressFormat.PNG, 100, it))
         }
-        device.dumpWindowHierarchy(File(directory, "$name.xml"))
+        system.recycle()
+        check(instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == targetPackage)
+        device.dumpWindowHierarchy(hierarchy)
+        hierarchy.copyTo(File(directory, "$name-system.xml"), overwrite = true)
     }
 }
