@@ -56,6 +56,8 @@ internal class FieldOpsView(
     private var selected: GeoFeature? = null
     private var fieldCenter = GeoPoint(0.0, 0.0)
     private var syncingSelection = false
+    private lateinit var mapControls: LinearLayout
+    private lateinit var mapReadout: LinearLayout
 
     init {
         orientation = VERTICAL
@@ -64,7 +66,10 @@ internal class FieldOpsView(
             orientation = VERTICAL
             addView(commandBar(), match())
             addView(layerBar(), match())
+            addView(count.apply { setPadding(context.dp(12), context.dp(4), context.dp(12), context.dp(4)) }, match())
             addView(surface(), LayoutParams(-1, context.dp(maxOf(200, resources.configuration.screenHeightDp - 360))))
+            mapReadout = readout()
+            addView(mapReadout, match())
             addView(detail, match())
         }
         addView(ScrollView(context).apply { isFillViewport = true; addView(content) }, LayoutParams(-1, -1))
@@ -79,7 +84,7 @@ internal class FieldOpsView(
         map.onSelectionChanged = { feature -> select(feature, fromMap = true) }
         map.onBasemapChanged = { state ->
             mapStatus.text = state.label
-            mapStatus.setTextColor(if (state == BasemapState.ONLINE) QuasarDesign.lime else if (state == BasemapState.CACHED_ONLY) QuasarDesign.amber else QuasarDesign.coral)
+            QuasarDesign.stylePill(context, mapStatus, if (state == BasemapState.ONLINE) QuasarDesign.lime else if (state == BasemapState.CACHED_ONLY) QuasarDesign.amber else QuasarDesign.coral)
         }
         graph.onSelectionChanged = { feature -> select(feature, fromGraph = true) }
         search.addTextChangedListener(object : TextWatcher {
@@ -144,13 +149,13 @@ internal class FieldOpsView(
 
     fun setDataStatus(label: String, ready: Boolean) {
         dataStatus.text = label
-        dataStatus.setTextColor(if (ready) QuasarDesign.lime else QuasarDesign.amber)
+        QuasarDesign.stylePill(context, dataStatus, if (ready) QuasarDesign.lime else QuasarDesign.amber)
     }
 
     fun showDataError(label: String) {
         dataStatus.text = if (allFeatures.isEmpty()) "DATA UNAVAILABLE" else "REFRESH FAILED"
         notice.text = if (allFeatures.isEmpty()) "No records loaded. Check connection or permissions, then Sync." else "Refresh failed; previous snapshot retained. $label Tap Sync to retry."
-        dataStatus.setTextColor(QuasarDesign.coral)
+        QuasarDesign.stylePill(context, dataStatus, QuasarDesign.coral)
         if (allFeatures.isEmpty()) {
             detail.removeAllViews()
             detail.addView(QuasarDesign.eyebrow(context, "NO GEO DATA", QuasarDesign.coral))
@@ -214,31 +219,28 @@ internal class FieldOpsView(
         addView(graph, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT).apply {
             graph.visibility = View.GONE
         })
-        addView(LinearLayout(context).apply {
+        mapControls = LinearLayout(context).apply {
             orientation = VERTICAL
             addView(squareControl("+", "Zoom in") { map.zoomIn() })
             addView(squareControl("−", "Zoom out") { map.zoomOut() }, QuasarDesign.match(top = context.dp(5)))
             addView(squareControl("◎", "Recenter selected document") { map.recenterSelection() }, QuasarDesign.match(top = context.dp(5)))
-        }, FrameLayout.LayoutParams(context.dp(48), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
+        }
+        addView(mapControls, FrameLayout.LayoutParams(context.dp(48), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
             topMargin = context.dp(12)
             marginEnd = context.dp(12)
         })
-        addView(LinearLayout(context).apply {
-            orientation = VERTICAL
-            gravity = Gravity.START
-            setPadding(context.dp(10), context.dp(7), context.dp(10), context.dp(7))
-            setBackgroundColor(QuasarDesign.panel)
-            addView(coordinate, match())
-            addView(zoomReadout)
-            addView(mapStatus)
-            addView(count, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                marginStart = context.dp(10)
-            })
-        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
-            marginStart = context.dp(8)
-            marginEnd = context.dp(8)
-            bottomMargin = context.dp(28)
+        addView(mapStatus, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START).apply {
+            topMargin = context.dp(12)
+            marginStart = context.dp(12)
         })
+    }
+
+    private fun readout() = LinearLayout(context).apply {
+        orientation = VERTICAL
+        setPadding(context.dp(12), context.dp(8), context.dp(12), context.dp(8))
+        setBackgroundColor(QuasarDesign.panel)
+        addView(coordinate, match())
+        addView(zoomReadout, QuasarDesign.match(top = context.dp(4)))
     }
 
     private fun applyFilter() {
@@ -251,7 +253,7 @@ internal class FieldOpsView(
         }
         map.setFeatures(visible)
         graph.setFeatures(visible)
-        count.text = "${visible.size} GEO DOC${if (visible.size == 1) "" else "S"}"
+        count.text = "${visible.size} MATCHING GEO"
         selected?.takeIf { it !in visible }?.let { select(null) }
     }
 
@@ -303,6 +305,7 @@ internal class FieldOpsView(
 
     private fun showMap() {
         mode = "map"
+        mapControls.visibility = View.VISIBLE; mapReadout.visibility = View.VISIBLE; mapStatus.visibility = View.VISIBLE
         map.visibility = View.VISIBLE
         list.visibility = View.GONE
         graph.visibility = View.GONE
@@ -313,6 +316,7 @@ internal class FieldOpsView(
 
     private fun showGraph() {
         mode = "links"
+        mapControls.visibility = View.GONE; mapReadout.visibility = View.GONE; mapStatus.visibility = View.GONE
         map.visibility = View.GONE
         list.visibility = View.GONE
         graph.visibility = View.VISIBLE
@@ -323,6 +327,7 @@ internal class FieldOpsView(
 
     private fun showList() {
         mode = "list"
+        mapControls.visibility = View.GONE; mapReadout.visibility = View.GONE; mapStatus.visibility = View.GONE
         map.visibility = View.GONE; graph.visibility = View.GONE; list.visibility = View.VISIBLE
         styleCompact(listMode, true); styleCompact(mapMode, false); styleCompact(graphMode, false)
     }
@@ -359,6 +364,7 @@ internal class FieldOpsView(
 
     private fun squareControl(label: String, description: String, action: () -> Unit) = compactControl(label, active = true).apply {
         textSize = 20f
+        setPadding(0, 0, 0, 0)
         contentDescription = description
         setOnClickListener { action() }
         layoutParams = LayoutParams(context.dp(48), context.dp(48))

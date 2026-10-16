@@ -184,7 +184,6 @@ object NativeUi {
         File(directory, "$name.png").outputStream().use {
             check(screenshot.compress(Bitmap.CompressFormat.PNG, 100, it))
         }
-        screenshot.recycle()
         check(instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == targetPackage) {
             "Fixture lost the active window before hierarchy capture: $name"
         }
@@ -192,7 +191,33 @@ object NativeUi {
         device.dumpWindowHierarchy(hierarchy)
         // Supplemental compositor evidence covers the actual keyboard and system bars.
         // The fixture-only secure-flag override above is already committed to a frame.
-        val system = checkNotNull(instrumentation.uiAutomation.takeScreenshot()) { "No fixture compositor frame: $name" }
+        // Window frame commitment can precede SurfaceFlinger applying the test-only
+        // secure flag transaction. Require the compositor to contain this frame,
+        // rather than saving a black protected surface as valid evidence.
+        val deadline = android.os.SystemClock.uptimeMillis() + 10_000
+        var system: Bitmap
+        while (true) {
+            system = checkNotNull(instrumentation.uiAutomation.takeScreenshot()) { "No fixture compositor frame: $name" }
+            var matched = 0
+            var sampled = 0
+            if (system.width == screenshot.width && system.height == screenshot.height) {
+                for (y in screenshot.height / 4 until screenshot.height * 3 / 4 step 16) {
+                    for (x in screenshot.width / 4 until screenshot.width * 3 / 4 step 16) {
+                        val expected = screenshot.getPixel(x, y)
+                        val actual = system.getPixel(x, y)
+                        if (kotlin.math.abs(android.graphics.Color.red(expected) - android.graphics.Color.red(actual)) < 16 &&
+                            kotlin.math.abs(android.graphics.Color.green(expected) - android.graphics.Color.green(actual)) < 16 &&
+                            kotlin.math.abs(android.graphics.Color.blue(expected) - android.graphics.Color.blue(actual)) < 16) matched++
+                        sampled++
+                    }
+                }
+            }
+            if (sampled > 0 && matched.toDouble() / sampled >= 0.9) break
+            system.recycle()
+            check(android.os.SystemClock.uptimeMillis() < deadline) { "Compositor did not show the fixture frame: $name" }
+            android.os.SystemClock.sleep(50)
+        }
+        screenshot.recycle()
         File(directory, "$name-system.png").outputStream().use {
             check(system.compress(Bitmap.CompressFormat.PNG, 100, it))
         }
