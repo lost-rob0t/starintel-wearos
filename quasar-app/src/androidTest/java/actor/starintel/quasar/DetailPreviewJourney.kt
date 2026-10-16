@@ -19,25 +19,36 @@ internal object DetailPreviewJourney {
             }
         }
         fun click(label: String) = inspect { _, texts -> texts.single { it.text.toString() == label }.performClick() }
+        fun awaitPreview(label: String) {
+            // Preview can be below the fold; observe the wired view on the UI thread,
+            // rather than relying on accessibility exposing off-screen TextViews.
+            val deadline = android.os.SystemClock.uptimeMillis() + 5000
+            var ready = false
+            while (!ready && android.os.SystemClock.uptimeMillis() < deadline) {
+                inspect { _, texts -> ready = texts.any { it.isShown && it.text.startsWith(label) } }
+                if (!ready) Thread.sleep(25)
+            }
+            assertTrue("Missing preview state: $label", ready)
+        }
         fun collapsed() = inspect { _, texts ->
             assertFalse(texts.any { it.isShown && (it.text.startsWith("Complete raw preview") || it.text.startsWith("Partial preview:")) })
             assertFalse(texts.any { it.isShown && it.text.contains("\"document\"") })
         }
         collapsed()
-        click("Raw JSON"); Ui.waitText("Complete raw preview.")
+        click("Raw JSON"); awaitPreview("Complete raw preview.")
         inspect { _, texts -> assertTrue(texts.any { it.isShown && it.text.contains("\"document\"") }) }
         click("Raw JSON"); collapsed()
-        click("Structured fields"); Ui.waitText("Structured field preview.")
+        click("Structured fields"); awaitPreview("Structured field preview.")
         inspect { _, texts -> assertTrue(texts.any { it.isShown && it.text.contains("\"name\": \"Fixture record 0\"") }) }
         backend.detailPadding = 256 * 1024
         try {
             scenario.recreate(); Ui.waitText("Synthetic field exercise"); collapsed()
-            click("Raw JSON"); Ui.waitText("Partial preview:")
+            click("Raw JSON"); awaitPreview("Partial preview:")
             inspect { _, texts ->
                 assertTrue(texts.filter { it.isShown }.all { it.text.length <= RecordDetailPreview.MAX_CHARS })
                 assertTrue(texts.any { it.isShown && it.text.length == RecordDetailPreview.MAX_CHARS })
             }
-            click("Structured fields"); Ui.waitText("Partial preview:")
+            click("Structured fields"); awaitPreview("Partial preview:")
             inspect { _, texts -> assertTrue(texts.filter { it.isShown }.all { it.text.length <= RecordDetailPreview.MAX_CHARS }) }
             click("Structured fields"); collapsed()
             Ui.capture("quasar-detail-bounded-collapsed")
