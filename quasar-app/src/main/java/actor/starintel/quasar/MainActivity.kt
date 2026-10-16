@@ -208,7 +208,7 @@ class MainActivity : Activity() {
                     input.setText(value); input.setSelection((selections.getOrNull(i) ?: value.length).coerceAtMost(value.length))
                 }
             }
-            (root as? ScrollView)?.scrollTo(0, state.getInt("scroll"))
+            // ScrollView restoration waits for asynchronous content in screen().
         }
     }
 
@@ -702,6 +702,24 @@ class MainActivity : Activity() {
         body.addView(QuasarDesign.body(this, description), QuasarDesign.match(top = dp(8)))
 
         val scroll = ScrollView(this).apply { isFillViewport = true; addView(body) }
+        val savedScroll = workspace.views.getBundle(workspace.route)?.getInt("scroll") ?: 0
+        if (savedScroll > 0) {
+            var pending = true
+            var applying = false
+            scroll.setOnScrollChangeListener(View.OnScrollChangeListener { _, _, _, _, _ ->
+                if (!applying) pending = false
+            })
+            scroll.viewTreeObserver.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+                override fun onGlobalLayout() {
+                    if (!pending) { scroll.viewTreeObserver.removeOnGlobalLayoutListener(this); return }
+                    if (body.height - scroll.height >= savedScroll) {
+                        applying = true; scroll.scrollTo(0, savedScroll); applying = false
+                        pending = false
+                        scroll.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                    }
+                }
+            })
+        }
         viewport.addView(scroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         progress = ProgressBar(this).apply { visibility = View.GONE; isIndeterminate = true }
         viewport.addView(

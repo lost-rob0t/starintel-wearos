@@ -29,6 +29,13 @@ internal data class DocumentRow(val id: String, val title: String, val kind: Str
 
 internal class DocumentRows(private val onSelect: (DocumentRow) -> Unit) : ListAdapter<DocumentRow, DocumentRows.Holder>(Diff) {
     var selectedId: String? = null
+        set(value) {
+            if (field == value) return
+            val previous = field
+            field = value
+            currentList.indexOfFirst { it.id == previous }.takeIf { it >= 0 }?.let { notifyItemChanged(it) }
+            currentList.indexOfFirst { it.id == value }.takeIf { it >= 0 }?.let { notifyItemChanged(it) }
+        }
     class Holder(val row: LinearLayout, val title: TextView, val meta: TextView, val summary: TextView) : RecyclerView.ViewHolder(row)
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
         val context = parent.context
@@ -54,7 +61,7 @@ internal class DocumentRows(private val onSelect: (DocumentRow) -> Unit) : ListA
         holder.summary.visibility = if (item.summary.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
         holder.row.isSelected = item.id == selectedId
         holder.row.contentDescription = "${item.title}. ${item.kind}. ${item.id}${if (item.id == selectedId) ". Selected" else ""}"
-        holder.row.setOnClickListener { onSelect(item) }
+        holder.row.setOnClickListener { selectedId = item.id; onSelect(item) }
     }
     private object Diff : DiffUtil.ItemCallback<DocumentRow>() {
         override fun areItemsTheSame(oldItem: DocumentRow, newItem: DocumentRow) = oldItem.id == newItem.id
