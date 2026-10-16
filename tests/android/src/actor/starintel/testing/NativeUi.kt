@@ -149,6 +149,19 @@ object NativeUi {
         check(device.wait(androidx.test.uiautomator.Until.hasObject(
             androidx.test.uiautomator.By.pkg(targetPackage).depth(0)), 10_000)) { "Fixture window is not foreground: $name" }
         check(instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == targetPackage)
+        // Accessibility can expose a newly resumed activity before WindowManager
+        // transfers focus. Wait for readiness without relaunching or replaying actions.
+        var focused: android.app.Activity? = null
+        val focusDeadline = android.os.SystemClock.uptimeMillis() + 10_000
+        while (focused == null && android.os.SystemClock.uptimeMillis() < focusDeadline) {
+            instrumentation.runOnMainSync {
+                focused = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).singleOrNull()
+                    ?.takeIf { it.hasWindowFocus() && it.window.decorView.isAttachedToWindow }
+            }
+            if (focused == null) Thread.sleep(100)
+        }
+        check(focused != null) { "Fixture activity did not receive focus within 10s: $name" }
         val committed = CountDownLatch(1)
         lateinit var activity: android.app.Activity
         lateinit var screenshot: Bitmap
