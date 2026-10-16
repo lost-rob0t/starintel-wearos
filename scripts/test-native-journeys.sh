@@ -28,6 +28,11 @@ for package in actor.starintel.operator actor.starintel.quasar actor.starintel.w
   timeout 30 adb wait-for-device
   adb pull "/sdcard/Android/data/$package/files/e2e" "build/native-journeys/$package" || result=1
 done
+# Exercise the real editor filter, spans and recreation in its own bounded journey.
+editor_log="build/native-journeys/logic-editor.log"
+adb shell am instrument -w -e class actor.starintel.quasar.ide.LogicEditorJourneyTest \
+  actor.starintel.quasar.test/androidx.test.runner.AndroidJUnitRunner | tee "$editor_log"
+if ! grep -Fq 'OK (1 test)' "$editor_log"; then result=1; fi
 # Keep crash diagnostics readable even when artifact downloads are unavailable.
 adb logcat -d -b crash | tee build/native-journeys/crashes.log
 # Only explicitly named synthetic fixture screens enter the bounded log fallback.
