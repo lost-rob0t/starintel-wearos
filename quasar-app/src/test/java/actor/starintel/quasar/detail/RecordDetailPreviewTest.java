@@ -13,7 +13,7 @@ public class RecordDetailPreviewTest {
         @Override public String toString(int indent) { throw new AssertionError("Whole object serialized"); }
     }
 
-    @Test public void largeStringHasBoundedOutputAndScanWork() {
+    @Test public void largeStringHasBoundedOutputAndScanWork() throws Exception {
         JSONObject root = new NoSerialization().put("huge", "x".repeat(2_097_152));
         RecordDetailPreview.Result result = RecordDetailPreview.raw(root, () -> false);
         assertTrue(result.truncated);
@@ -22,7 +22,7 @@ public class RecordDetailPreviewTest {
         assertTrue(result.visitedNodes <= RecordDetailPreview.MAX_NODES);
     }
 
-    @Test public void deepInputDoesNotRecursePastBudget() {
+    @Test public void deepInputDoesNotRecursePastBudget() throws Exception {
         JSONObject root = new NoSerialization();
         JSONObject cursor = root;
         for (int i = 0; i < 10000; i++) {
@@ -34,7 +34,7 @@ public class RecordDetailPreviewTest {
         assertEquals(RecordDetailPreview.MAX_DEPTH + 1, result.visitedNodes);
     }
 
-    @Test public void arrayTraversalStopsAtNodeLimit() {
+    @Test public void arrayTraversalStopsAtNodeLimit() throws Exception {
         AtomicInteger reads = new AtomicInteger();
         JSONArray virtualMillion = new JSONArray() {
             @Override public int length() { return 1_000_000; }
@@ -48,7 +48,7 @@ public class RecordDetailPreviewTest {
         assertTrue(reads.get() <= RecordDetailPreview.MAX_NODES);
     }
 
-    @Test public void fieldsShareOneOutputBudget() {
+    @Test public void fieldsShareOneOutputBudget() throws Exception {
         JSONObject root = new NoSerialization();
         for (int i = 0; i < 1000; i++) root.put("field" + i, new NoSerialization().put("large", "x".repeat(4096)));
         RecordDetailPreview.Result result = RecordDetailPreview.fields(root, () -> false);
@@ -57,7 +57,7 @@ public class RecordDetailPreviewTest {
         assertTrue(result.scannedCharacters <= RecordDetailPreview.MAX_CHARS);
     }
 
-    @Test public void fieldsAlsoHaveCountLimit() {
+    @Test public void fieldsAlsoHaveCountLimit() throws Exception {
         JSONObject root = new NoSerialization();
         for (int i = 0; i < 1000; i++) root.put("f" + i, i);
         RecordDetailPreview.Result result = RecordDetailPreview.fields(root, () -> false);
@@ -65,7 +65,7 @@ public class RecordDetailPreviewTest {
         assertEquals(RecordDetailPreview.MAX_FIELDS, result.visitedNodes);
     }
 
-    @Test public void completeSmallJsonEscapesAndRoundTrips() {
+    @Test public void completeSmallJsonEscapesAndRoundTrips() throws Exception {
         JSONObject root = new NoSerialization().put("text", "\"\\\n\r\t\u0000😀").put("null", JSONObject.NULL)
             .put("number", 12).put("array", new JSONArray().put(true));
         RecordDetailPreview.Result result = RecordDetailPreview.raw(root, () -> false);
@@ -76,7 +76,7 @@ public class RecordDetailPreviewTest {
         assertTrue(parsed.getJSONArray("array").getBoolean(0));
     }
 
-    @Test public void absentAndContainerSummaryNeverSerialize() {
+    @Test public void absentAndContainerSummaryNeverSerialize() throws Exception {
         JSONObject root = new NoSerialization().put("summary", new NoSerialization()).put("title", "abcdef");
         assertEquals("", RecordDetailPreview.scalar(root, "absent", 100));
         assertEquals("", RecordDetailPreview.scalar(root, "summary", 100));
@@ -84,12 +84,12 @@ public class RecordDetailPreviewTest {
         assertEquals("No structured fields supplied.", RecordDetailPreview.fields(new JSONObject(), () -> false).text);
     }
 
-    @Test(expected = CancellationException.class) public void cancellationInterruptsStringWork() {
+    @Test(expected = CancellationException.class) public void cancellationInterruptsStringWork() throws Exception {
         AtomicInteger checks = new AtomicInteger();
         RecordDetailPreview.raw(new JSONObject().put("large", "x".repeat(100000)), () -> checks.incrementAndGet() > 100);
     }
 
-    @Test public void arbitraryScalarToStringIsNeverCalled() {
+    @Test public void arbitraryScalarToStringIsNeverCalled() throws Exception {
         JSONObject root = new JSONObject().put("value", new Object() {
             @Override public String toString() { throw new AssertionError(); }
         });
