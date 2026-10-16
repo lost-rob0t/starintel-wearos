@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.StateListDrawable
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
@@ -122,7 +123,7 @@ internal object QuasarDesign {
             textSize = 14f
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             gravity = Gravity.CENTER
-            setTextColor(if (primary) onAccent else QuasarDesign.text)
+            setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(muted, if (primary) onAccent else QuasarDesign.text)))
             accessibilityDelegate = object : View.AccessibilityDelegate() {
                 override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
                     super.onInitializeAccessibilityNodeInfo(host, info)
@@ -188,7 +189,12 @@ internal object QuasarDesign {
             typeface = Typeface.MONOSPACE
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         }
-        background = rounded(panelRaised, QuasarPalette.mix(border, panelRaised, .25), context.dp(12).toFloat())
+        highlightColor = Color.argb(42, Color.red(cyan), Color.green(cyan), Color.blue(cyan))
+        if (android.os.Build.VERSION.SDK_INT >= 29) textCursorDrawable = textCursorDrawable?.mutate()?.apply { setTint(cyan) }
+        background = StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), rounded(panelRaised, cyan, context.dp(12).toFloat()).apply { setStroke(context.dp(2), cyan) })
+            addState(intArrayOf(), rounded(panelRaised, QuasarPalette.mix(border, panelRaised, .25), context.dp(12).toFloat()))
+        }
     }
 
     fun match(top: Int = 0, bottom: Int = 0) = LinearLayout.LayoutParams(
@@ -208,7 +214,10 @@ internal object QuasarDesign {
 
     private fun ripple(context: Context, fill: Int, stroke: Int, radius: Float) = RippleDrawable(
         ColorStateList.valueOf(Color.argb(45, 255, 255, 255)),
-        rounded(fill, stroke, radius),
+        StateListDrawable().apply {
+            addState(intArrayOf(-android.R.attr.state_enabled), rounded(panelRaised, QuasarPalette.mix(border, panelRaised, .6), radius))
+            addState(intArrayOf(), rounded(fill, stroke, radius))
+        },
         null,
     )
 }
