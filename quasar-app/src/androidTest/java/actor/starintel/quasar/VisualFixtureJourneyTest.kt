@@ -27,7 +27,7 @@ class VisualFixtureJourneyTest {
                 }
                 Ui.waitText("Fixture record 0"); Ui.capture("$label-search")
                 Ui.click("Fixture record 0")
-                Ui.waitText("Synthetic observation"); Ui.capture("$label-document")
+                Ui.waitText("Synthetic field exercise"); Ui.capture("$label-document")
                 Ui.click("Field"); Ui.waitText("Quasar tactical")
                 // Wait for the snapshot, rather than screenshotting the in-flight spinner.
                 val end = System.currentTimeMillis() + 10_000

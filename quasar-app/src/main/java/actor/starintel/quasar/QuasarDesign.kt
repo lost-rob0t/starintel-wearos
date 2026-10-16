@@ -21,6 +21,7 @@ internal object QuasarDesign {
     fun configure(context: Context) {
         dark = context.resources.configuration.uiMode and
             android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        if (context is android.app.Activity) context.setTheme(if (dark) android.R.style.Theme_Material_NoActionBar else android.R.style.Theme_Material_Light_NoActionBar)
     }
     val background get() = Color.parseColor(if (dark) "#101820" else "#F3F5F7")
     val panel get() = Color.parseColor(if (dark) "#19232D" else "#FFFFFF")
@@ -38,7 +39,7 @@ internal object QuasarDesign {
     fun install(activity: android.app.Activity, content: View) {
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(activity.window, false)
         val frame = android.widget.FrameLayout(activity).apply {
-            setBackgroundColor(background)
+            setBackgroundColor(QuasarDesign.background)
             addView(content)
         }
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(frame) { view, insets ->

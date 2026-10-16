@@ -31,8 +31,8 @@ class FlowStudioActivity : Activity() {
     private var restoredSource: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
         QuasarDesign.configure(this)
+        super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         window.statusBarColor = QuasarDesign.background
         window.navigationBarColor = QuasarDesign.background
