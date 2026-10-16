@@ -110,3 +110,15 @@ expansion/collapse, navigation while loading, same-ID retries, missing fields,
 malformed/oversized responses, recreation and detach on an emulator. Recreated
 detail should restore the selected route through WorkspaceState and remain
 collapsed until explicitly expanded. No physical-device claims or deployment.
+
+## Hosted compile correction
+
+The earlier 14e0845 Android job 117234292155 compiled production Kotlin/Java,
+but unit-test Java compilation failed: Android JSON declares checked
+JSONException whereas desktop org.json does not. The preview tests now declare
+throws Exception. All 14 tests also compile and pass against Android's checked
+JSON API (`com.vaadin.external.google:android-json:0.0.20131108.vaadin1`) using
+ECJ/Java21. This supplemental check is not an Android APK/emulator run.
+
+The parent-requested PR128 restoration compile fix (329a2b0) is incorporated as
+7b6da19. Hosted checks must validate both corrections on the current head.
