@@ -16,6 +16,7 @@ internal class WorkstationFixture : AutoCloseable {
     val slowRequested = java.util.concurrent.CountDownLatch(1)
     @Volatile var searchStatus = 200
     @Volatile var delayMillis = 0L
+    @Volatile var detailPadding = 0
     private val acceptor = Thread {
         while (!server.isClosed) {
             val socket = try { server.accept() } catch (_: Exception) { break }
@@ -31,12 +32,16 @@ internal class WorkstationFixture : AutoCloseable {
                     val limit = requestedLimit.coerceIn(1, 100)
                     if (search && params["q"] == "slow") { slowRequested.countDown(); Thread.sleep(700) }
                     if (search) { maxRequested.updateAndGet { current -> maxOf(current, requestedLimit) }; Thread.sleep(delayMillis) }
+                    val offset = params["bookmark"]?.removePrefix("fixture-page-")?.toIntOrNull() ?: 0
+                    val count = if (params["q"] == "empty") 0 else minOf(limit, (1_000_000 - offset).coerceAtLeast(0))
                     val status = if (search) searchStatus else 200
                     val payload = when {
                         search -> JSONObject().put("rows", JSONArray().apply {
-                            if (params["q"] != "empty") repeat(limit) { index -> put(JSONObject().put("id", "fixture-$index").put("doc", document(index))) }
-                        }).put("fixture_corpus_size", 1_000_000)
-                        path.startsWith("/api/v1/documents/") -> JSONObject().put("document", document(path.substringAfterLast('-').toIntOrNull() ?: 0))
+                            repeat(count) { n -> val index = offset + n; put(JSONObject().put("id", "fixture-$index").put("doc", document(index))) }
+                        }).put("bookmark", if (count == 0) JSONObject.NULL else "fixture-page-${offset + count}").put("total_rows", if (params["q"] == "empty") 0 else 1_000_000)
+                        path.startsWith("/api/v1/documents/") -> JSONObject().put("document", document(path.substringAfterLast('-').toIntOrNull() ?: 0).apply {
+                            if (detailPadding > 0) getJSONObject("data").put("largeDetail", "x".repeat(detailPadding))
+                        })
                         path == "/api/v1/stats" -> JSONObject("""{"data":{"documents":{"total":1000000},"targets":{"total":1}}}""")
                         path == "/v1/actors" -> JSONObject("""{"data":{"actors":[{"resourceUri":"star://fixture/actor/reconnaissance","operatorVisible":true,"semantic":{"name":"fixture-reconnaissance"},"status":"online","ready":true,"accepts":{"targets":["target"]}}]}}""")
                         else -> JSONObject().put("status", "ok")
