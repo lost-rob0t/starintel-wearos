@@ -4,6 +4,12 @@ import actor.starintel.quasar.QuasarDesign
 import actor.starintel.quasar.dp
 import android.content.Context
 import android.graphics.Typeface
+import android.os.Bundle
+import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.LinearLayoutManager
+import actor.starintel.quasar.DocumentRows
+import actor.starintel.quasar.DocumentRow
+import android.widget.ScrollView
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
@@ -22,13 +28,23 @@ internal class FieldOpsView(
     private val map = FieldMapView(context)
     private val graph = GeoGraphView(context)
     private val mapStatus = QuasarDesign.pill(context, BasemapState.UNAVAILABLE.label, QuasarDesign.coral)
-    private val dataStatus = QuasarDesign.pill(context, "LOCAL ONLY", QuasarDesign.amber)
+    private val dataStatus = QuasarDesign.pill(context, "LOCAL ONLY", QuasarDesign.amber).apply {
+        accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+    }
     private val coordinate = QuasarDesign.body(context, GeoMath.coordinateReadout(GeoPoint(0.0, 0.0)), QuasarDesign.text, 11f)
     private val zoomReadout = QuasarDesign.eyebrow(context, "Z3", QuasarDesign.amber)
     private val count = QuasarDesign.eyebrow(context, "0 GEO DOCS", QuasarDesign.muted)
     private val search = QuasarDesign.field(context, hint = "Search loaded geo docs…")
     private val mapMode = compactControl("MAP", active = true)
+    private val listMode = compactControl("LIST", active = false)
     private val graphMode = compactControl("LINKS", active = false)
+    private val listAdapter = DocumentRows { row -> allFeatures.firstOrNull { it.id == row.id }?.let { select(it) } }
+    private val list = RecyclerView(context).apply { layoutManager = LinearLayoutManager(context); adapter = listAdapter; itemAnimator = null }
+    private val notice = QuasarDesign.body(context, "Snapshot ≤100 records · corpus total unknown", size = 12f)
+    private var mode = "map"
+    private var pendingSelected: String? = null
+    private var pendingListState: android.os.Parcelable? = null
+    private var fieldZoom = 3
     private val layerControls = linkedMapOf<GeoLayer, TextView>()
     private val visibleLayers = GeoLayer.entries.toMutableSet()
     private val detail = LinearLayout(context).apply {
@@ -40,17 +56,27 @@ internal class FieldOpsView(
     private var selected: GeoFeature? = null
     private var fieldCenter = GeoPoint(0.0, 0.0)
     private var syncingSelection = false
+    private lateinit var mapControls: LinearLayout
+    private lateinit var mapReadout: LinearLayout
 
     init {
         orientation = VERTICAL
         setBackgroundColor(QuasarDesign.background)
-        addView(commandBar(), match())
-        addView(layerBar(), match())
-        addView(surface(), LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        addView(detail, match())
+        val content = LinearLayout(context).apply {
+            orientation = VERTICAL
+            addView(commandBar(), match())
+            addView(layerBar(), match())
+            addView(count.apply { setPadding(context.dp(12), context.dp(4), context.dp(12), context.dp(4)) }, match())
+            addView(surface(), LayoutParams(-1, context.dp(maxOf(200, resources.configuration.screenHeightDp - 360))))
+            mapReadout = readout()
+            addView(mapReadout, match())
+            addView(detail, match())
+        }
+        addView(ScrollView(context).apply { isFillViewport = true; addView(content) }, LayoutParams(-1, -1))
 
         map.onViewportChanged = { center, zoom ->
             fieldCenter = center
+            fieldZoom = zoom
             coordinate.text = GeoMath.coordinateReadout(center)
             zoomReadout.text = "Z$zoom"
             selected?.let(::renderDetail)
@@ -58,7 +84,7 @@ internal class FieldOpsView(
         map.onSelectionChanged = { feature -> select(feature, fromMap = true) }
         map.onBasemapChanged = { state ->
             mapStatus.text = state.label
-            mapStatus.setTextColor(if (state == BasemapState.ONLINE) QuasarDesign.lime else if (state == BasemapState.CACHED_ONLY) QuasarDesign.amber else QuasarDesign.coral)
+            QuasarDesign.stylePill(context, mapStatus, if (state == BasemapState.ONLINE) QuasarDesign.lime else if (state == BasemapState.CACHED_ONLY) QuasarDesign.amber else QuasarDesign.coral)
         }
         graph.onSelectionChanged = { feature -> select(feature, fromGraph = true) }
         search.addTextChangedListener(object : TextWatcher {
@@ -68,12 +94,15 @@ internal class FieldOpsView(
         })
         mapMode.setOnClickListener { showMap() }
         graphMode.setOnClickListener { showGraph() }
+        listMode.setOnClickListener { showList() }
         renderEmptyDetail()
     }
 
     fun setFeatures(features: List<GeoFeature>) {
-        allFeatures = features
+        allFeatures = features.take(100)
         applyFilter()
+        pendingSelected?.let { id -> allFeatures.firstOrNull { it.id == id }?.let { select(it) } }
+        pendingSelected = null
     }
 
     /** Focus handed off from Operator: center the map and select the nearest loaded feature. */
@@ -91,17 +120,42 @@ internal class FieldOpsView(
             val deltaLat = feature.point.latitude - latitude
             val deltaLon = feature.point.longitude - longitude
             deltaLat * deltaLat + deltaLon * deltaLon
-        }?.let { selectedFeature -> select(selectedFeature, fromMap = true) }
+        }?.let { selectedFeature -> select(selectedFeature) }
+    }
+
+    fun query(): String = search.text.toString().trim()
+    fun setSnapshotNotice(value: String) { notice.text = value }
+    fun saveWorkspace() = Bundle().apply {
+        putString("query", search.text.toString()); putString("mode", mode)
+        putString("selected", selected?.id ?: pendingSelected)
+        putStringArrayList("layers", ArrayList(visibleLayers.map { it.name }))
+        putDouble("latitude", fieldCenter.latitude); putDouble("longitude", fieldCenter.longitude)
+        putInt("zoom", fieldZoom)
+        putParcelable("list", list.layoutManager?.onSaveInstanceState())
+        putInt("scroll", (getChildAt(0) as ScrollView).scrollY)
+    }
+    fun restoreWorkspace(state: Bundle) {
+        search.setText(state.getString("query", ""))
+        visibleLayers.clear()
+        (state.getStringArrayList("layers") ?: arrayListOf()).forEach { name -> GeoLayer.entries.firstOrNull { it.name == name }?.let { visibleLayers.add(it) } }
+        layerControls.forEach { (layer, control) -> styleCompact(control, layer in visibleLayers, FieldMapView.layerColor(layer)) }
+        pendingSelected = state.getString("selected")
+        map.focus(GeoPoint(state.getDouble("latitude"), state.getDouble("longitude")), state.getInt("zoom", 3))
+        when (state.getString("mode")) { "list" -> showList(); "links" -> showGraph(); else -> showMap() }
+        pendingListState = state.getParcelable<android.os.Parcelable>("list")
+        applyFilter()
+        post { (getChildAt(0) as ScrollView).scrollTo(0, state.getInt("scroll")) }
     }
 
     fun setDataStatus(label: String, ready: Boolean) {
-        dataStatus.text = label.uppercase().take(24)
-        dataStatus.setTextColor(if (ready) QuasarDesign.lime else QuasarDesign.amber)
+        dataStatus.text = label
+        QuasarDesign.stylePill(context, dataStatus, if (ready) QuasarDesign.lime else QuasarDesign.amber)
     }
 
     fun showDataError(label: String) {
-        dataStatus.text = "DATA DEGRADED"
-        dataStatus.setTextColor(QuasarDesign.coral)
+        dataStatus.text = if (allFeatures.isEmpty()) "DATA UNAVAILABLE" else "REFRESH FAILED"
+        notice.text = if (allFeatures.isEmpty()) "No records loaded. Check connection or permissions, then Sync." else "Refresh failed; previous snapshot retained. $label Tap Sync to retry."
+        QuasarDesign.stylePill(context, dataStatus, QuasarDesign.coral)
         if (allFeatures.isEmpty()) {
             detail.removeAllViews()
             detail.addView(QuasarDesign.eyebrow(context, "NO GEO DATA", QuasarDesign.coral))
@@ -113,27 +167,26 @@ internal class FieldOpsView(
         orientation = VERTICAL
         setPadding(context.dp(12), context.dp(10), context.dp(12), context.dp(7))
         val titleRow = LinearLayout(context).apply {
-            orientation = HORIZONTAL
+            orientation = VERTICAL
             gravity = Gravity.CENTER_VERTICAL
             addView(LinearLayout(context).apply {
                 orientation = VERTICAL
                 addView(QuasarDesign.eyebrow(context, "Field intelligence", QuasarDesign.amber))
                 addView(QuasarDesign.title(context, "Quasar tactical", 22f), QuasarDesign.match(top = context.dp(2)))
-            }, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            }, match())
             addView(dataStatus)
-            addView(mapStatus, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                marginStart = context.dp(6)
-            })
+            // Basemap transport status is independent of server data status.
         }
         addView(titleRow, match())
+        addView(notice, QuasarDesign.match(top = context.dp(4)))
         val searchRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(search, LayoutParams(0, context.dp(48), 1f))
+            addView(search, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(compactControl("SYNC", active = true).apply {
                 contentDescription = "Search Star server for geo documents"
-                setOnClickListener { onServerSearch(search.text.toString().trim()) }
-            }, LayoutParams(context.dp(64), context.dp(48)).apply { marginStart = context.dp(7) })
+                setOnClickListener { if (dataStatus.text.toString() != "SYNCING") onServerSearch(search.text.toString().trim()) }
+            }, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = context.dp(7) })
         }
         addView(searchRow, QuasarDesign.match(top = context.dp(8)))
     }
@@ -145,8 +198,9 @@ internal class FieldOpsView(
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(context.dp(10), context.dp(7), context.dp(10), context.dp(7))
-            addView(mapMode, LayoutParams(context.dp(58), context.dp(38)))
-            addView(graphMode, LayoutParams(context.dp(64), context.dp(38)).apply { marginStart = context.dp(5) })
+            addView(mapMode, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(listMode, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = context.dp(8) })
+            addView(graphMode, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = context.dp(5) })
             addView(divider(), LayoutParams(context.dp(1), context.dp(24)).apply {
                 marginStart = context.dp(10)
                 marginEnd = context.dp(10)
@@ -154,47 +208,52 @@ internal class FieldOpsView(
             GeoLayer.entries.forEach { layer ->
                 val control = layerControl(layer)
                 layerControls[layer] = control
-                addView(control, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, context.dp(38)).apply { marginEnd = context.dp(5) })
+                addView(control, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = context.dp(5) })
             }
         })
     }
 
     private fun surface(): View = FrameLayout(context).apply {
         addView(map, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        addView(list, FrameLayout.LayoutParams(-1, -1).apply { list.visibility = View.GONE })
         addView(graph, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT).apply {
             graph.visibility = View.GONE
         })
-        addView(LinearLayout(context).apply {
+        mapControls = LinearLayout(context).apply {
             orientation = VERTICAL
             addView(squareControl("+", "Zoom in") { map.zoomIn() })
             addView(squareControl("−", "Zoom out") { map.zoomOut() }, QuasarDesign.match(top = context.dp(5)))
             addView(squareControl("◎", "Recenter selected document") { map.recenterSelection() }, QuasarDesign.match(top = context.dp(5)))
-        }, FrameLayout.LayoutParams(context.dp(46), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
+        }
+        addView(mapControls, FrameLayout.LayoutParams(context.dp(48), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
             topMargin = context.dp(12)
             marginEnd = context.dp(12)
         })
-        addView(LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(context.dp(10), context.dp(7), context.dp(10), context.dp(7))
-            setBackgroundColor(0xdd11121b.toInt())
-            addView(coordinate, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(zoomReadout)
-            addView(count, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                marginStart = context.dp(10)
-            })
-        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
-            marginStart = context.dp(8)
-            marginEnd = context.dp(8)
-            bottomMargin = context.dp(28)
+        addView(mapStatus, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START).apply {
+            topMargin = context.dp(12)
+            marginStart = context.dp(12)
         })
+    }
+
+    private fun readout() = LinearLayout(context).apply {
+        orientation = VERTICAL
+        setPadding(context.dp(12), context.dp(8), context.dp(12), context.dp(8))
+        setBackgroundColor(QuasarDesign.panel)
+        addView(coordinate, match())
+        addView(zoomReadout, QuasarDesign.match(top = context.dp(4)))
     }
 
     private fun applyFilter() {
         val visible = GeoFeatureFilter.apply(allFeatures, search.text.toString(), visibleLayers)
+        listAdapter.submitList(visible.map { DocumentRow(it.id, it.title, it.dtype, it.summary) }) {
+            if (allFeatures.isNotEmpty()) pendingListState?.let { saved ->
+                list.layoutManager?.onRestoreInstanceState(saved)
+                pendingListState = null
+            }
+        }
         map.setFeatures(visible)
         graph.setFeatures(visible)
-        count.text = "${visible.size} GEO DOC${if (visible.size == 1) "" else "S"}"
+        count.text = "${visible.size} MATCHING GEO"
         selected?.takeIf { it !in visible }?.let { select(null) }
     }
 
@@ -202,6 +261,7 @@ internal class FieldOpsView(
         if (syncingSelection) return
         syncingSelection = true
         selected = feature
+        listAdapter.selectedId = feature?.id
         if (!fromMap) map.select(feature)
         if (!fromGraph) graph.select(feature)
         if (feature == null) renderEmptyDetail() else renderDetail(feature)
@@ -244,17 +304,32 @@ internal class FieldOpsView(
     }
 
     private fun showMap() {
+        mode = "map"
+        mapControls.visibility = View.VISIBLE; mapReadout.visibility = View.VISIBLE; mapStatus.visibility = View.VISIBLE
         map.visibility = View.VISIBLE
+        list.visibility = View.GONE
         graph.visibility = View.GONE
+        styleCompact(listMode, false)
         styleCompact(mapMode, true)
         styleCompact(graphMode, false)
     }
 
     private fun showGraph() {
+        mode = "links"
+        mapControls.visibility = View.GONE; mapReadout.visibility = View.GONE; mapStatus.visibility = View.GONE
         map.visibility = View.GONE
+        list.visibility = View.GONE
         graph.visibility = View.VISIBLE
+        styleCompact(listMode, false)
         styleCompact(mapMode, false)
         styleCompact(graphMode, true)
+    }
+
+    private fun showList() {
+        mode = "list"
+        mapControls.visibility = View.GONE; mapReadout.visibility = View.GONE; mapStatus.visibility = View.GONE
+        map.visibility = View.GONE; graph.visibility = View.GONE; list.visibility = View.VISIBLE
+        styleCompact(listMode, true); styleCompact(mapMode, false); styleCompact(graphMode, false)
     }
 
     private fun layerControl(layer: GeoLayer): TextView = compactControl(layer.label.uppercase(), active = true).apply {
@@ -271,27 +346,29 @@ internal class FieldOpsView(
 
     private fun compactControl(label: String, active: Boolean): TextView = TextView(context).apply {
         text = label
-        textSize = 10f
+        textSize = 12f
         typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
         gravity = Gravity.CENTER
         setPadding(context.dp(11), context.dp(5), context.dp(11), context.dp(5))
         isClickable = true
         isFocusable = true
-        minHeight = context.dp(38)
+        minHeight = context.dp(48)
+        minWidth = context.dp(48)
         styleCompact(this, active)
     }
 
     private fun styleCompact(view: TextView, active: Boolean, accent: Int = QuasarDesign.amber) {
         view.setTextColor(if (active) accent else QuasarDesign.muted)
-        view.setBackgroundColor(if (active) 0xff20202a.toInt() else 0xff11121b.toInt())
-        view.alpha = if (active) 1f else .7f
+        view.setBackgroundColor(if (active) QuasarDesign.panelRaised else QuasarDesign.panel)
+        view.isSelected = active
     }
 
     private fun squareControl(label: String, description: String, action: () -> Unit) = compactControl(label, active = true).apply {
         textSize = 20f
+        setPadding(0, 0, 0, 0)
         contentDescription = description
         setOnClickListener { action() }
-        layoutParams = LayoutParams(context.dp(46), context.dp(46))
+        layoutParams = LayoutParams(context.dp(48), context.dp(48))
     }
 
     private fun divider() = View(context).apply { setBackgroundColor(QuasarDesign.border) }

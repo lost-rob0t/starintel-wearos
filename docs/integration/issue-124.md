@@ -17,8 +17,10 @@ altering its native-design changes. No MainActivity changes.
 The repository retains `tile()` and the trailing onChanged constructor lambda.
 This draft preserves PR120's MAP AVAILABLE wording, decode-null failure behavior
 and cached-only error state. PR120 also edits OpenMapTileRepository: its merge
-must keep these fixes and the new scheduler. Its branch was not modified.
+must keep these fixes and the new scheduler. Its branch was not modified; its head was merged into this tile branch on parent instruction.
 No Quasar Lisp, transaction overlay, PR110, PR115 or native redesign branch edits.
+The tile branch now contains PR120 through a merge commit; its MainActivity and
+other redesign changes are imported unchanged, with no tile-specific edits there.
 
 ## Resource bounds and complexity
 
@@ -81,7 +83,7 @@ Blocked/unrun:
   actual Java sources directly to Kotlin resolved symbol compilation. The later follow-up found the JDK compiler module and successfully compiled the
   actual shared-config/design Java sources using `java com.sun.tools.javac.Main`.
 
-No deploy, merge, installation or production service changes.
+No deploy, main-branch merge, installation or production service changes.
 
 ## Follow-up validation
 
@@ -116,12 +118,21 @@ emulator workflow. A local harness initially loaded an older temporary scheduler
 JAR and reported NoSuchMethodError; an explicit current-test JAR classpath fixed
 that harness issue before the passing run.
 
-`git merge-tree --write-tree HEAD origin/pr120` confirms FieldMapView merges
-cleanly. The only conflicting file is OpenMapTileRepository.kt, at the decode
-publication hunk: retain this PR's bounds/decode/cancellation-safe publication
-block. It already includes PR120's requireNotNull decode failure check; MAP
-AVAILABLE wording and cached-only error state also match PR120. This merge
-preview does not alter either branch or merge the redesign into this workstream.
+PR120 head 82c2a3ae332fdc42c61e487b2607d81210ea9278 is now merged into
+this branch, as directed by the parent. FieldMapView merged automatically; its
+only difference from PR120 is the viewport call. The OpenMapTileRepository decode
+conflict was resolved in source by retaining bounds validation, requireNotNull
+decode and cancellation-safe publication. MAP AVAILABLE wording and cached-only
+failure state are preserved. No unresolved index entries remain. Compared with
+PR120, the merged working tree contains only the seven tile-workstream files.
+
+After integration: compilation passed for the actual merged FieldMapView,
+QuasarDesign, QuasarAppearance, QuasarIcon and tile/geo sources against Android API
+classes, with generated-style BuildConfig/R fixtures and actual Java shared
+config/design sources. Eight pure JVM tests and seven supplemental Robolectric
+native-decoder cases passed again; both Python repository gates passed. The tile
+repository and scheduler source match the previously compiled runtime-test source
+exactly after conflict resolution. Hosted checks will run against the merge head.
 
 Hosted initial-head Nix evaluation and helper smoke steps passed; watchface
 validation passed; APK compilation remained running. Integrated-head Android,
