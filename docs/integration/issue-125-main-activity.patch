@@ -1,8 +1,6 @@
 --- a/quasar-app/src/main/java/actor/starintel/quasar/MainActivity.kt
 +++ b/quasar-app/src/main/java/actor/starintel/quasar/MainActivity.kt
-@@ -463,46 +463,21 @@
-     }
- 
+@@ -465,43 +465,18 @@
      private fun loadDocument(content: LinearLayout, id: String) {
 -        content.tag = id
 +        // Identity token also rejects an older retry for the same document ID.
@@ -54,4 +52,3 @@
 +            content.addView(actor.starintel.quasar.detail.RecordDetailView(this, root, id), QuasarDesign.match())
          }
      }
- 
