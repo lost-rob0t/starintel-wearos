@@ -129,11 +129,16 @@ class FileImportJourneyTest {
                     }
                     val body = CharArray(length); var offset = 0
                     while (offset < length) { val count = input.read(body, offset, length - offset); check(count > 0); offset += count }
-                    val payload = if (path == "/auth/context") """{"principal_id":"fixture","principal_type":"user"}""" else {
-                        val count = JSONArray(String(body)).length()
-                        if (calls.incrementAndGet() == 1) { arrived.countDown(); check(release.await(10, TimeUnit.SECONDS)) }
-                        if (partial) """{"total":$count,"succeeded":1,"failed":1,"correlation_id":"partial-fixture"}"""
-                        else """{"total":$count,"succeeded":$count,"failed":0,"correlation_id":"full-fixture"}"""
+                    val payload = when (path) {
+                        "/auth/context" -> """{"principal_id":"fixture","principal_type":"user"}"""
+                        "/api/v1/documents/bulk" -> {
+                            val count = JSONArray(String(body)).length()
+                            if (calls.incrementAndGet() == 1) { arrived.countDown(); check(release.await(10, TimeUnit.SECONDS)) }
+                            if (partial) """{"total":$count,"succeeded":1,"failed":1,"correlation_id":"partial-fixture"}"""
+                            else """{"total":$count,"succeeded":$count,"failed":0,"correlation_id":"full-fixture"}"""
+                        }
+                        "/api/v1/stats" -> """{"data":{"documents":{"total":0}}}"""
+                        else -> """{"status":"ok"}"""
                     }
                     val response = payload.toByteArray()
                     it.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: ${response.size}\r\nConnection: close\r\n\r\n".toByteArray())
