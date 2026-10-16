@@ -129,8 +129,13 @@ object NativeUi {
     }
     fun field(index: Int, value: String) { device.findObject(UiSelector().className("android.widget.EditText").instance(index)).setText(value) }
     fun fieldName(label: String, value: String) {
+        dismissFixtureLauncherAnr()
         val field = device.findObject(UiSelector().description(label))
-        if (!field.exists()) UiScrollable(UiSelector().scrollable(true)).scrollDescriptionIntoView(label)
+        if (!field.waitForExists(3000)) {
+            val scroll = UiScrollable(UiSelector().scrollable(true))
+            if (scroll.exists()) scroll.scrollDescriptionIntoView(label)
+        }
+        check(field.waitForExists(10000)) { "Missing input: $label" }
         field.setText(value)
         device.executeShellCommand("input keyevent 111")
     }
