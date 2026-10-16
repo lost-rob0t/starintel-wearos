@@ -36,7 +36,7 @@ class MainActivity : Activity() {
     private lateinit var sideNavigation: WorkspaceNavigation
     private val client by lazy { StarServerClient(this) }
     private val config by lazy { QuasarConfig(this) }
-    private val drafts by lazy { WorkspaceDrafts(this) }
+    private val draftFields by lazy { WorkspaceDraftFields(WorkspaceDrafts.coordinator(applicationContext)) }
     private val localRuntime by lazy { LocalRuntimeController(this) }
     private val actorDefinitions by lazy { ActorDefinitionStore(this) }
 
@@ -46,7 +46,7 @@ class MainActivity : Activity() {
     private var searchTask: Future<*>? = null
     private val searchGeneration = AtomicInteger()
     private val mapGeneration = AtomicInteger()
-    private val searchSnapshots = mutableMapOf<String, List<DocumentRow>>()
+    private val searchPages = mutableMapOf<String, actor.starintel.android.api.SearchPager>()
     private var resultList: RecyclerView? = null
     private var selectedDocument: String? = null
     private var isRestoring = false
@@ -68,6 +68,8 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        if (::viewport.isInitialized) rememberView()
+        draftFields.flush()
         if (networkRegistered) runCatching { connectivity.unregisterNetworkCallback(networkCallback) }
         networkRegistered = false
         super.onStop()
@@ -148,6 +150,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        draftFields.detach()
         searchTask?.cancel(true)
         requests.shutdownNow()
         if (::viewport.isInitialized) runCatching { localRuntime.close() }
@@ -166,7 +169,7 @@ class MainActivity : Activity() {
 
     private fun goBack() {
         if (sideNavigation.collapse()) return
-        rememberView()
+        if (!rememberView()) return
         val previous = workspace.back()
         if (previous == null) finish() else restoreRoute(previous)
     }
@@ -196,21 +199,10 @@ class MainActivity : Activity() {
         if (view is ViewGroup) for (i in 0 until view.childCount) yieldAll(descendants(view.getChildAt(i)))
     }
 
-    private fun rememberView() {
-        val root = viewport.getChildAt(0) ?: return
+    private fun rememberView(): Boolean {
+        val root = viewport.getChildAt(0) ?: return true
         val state = workspace.views.getBundle(workspace.route) ?: Bundle()
-        // Credential fields explicitly disable saving. Large drafts stay out of Binder state.
-        val inputs = descendants(root).filterIsInstance<EditText>().filter { it.isSaveEnabled }.toList()
-        val draftKeys = arrayListOf<String>()
-        val values = inputs.mapIndexed { index, input ->
-            val value = input.text.toString()
-            if (value.length > 4096) {
-                draftKeys.add(drafts.save("${workspace.route}:$index", value)); ""
-            } else { draftKeys.add(""); value }
-        }
-        state.putStringArrayList("draftKeys", draftKeys)
-        state.putStringArrayList("inputs", ArrayList(values))
-        state.putIntArray("selection", inputs.map { it.selectionStart.coerceAtLeast(0) }.toIntArray())
+        if (!draftFields.saveInto(state)) return false
         state.putInt("scroll", (root as? ScrollView)?.scrollY ?: 0)
         resultList?.let { state.putParcelable("list", it.layoutManager?.onSaveInstanceState()) }
         state.putString("selected", selectedDocument)
@@ -219,10 +211,12 @@ class MainActivity : Activity() {
         workspace.views.putBundle(workspace.route, state)
         val retained = workspace.history.toSet() + workspace.route + setOf("home", "search", "datasets", "field", "actors", "settings")
         workspace.views.keySet().toList().filter { it !in retained }.forEach(workspace.views::remove)
+        return true
     }
 
-    private fun enterRoute(route: String) {
-        if (!isRestoring) { rememberView(); workspace.enter(route) }
+    private fun enterRoute(route: String): Boolean {
+        if (!isRestoring) { if (!rememberView()) return false; workspace.enter(route) }
+        draftFields.detach()
         workspace.route = route
         resultList = null
         connectionViews.clear()
@@ -236,26 +230,16 @@ class MainActivity : Activity() {
         })
         viewport.post {
             if (workspace.route != route) return@post
-            val state = workspace.views.getBundle(route) ?: return@post
+            val state = workspace.views.getBundle(route) ?: Bundle().also { workspace.views.putBundle(route, it) }
             val root = viewport.getChildAt(0) ?: return@post
-            val values = state.getStringArrayList("inputs") ?: arrayListOf()
-            val selections = state.getIntArray("selection") ?: intArrayOf()
-            descendants(root).filterIsInstance<EditText>().filter { it.isSaveEnabled }.forEachIndexed { i, input ->
-                values.getOrNull(i)?.let { saved ->
-                    val key = state.getStringArrayList("draftKeys")?.getOrNull(i).orEmpty()
-                    val value = if (key.isBlank()) saved else runCatching { drafts.read(key) }.getOrElse {
-                        input.error = "Saved draft could not be read. Reopen your source before submitting."
-                        input.text.toString()
-                    }
-                    input.setText(value); input.setSelection((selections.getOrNull(i) ?: value.length).coerceAtMost(value.length))
-                }
-            }
+            draftFields.bind(root, route, state)
             // ScrollView restoration waits for asynchronous content in screen().
         }
+        return true
     }
 
     private fun showHome() {
-        enterRoute("home")
+        if (!enterRoute("home")) return
         val body = screen(
             eyebrow = "StarIntel // Quasar",
             title = "Investigation desk",
@@ -320,7 +304,7 @@ class MainActivity : Activity() {
 
     private fun showSearch(title: String, initial: String) {
         val route = if (title == "Datasets") "datasets" else "search"
-        enterRoute(route)
+        if (!enterRoute(route)) return
         viewport.removeAllViews()
         val state = workspace.views.getBundle(route) ?: Bundle().also { workspace.views.putBundle(route, it) }
         val columns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -342,7 +326,7 @@ class MainActivity : Activity() {
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
         }
         body.addView(query, QuasarDesign.match(top = dp(8)))
-        val status = QuasarDesign.status(this, "Enter a query, then Search. Up to 40 records per snapshot.").apply {
+        val status = QuasarDesign.status(this, "Enter a query, then Search. Up to 40 records per page.").apply {
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
         val adapter = DocumentRows { row ->
@@ -359,54 +343,90 @@ class MainActivity : Activity() {
             setPadding(0, dp(8), 0, dp(16))
         }
         resultList = list
-        fun display(rows: List<DocumentRow>) {
+        val pager = searchPages.getOrPut(route) { actor.starintel.android.api.SearchPager() }
+        lateinit var previous: TextView
+        lateinit var next: TextView
+        fun display(entry: actor.starintel.android.api.SearchPager.Entry) {
+            val rows = DocumentRow.from(entry.page.rows, 40)
             adapter.submitList(rows) {
                 list.layoutManager?.onRestoreInstanceState(state.getParcelable<Parcelable>("list"))
             }
-            status.text = if (rows.isEmpty()) {
-                if (state.getString("loadedQuery") == "*") "No visible records. The server returned an empty snapshot."
-                else "No matching documents. Broaden the query or change the dtype filter."
-            } else "${rows.size} records loaded · limit 40 · total unknown"
+            state.putString("loadedQuery", entry.query)
+            state.putString("pageCursor", entry.cursor)
+            state.putLong("pageNumber", entry.number)
+            val total = entry.page.total?.let { "server total $it" } ?: "total unknown"
+            status.text = "Page ${entry.number} · ${rows.size} records loaded · $total" +
+                if (rows.isEmpty()) " · No matching documents on this page · End of results" else if (entry.page.nextCursor == null) " · No continuation supplied" else " · Next checks for more"
+            if (entry.number > 1 && !pager.canPrevious) status.append("\nEarlier pages evicted; Search restarts from page 1.")
+            previous.isEnabled = pager.canPrevious
+            next.isEnabled = pager.canNext
             state.getString("error")?.let { status.text = "$it\n${status.text}" }
         }
-        var restoringSearch = false
+        fun load(request: actor.starintel.android.api.SearchPager.Request, restore: Boolean = false) {
+            state.putBoolean("searched", true)
+            if (!restore) state.remove("list")
+            val generation = searchGeneration.incrementAndGet()
+            searchTask?.cancel(true)
+            (requests as java.util.concurrent.ThreadPoolExecutor).purge()
+            previous.isEnabled = false; next.isEnabled = false
+            status.text = "Loading page ${request.number}…"
+            searchTask = requests.submit {
+                val response = runCatching { client.searchPage(request.query, 40, request.cursor) }
+                runOnUiThread {
+                    if (isFinishing || isDestroyed || viewport.getChildAt(0) !== columns || searchGeneration.get() != generation) {
+                        pager.fail(request)
+                        return@runOnUiThread
+                    }
+                    response.mapCatching { page -> pager.complete(request, page) }.onSuccess { applied ->
+                        if (applied) { state.remove("error"); pager.current?.let(::display) }
+                    }.onFailure {
+                        pager.fail(request)
+                        noteFailure(it)
+                        val message = "${if (adapter.itemCount > 0) "Refresh failed; previous results retained (query ${state.getString("loadedQuery", "*")}). " else "Search failed. "}${failureText(it)}"
+                        state.putString("error", message)
+                        pager.current?.let(::display) ?: run { status.text = message }
+                    }
+                }
+            }
+        }
         val search = QuasarDesign.action(this, "Search", primary = true) {
             val value = query.text.toString().trim()
             if (value.isBlank() || value.length > 512) { query.error = "Enter a query of 1–512 characters"; return@action }
             if (!config.isConfigured()) { status.text = "Connect a server in Settings before searching."; return@action }
             getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(query.windowToken, 0)
             query.clearFocus()
-            state.putBoolean("searched", true)
-            if (!restoringSearch) state.remove("list")
-            val generation = searchGeneration.incrementAndGet()
-            searchTask?.cancel(true)
-            (requests as java.util.concurrent.ThreadPoolExecutor).purge()
-            status.text = "Loading records…"
-            searchTask = requests.submit {
-                val response = runCatching { DocumentRow.from(client.search(value, 40), 40) }
-                runOnUiThread {
-                    if (isFinishing || isDestroyed || viewport.getChildAt(0) !== columns || searchGeneration.get() != generation) return@runOnUiThread
-                    response.onSuccess { rows -> state.remove("error"); state.putString("loadedQuery", value); searchSnapshots[route] = rows; display(rows) }
-                        .onFailure {
-                            noteFailure(it)
-                            val message = "${if (adapter.itemCount > 0) "Refresh failed; previous results retained (query ${state.getString("loadedQuery", "*")}). " else "Search failed. "}${failureText(it)}"
-                            state.putString("error", message); status.text = message
-                        }
-                }
-            }
+            load(pager.start(value))
         }
+        previous = QuasarDesign.action(this, "Previous page") {
+            state.remove("list")
+            pager.previous()?.let(::display)
+        }.apply { isEnabled = false }
+        next = QuasarDesign.action(this, "Next page") {
+            state.remove("list")
+            val cached = pager.forwardCached()
+            if (cached != null) display(cached) else pager.next()?.let { load(it) }
+        }.apply { isEnabled = false }
         query.setOnEditorActionListener { _, _, _ -> search.performClick(); true }
         body.addView(search, QuasarDesign.match(top = dp(8)))
+        body.addView(LinearLayout(this).apply {
+            addView(previous, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(next, LinearLayout.LayoutParams(0, -2, 1f))
+        }, QuasarDesign.match(top = dp(8)))
         body.addView(status, QuasarDesign.match(top = dp(8)))
         body.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
         viewport.addView(columns, FrameLayout.LayoutParams(-1, -1))
         progress = ProgressBar(this).apply { visibility = View.GONE }
-        searchSnapshots[route]?.let(::display) ?: if (state.getBoolean("searched")) { restoringSearch = true; search.performClick(); restoringSearch = false } else Unit
+        pager.cancel()
+        pager.current?.let(::display) ?: if (state.getBoolean("searched") && config.isConfigured()) {
+            val loadedQuery = state.getString("loadedQuery") ?: query.text.toString().trim()
+            if (loadedQuery.isNotBlank()) load(pager.start(loadedQuery, state.getString("pageCursor"), state.getLong("pageNumber", 1)), restore = true)
+            Unit
+        } else Unit
         if (detail != null) selectedDocument?.let { loadDocument(detail, it) }
     }
 
     private fun showFieldOps() {
-        enterRoute("field")
+        if (!enterRoute("field")) return
         viewport.removeAllViews()
         lateinit var field: FieldOpsView
         lateinit var fieldProgress: ProgressBar
@@ -454,7 +474,7 @@ class MainActivity : Activity() {
     }
 
     private fun showDocument(id: String) {
-        enterRoute("document:$id")
+        if (!enterRoute("document:$id")) return
         val body = screen("Document", "Record details", id)
         body.addView(QuasarDesign.action(this, "Back to results") { goBack() }, QuasarDesign.match(top = dp(8)))
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -463,51 +483,26 @@ class MainActivity : Activity() {
     }
 
     private fun loadDocument(content: LinearLayout, id: String) {
-        content.tag = id
+        // Identity token also rejects an older retry for the same document ID.
+        val request = Any()
+        content.tag = request
         content.removeAllViews()
         content.addView(QuasarDesign.body(this, "Loading record…"))
-        runApi({
-            val root = client.document(id)
-            val doc = root.optJSONObject("document") ?: root.optJSONObject("data")?.optJSONObject("document") ?: root.optJSONObject("data") ?: root
-            val data = doc.optJSONObject("data") ?: doc
-            Triple(doc, data, root.toString(2))
-        }, onFailure = {
-            if (content.tag == id) {
+        runApi({ client.document(id) }, onFailure = {
+            if (content.tag === request && content.isAttachedToWindow) {
                 content.removeAllViews()
                 content.addView(emptyState("Record unavailable", failureText(it)))
                 content.addView(QuasarDesign.action(this, "Retry read") { loadDocument(content, id) }, QuasarDesign.match(top = dp(8)))
             }
-        }) { (doc, data, raw) ->
-            if (content.tag != id) return@runApi
+        }) { root ->
+            if (content.tag !== request || !content.isAttachedToWindow) return@runApi
             content.removeAllViews()
-            content.addView(QuasarDesign.eyebrow(this, doc.optString("dtype").ifBlank { "document" }))
-            content.addView(QuasarDesign.title(this, data.optString("name").ifBlank { data.optString("title") }.ifBlank { id }, 22f), QuasarDesign.match(top = dp(8)))
-            content.addView(QuasarDesign.body(this, id), QuasarDesign.match(top = dp(8)))
-            val summary = data.optString("summary").ifBlank { data.optString("description") }.ifBlank { "No summary supplied in this record." }
-            content.addView(QuasarDesign.body(this, summary, QuasarDesign.text, 16f), QuasarDesign.match(top = dp(12)))
-            listOf("source", "dataset", "created_at", "updated_at", "observed_at").forEach { key ->
-                val value = doc.opt(key) ?: data.opt(key)
-                if (value != null && value != JSONObject.NULL) content.addView(QuasarDesign.body(this, "${key.replace('_', ' ')} · $value"), QuasarDesign.match(top = dp(8)))
-            }
-            val fields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-            content.addView(QuasarDesign.action(this, "Structured fields") {
-                if (fields.childCount == 0) data.keys().asSequence().take(100).forEach { key ->
-                    fields.addView(QuasarDesign.body(this, "$key\n${data.opt(key).toString().take(4096)}", QuasarDesign.text), QuasarDesign.match(top = dp(12)))
-                }
-                fields.visibility = if (fields.visibility == View.GONE) View.VISIBLE else View.GONE
-            }, QuasarDesign.match(top = dp(16)))
-            content.addView(fields)
-            val rawView = codeBlock("").apply { visibility = View.GONE }
-            content.addView(QuasarDesign.action(this, "Raw JSON") {
-                rawView.text = raw
-                rawView.visibility = if (rawView.visibility == View.GONE) View.VISIBLE else View.GONE
-            }, QuasarDesign.match(top = dp(8)))
-            content.addView(rawView, QuasarDesign.match(top = dp(8)))
+            content.addView(actor.starintel.quasar.detail.RecordDetailView(this, root, id), QuasarDesign.match())
         }
     }
 
     private fun showCreateDocument() {
-        enterRoute("create")
+        if (!enterRoute("create")) return
         val body = screen("Mutation", "Add record", "The Star server remains the schema authority for connected writes.")
         val editor = QuasarDesign.field(this, "{\n  \"dtype\": \"document\",\n  \"data\": {}\n}", lines = 14)
         val status = QuasarDesign.status(this, "Ready for server validation.")
@@ -522,7 +517,7 @@ class MainActivity : Activity() {
     }
 
     private fun showImport() {
-        enterRoute("import")
+        if (!enterRoute("import")) return
         val body = screen("Ingest", "Import batch", "Paste a bounded JSON array. The server validates every StarIntel document.")
         val editor = QuasarDesign.field(this, "[]", lines = 14)
         val status = QuasarDesign.status(this, "Nothing imported yet.")
@@ -537,7 +532,7 @@ class MainActivity : Activity() {
     }
 
     private fun showTarget(initialActor: String = "") {
-        enterRoute("target:$initialActor")
+        if (!enterRoute("target:$initialActor")) return
         val body = screen("Orchestration", "Dispatch target", "Create one idempotent actor request against a named dataset.")
         val actor = labeledField(body, "ACTOR", initialActor)
         val target = labeledField(body, "TARGET", "")
@@ -557,7 +552,7 @@ class MainActivity : Activity() {
     }
 
     private fun showAgent() {
-        enterRoute("agent")
+        if (!enterRoute("agent")) return
         val body = screen(
             "Prolog-RLM",
             "Reasoning console",
@@ -593,7 +588,7 @@ class MainActivity : Activity() {
     }
 
     private fun showActors() {
-        enterRoute("actors")
+        if (!enterRoute("actors")) return
         val body = screen("StarIntel // Fleet", "Actors", "Server actors remain private. This view shows the registry your account can read; execution is authorized on the server.")
         val remote = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         body.addView(QuasarDesign.eyebrow(this, "Server fleet"), QuasarDesign.match(top = dp(18)))
@@ -648,7 +643,7 @@ class MainActivity : Activity() {
     }
 
     private fun showActorEditor() {
-        enterRoute("actor-editor")
+        if (!enterRoute("actor-editor")) return
         val body = screen("Actor config", "Define local actor", "The manifest describes input types and capabilities. Executable Lisp must already exist in the trusted mobile image.")
         val template = """
             {
@@ -666,6 +661,7 @@ class MainActivity : Activity() {
         val status = QuasarDesign.status(this, "Manifest not saved.")
         body.addView(editor, QuasarDesign.match(top = dp(18)))
         body.addView(QuasarDesign.action(this, "Validate and save", primary = true) {
+            if (!draftFields.ready) return@action
             runCatching { actorDefinitions.saveCustom(editor.text.toString()) }
                 .onSuccess { status.text = "Saved ${it.id}. Restarting the trusted Lisp image is required before first execution." }
                 .onFailure { status.text = it.message ?: "Manifest validation failed" }
@@ -674,7 +670,7 @@ class MainActivity : Activity() {
     }
 
     private fun showSettings() {
-        enterRoute("settings")
+        if (!enterRoute("settings")) return
         val body = screen("Connection", "Settings", "Credentials are validated before replacing the working Keystore-encrypted key.")
         val appearance = QuasarAppearance(this)
         body.addView(QuasarDesign.routeCard(this, "Appearance & themes", "${when (appearance.theme) { "synthwave" -> "Synthwave"; "custom" -> appearance.custom().optString("name", "Custom"); else -> "StarIntel" }} · ${appearance.mode}", QuasarDesign.pink) { showAppearance() }, QuasarDesign.match(top = dp(16)))
@@ -751,7 +747,7 @@ class MainActivity : Activity() {
     }
 
     private fun showAppearance() {
-        enterRoute("appearance")
+        if (!enterRoute("appearance")) return
         viewport.removeAllViews()
         viewport.addView(AppearanceView(this, workspace.views.getBundle("appearance")?.getBundle("appearance")) { recreate() }, FrameLayout.LayoutParams(-1, -1))
     }
@@ -930,7 +926,7 @@ class MainActivity : Activity() {
         val state = workspace.views.getBundle(workspace.route) ?: Bundle().also { workspace.views.putBundle(workspace.route, it) }
         lateinit var reset: TextView
         val button = QuasarDesign.action(this, label, primary = true) {
-            if (!state.getBoolean("attempted") && validate()) {
+            if (draftFields.ready && !state.getBoolean("attempted") && validate()) {
                 state.putBoolean("attempted", true)
                 reset.visibility = View.VISIBLE
                 submit()

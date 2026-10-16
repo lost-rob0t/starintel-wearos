@@ -1,5 +1,12 @@
 package actor.starintel.quasar.ide
 
+import actor.starintel.quasar.DraftReference
+import actor.starintel.quasar.WorkspaceDrafts
+import android.os.Handler
+import android.os.Looper
+import android.text.InputFilter
+import java.lang.ref.WeakReference
+import java.util.concurrent.CompletableFuture
 import actor.starintel.quasar.QuasarDesign
 import actor.starintel.quasar.dp
 import android.app.Activity
@@ -7,10 +14,6 @@ import android.app.AlertDialog
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
-import android.text.Editable
-import android.text.Spanned
-import android.text.TextWatcher
-import android.text.style.ForegroundColorSpan
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -31,7 +34,19 @@ class LogicStudioActivity : Activity() {
     private val drafts = linkedMapOf<String, SourceBuffer>()
     private var activeName: String? = null
     private var editor: EditText? = null
-    private var applyingHighlight = false
+    private val draftStore by lazy { WorkspaceDrafts.coordinator(applicationContext) }
+    private val draftReferences = linkedMapOf<String, String>()
+    private val handler = Handler(Looper.getMainLooper())
+    private var editorChanged = false
+    private var restoringDrafts = false
+    private var draftStatus: TextView? = null
+    private var restoredCursor = 0
+    private var restoreFailures = emptySet<String>()
+    private var restoreReviewRequired = false
+    private var unreviewedRestore = false
+    private val capturePending = Runnable { if (captureDraft()) flushDrafts() }
+    private fun draftName(name: String, mode: IdeLanguage = language) = "logic:${mode.name}:$name"
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         QuasarDesign.configure(this)
@@ -45,29 +60,106 @@ class LogicStudioActivity : Activity() {
             .onFailure { Toast.makeText(this, it.safeMessage(), Toast.LENGTH_LONG).show() }
         renderShell()
         val restoredLanguage = savedInstanceState?.getString("language")?.let { runCatching { IdeLanguage.valueOf(it) }.getOrNull() } ?: IdeLanguage.LISP
-        openLanguage(restoredLanguage)
+        language = restoredLanguage
+        activeName = savedInstanceState?.getString("activeName")
+        restoredCursor = savedInstanceState?.getInt("cursor") ?: 0
         savedInstanceState?.getBundle("drafts")?.let { saved ->
-            saved.keySet().forEach { name -> saved.getString(name)?.let { key ->
-                runCatching { actor.starintel.quasar.WorkspaceDrafts(this).read(key) }.onSuccess { source -> drafts[name] = SourceBuffer(name, restoredLanguage, source, dirty = true) }
+            saved.keySet().take(32).forEach { name -> saved.getString(name)?.let { key ->
+                draftReferences[if (name.startsWith("logic:")) name else draftName(name)] = key
             } }
-            activeName = savedInstanceState.getString("activeName") ?: activeName
-            showEditor()
-            editor?.setSelection((savedInstanceState.getInt("cursor")).coerceIn(0, editor?.text?.length ?: 0))
         }
+        unreviewedRestore = savedInstanceState?.getBoolean("draftReviewRequired") == true
+        restoreReviewRequired = savedInstanceState?.getBoolean("draftsPending") == true
+        restoreDrafts(restoreReviewRequired)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         captureDraft()
         outState.putString("language", language.name)
         outState.putString("activeName", activeName)
-        outState.putInt("cursor", editor?.selectionStart ?: 0)
-        // Only unsaved, bounded buffers; persisted sources remain in the private workspace.
+        outState.putInt("cursor", editor?.selectionStart ?: restoredCursor)
+        outState.putBoolean("draftReviewRequired", unreviewedRestore)
+        outState.putBoolean("draftsPending", restoreReviewRequired || editorChanged || draftReferences.keys.any { draftStore.isDirty(it) })
         outState.putBundle("drafts", Bundle().apply {
-            drafts.values.filter { it.dirty }.forEach { buffer ->
-                putString(buffer.name, actor.starintel.quasar.WorkspaceDrafts(this@LogicStudioActivity).save("logic:${language.name}:${buffer.name}", buffer.source))
-            }
+            draftReferences.forEach { (name, key) -> putString(name, key) }
         })
+        flushDrafts()
         super.onSaveInstanceState(outState)
+    }
+
+    override fun onStop() {
+        captureDraft()
+        flushDrafts()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacks(capturePending)
+        super.onDestroy()
+    }
+
+    private fun restoreDrafts(pending: Boolean) {
+        // Rotation uses process-local snapshots synchronously; process death uses worker reads.
+        if (draftReferences.keys.all { draftStore.current(it) != null }) {
+            if (unreviewedRestore) { restoringDrafts = true; showRestoreGate(); return }
+            restoringDrafts = false
+            restoreReviewRequired = false
+            openLanguage(language)
+            editor?.setSelection(restoredCursor.coerceIn(0, editor?.length() ?: 0))
+            return
+        }
+        restoringDrafts = true
+        content.removeAllViews()
+        content.addView(QuasarDesign.body(this, "Restoring encrypted drafts…"))
+        val weak = WeakReference(this)
+        val results = draftReferences.map { (name, key) ->
+            name to runCatching { draftStore.restoreInto(name, key) }
+                .getOrElse { CompletableFuture<String>().apply { completeExceptionally(it) } }
+        }
+        CompletableFuture.allOf(*results.map { it.second }.toTypedArray()).whenComplete { _, _ ->
+            weak.get()?.runOnUiThread {
+                val activity = weak.get() ?: return@runOnUiThread
+                if (activity.isDestroyed || activity.isFinishing) return@runOnUiThread
+                activity.restoreFailures = results.filter { it.second.isCompletedExceptionally }.map { it.first }.toSet()
+                if (activity.restoreFailures.isNotEmpty() || pending) activity.showRestoreGate()
+                else {
+                    activity.restoringDrafts = false
+                    activity.openLanguage(activity.language)
+                    activity.editor?.setSelection(activity.restoredCursor.coerceIn(0, activity.editor?.length() ?: 0))
+                }
+            }
+        }
+    }
+
+    private fun showRestoreGate() {
+        unreviewedRestore = true
+        content.removeAllViews()
+        content.addView(QuasarDesign.body(this, if (restoreFailures.isEmpty())
+            "Restored the last saved draft. A save was pending at shutdown; review this version before saving or using it."
+            else "Saved draft could not be read. Editing and saving are blocked until you retry or explicitly discard the unavailable draft."))
+        if (restoreFailures.isNotEmpty()) content.addView(QuasarDesign.action(this, "Retry draft restore") { restoreDrafts(true) })
+        content.addView(QuasarDesign.action(this, if (restoreFailures.isEmpty()) "Review restored drafts" else "Discard unavailable drafts") {
+            restoreFailures.forEach { draftReferences.remove(it); draftStore.discardSaved(it) }
+            restoreFailures = emptySet()
+            restoreReviewRequired = false
+            unreviewedRestore = false
+            restoringDrafts = false
+            openLanguage(language)
+        })
+    }
+
+    private fun flushDrafts() {
+        if (draftReferences.isEmpty()) return
+        val weak = WeakReference(this)
+        draftStore.flush().whenComplete { _, failure ->
+            weak.get()?.runOnUiThread {
+                val activity = weak.get() ?: return@runOnUiThread
+                if (activity.isDestroyed || activity.isFinishing) return@runOnUiThread
+                activity.draftStatus?.text = if (failure != null) "Draft save failed; keep this app open and retry."
+                    else if (activity.editorChanged || activity.draftReferences.keys.any { activity.draftStore.isDirty(it) }) "Draft save pending"
+                    else "Draft saved privately"
+            }
+        }
     }
 
     private fun renderShell() {
@@ -121,18 +213,29 @@ class LogicStudioActivity : Activity() {
     }
 
     private fun openLanguage(nextLanguage: IdeLanguage) {
-        captureDraft()
+        if (restoringDrafts || !captureDraft()) return
+        val previousName = activeName
+        editor = null
         language = nextLanguage
         drafts.clear()
         val buffers = runCatching { workspace.list(language) }
             .onFailure { toast(it.safeMessage()) }
             .getOrDefault(emptyList())
         buffers.forEach { drafts[it.name] = it }
-        activeName = buffers.firstOrNull()?.name
+        draftReferences.keys.filter { it.startsWith("logic:${language.name}:") }.forEach { id ->
+            draftStore.current(id)?.let { source ->
+                val name = id.substringAfterLast(':')
+                drafts[name] = SourceBuffer(name, language, source, dirty = true)
+            }
+        }
+        activeName = previousName?.takeIf { it in drafts } ?: drafts.keys.firstOrNull()
         showEditor()
     }
 
     private fun showEditor() {
+        handler.removeCallbacks(capturePending)
+        editorChanged = false
+        editor = null
         content.removeAllViews()
         content.addView(sectionLine(language.displayName, "APP PRIVATE"))
         content.addView(
@@ -159,22 +262,31 @@ class LogicStudioActivity : Activity() {
             typeface = Typeface.MONOSPACE
             textSize = 13f
             setHorizontallyScrolling(true)
-            addTextChangedListener(object : TextWatcher {
-                override fun beforeTextChanged(value: CharSequence?, start: Int, count: Int, after: Int) = Unit
-                override fun onTextChanged(value: CharSequence?, start: Int, before: Int, count: Int) = Unit
-                override fun afterTextChanged(value: Editable?) {
-                    if (applyingHighlight || value == null) return
-                    val name = activeName ?: return
-                    drafts[name] = SourceBuffer(name, language, value.toString(), dirty = true)
-                    highlight(value, language)
-                }
-            })
         }
         editor?.let { field ->
-            highlight(field.text, language)
+            val identity = draftName(source.name)
+            field.filters = field.filters + InputFilter { insertion, start, end, destination, dstart, dend ->
+                val length = destination.length.toLong() - (dend - dstart) + end - start
+                if (length <= Int.MAX_VALUE && draftStore.canAcceptLength(identity, length.toInt())) null else {
+                    field.error = "Open drafts exceed the storage memory limit; save or discard another draft"
+                    destination.subSequence(dstart, dend)
+                }
+            }
+            SourceEditorAnalysis(field, language, ::tokenColor,
+                rejected = { toast("Source limit is 256 KiB; edit was not inserted") },
+                changed = {
+                    activeName?.let { name -> drafts[name]?.let { drafts[name] = it.copy(dirty = true) } }
+                    editorChanged = true
+                    draftStatus?.text = "Draft save pending"
+                    handler.removeCallbacks(capturePending)
+                    handler.postDelayed(capturePending, 300)
+                },
+            )
             content.addView(field, QuasarDesign.match(top = dp(12)))
         }
 
+        draftStatus = QuasarDesign.body(this, "Drafts save privately after editing pauses", QuasarDesign.muted, 12f)
+        content.addView(draftStatus, QuasarDesign.match(top = dp(8)))
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(studioButton("Save") { saveActive() }, weighted())
         actions.addView(studioButton("Validate") { validateActive() }, weighted(dp(7)))
@@ -200,7 +312,7 @@ class LogicStudioActivity : Activity() {
                 isSelected = selected
                 isClickable = true
                 setOnClickListener {
-                    captureDraft()
+                    if (!captureDraft()) return@setOnClickListener
                     activeName = buffer.name
                     showEditor()
                 }
@@ -231,12 +343,14 @@ class LogicStudioActivity : Activity() {
     }
 
     private fun saveActive() {
-        captureDraft()
+        if (restoringDrafts || !captureDraft()) return
         val name = activeName ?: return
         val buffer = drafts[name] ?: return
         runCatching { workspace.save(buffer.copy(dirty = false)) }
             .onSuccess {
                 drafts[name] = buffer.copy(dirty = false)
+                draftReferences.remove(draftName(name))
+                draftStore.discardSaved(draftName(name))
                 toast("Saved $name atomically")
                 showEditor()
             }
@@ -244,7 +358,7 @@ class LogicStudioActivity : Activity() {
     }
 
     private fun validateActive() {
-        captureDraft()
+        if (restoringDrafts || !captureDraft()) return
         val source = activeName?.let(drafts::get)?.source.orEmpty()
         val diagnostics = LanguageRegistry.implementation(language).validate(source)
         renderDiagnostics(diagnostics)
@@ -270,6 +384,7 @@ class LogicStudioActivity : Activity() {
     }
 
     private fun promptNewBuffer() {
+        if (restoringDrafts || !captureDraft()) return
         val input = QuasarDesign.field(this, hint = if (language == IdeLanguage.LISP) "policy.lisp" else "rules.pl")
         AlertDialog.Builder(this)
             .setTitle("New ${language.displayName} buffer")
@@ -280,6 +395,9 @@ class LogicStudioActivity : Activity() {
                 runCatching {
                     if (!name.endsWith(".${language.extension}")) throw WorkspaceException("Use a .${language.extension} filename")
                     if (!Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,63}").matches(name)) throw WorkspaceException("Invalid source name")
+                    require(draftStore.canAcceptLength(draftName(name), buffer.source.length)) { "Draft limit reached" }
+                    draftStore.update(draftName(name), buffer.source)
+                    draftReferences[draftName(name)] = DraftReference.key(draftName(name))
                     drafts[name] = buffer
                     activeName = name
                     showEditor()
@@ -290,7 +408,7 @@ class LogicStudioActivity : Activity() {
     }
 
     private fun showExperts() {
-        captureDraft()
+        if (restoringDrafts || !captureDraft()) return
         activeName = null
         editor = null
         content.removeAllViews()
@@ -390,27 +508,22 @@ class LogicStudioActivity : Activity() {
         return QuasarDesign.field(this, value, lines, hint).also { content.addView(it, QuasarDesign.match(top = dp(6))) }
     }
 
-    private fun captureDraft() {
-        val name = activeName ?: return
-        val field = editor ?: return
-        drafts[name] = SourceBuffer(name, language, field.text.toString(), dirty = drafts[name]?.dirty == true || field.text.toString() != drafts[name]?.source)
-    }
-
-    private fun highlight(editable: Editable, targetLanguage: IdeLanguage) {
-        applyingHighlight = true
-        try {
-            editable.getSpans(0, editable.length, ForegroundColorSpan::class.java).forEach(editable::removeSpan)
-            LanguageRegistry.implementation(targetLanguage).tokenize(editable.toString()).forEach { token ->
-                editable.setSpan(
-                    ForegroundColorSpan(tokenColor(token.kind)),
-                    token.start.coerceAtMost(editable.length),
-                    token.endExclusive.coerceAtMost(editable.length),
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
-                )
-            }
-        } finally {
-            applyingHighlight = false
-        }
+    private fun captureDraft(): Boolean {
+        handler.removeCallbacks(capturePending)
+        if (restoringDrafts || !editorChanged) return true
+        val name = activeName ?: return true
+        val field = editor ?: return true
+        return runCatching {
+            val id = draftName(name)
+            draftStore.update(id, field.text)
+            val source = checkNotNull(draftStore.current(id))
+            drafts[name] = SourceBuffer(name, language, source, dirty = true)
+            draftReferences[id] = DraftReference.key(id)
+            editorChanged = false
+        }.fold({ true }, {
+            field.error = "Draft was not captured. Keep this editor open; save or discard another draft."
+            false
+        })
     }
 
     private fun tokenColor(kind: TokenKind): Int = when (kind) {
@@ -442,7 +555,7 @@ class LogicStudioActivity : Activity() {
         setPadding(dp(8), dp(12), dp(8), dp(12))
         isClickable = true
         isFocusable = true
-        setOnClickListener { action() }
+        setOnClickListener { if (!restoringDrafts) action() }
     }
 
     private fun weighted(start: Int = 0) = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = start }
