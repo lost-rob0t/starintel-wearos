@@ -20,7 +20,9 @@ class VisualFixtureJourneyTest {
             QuasarConfig(instrumentation.targetContext).save(backend.origin, "star_sk_v1_fixture")
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 Ui.waitText("Investigation desk"); Ui.capture("$label-home")
-                Ui.click("Documents")
+                var primarySearch = false
+                scenario.onActivity { activity -> primarySearch = all(activity.window.decorView).any { it.tag == "Search" || it.contentDescription == "Primary destinations" } }
+                Ui.click(if (primarySearch) "Search" else "Documents")
                 val searchStart = android.os.SystemClock.elapsedRealtime()
                 scenario.onActivity { activity ->
                     all(activity.window.decorView).filterIsInstance<TextView>()
