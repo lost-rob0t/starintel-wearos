@@ -56,9 +56,19 @@ internal object NavigationJourney {
                 }
                 expand()
                 scenario.onActivity { activity ->
-                    activity.startActivity(android.content.Intent(activity, MainActivity::class.java)
-                        .addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                        .setAction(actor.starintel.android.config.OperatorContracts.ACTION_OPEN_MAP))
+                    val launchIntent = activity.intent
+                    // ActivityScenario identifies its lifecycle events by the launch
+                    // intent. Exercise the real callback without starting another task.
+                    try {
+                        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+                            .callActivityOnNewIntent(activity, android.content.Intent(activity, MainActivity::class.java)
+                                .setAction(actor.starintel.android.config.OperatorContracts.ACTION_OPEN_MAP))
+                        assertEquals(actor.starintel.android.config.OperatorContracts.ACTION_OPEN_MAP, activity.intent.action)
+                    } finally {
+                        // Preserve the runner's lifecycle association without changing
+                        // the route or reversing any production callback behavior.
+                        activity.intent = launchIntent
+                    }
                 }
                 Ui.waitText("Quasar tactical")
                 scenario.onActivity { activity ->
