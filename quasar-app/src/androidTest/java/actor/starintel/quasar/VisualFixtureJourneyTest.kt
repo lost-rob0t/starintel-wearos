@@ -50,6 +50,11 @@ class VisualFixtureJourneyTest {
                 }
                 check(backend.maxRequested.get() <= 100) { "Unbounded map request" }
                 Ui.capture("$label-field")
+                Ui.click("Actors"); reveal("star://fixture/actor/reconnaissance"); Ui.capture("$label-actors")
+                val selection = Ui.device.findObject(androidx.test.uiautomator.UiSelector().text("Select fixture-reconnaissance"))
+                if (selection.exists()) selection.click() else Ui.click("Dispatch a target")
+                Ui.fieldName("ACTOR", "fixture-reconnaissance")
+                Ui.waitText("Dispatch target"); Ui.capture("$label-target")
                 Ui.click("Settings"); Ui.waitText("Credentials are validated"); Ui.capture("$label-settings")
                 androidx.test.uiautomator.UiScrollable(androidx.test.uiautomator.UiSelector().scrollable(true)).scrollDescriptionIntoView("STAR SERVER")
                 Ui.device.findObject(androidx.test.uiautomator.UiSelector().description("STAR SERVER")).click()
@@ -62,6 +67,21 @@ class VisualFixtureJourneyTest {
                 check(imeShown) { "Keyboard did not open for fixture" }
                 Ui.capture("$label-keyboard")
                 Ui.device.pressBack()
+            }
+            ActivityScenario.launch(actor.starintel.quasar.ide.LogicStudioActivity::class.java).use {
+                Ui.waitText("Logic studio"); Ui.capture("$label-logic")
+            }
+            ActivityScenario.launch(actor.starintel.quasar.workflows.FlowStudioActivity::class.java).use {
+                Ui.waitText("Flow studio"); Ui.capture("$label-flow")
+            }
+            val workflows = actor.starintel.quasar.workflows.SharedPreferencesWorkflowRepository(instrumentation.targetContext)
+            workflows.publish(actor.starintel.quasar.workflows.WorkflowWidgetState(
+                actor.starintel.quasar.workflows.WorkflowConnectivity.ONLINE,
+                listOf(actor.starintel.quasar.workflows.WorkflowWidgetSummary.create("fixture-workflow", "Fixture field route", actor.starintel.quasar.workflows.WorkflowRunStatus.RUNNING)),
+                System.currentTimeMillis(),
+            ))
+            ActivityScenario.launch(actor.starintel.quasar.workflows.WorkflowStatusActivity::class.java).use {
+                Ui.waitText("Workflows"); Ui.capture("$label-workflows")
             }
         }
     }

@@ -21,7 +21,7 @@ class OperatorJourneyTest {
                 Ui.click("Settings"); Ui.fieldName("STAR SERVER", backend.origin)
                 Ui.fieldName("API key", "star_sk_v1_fixture"); Ui.click("Authenticate key"); Ui.waitText("API key authenticated")
                 Ui.click("Actors"); Ui.waitText("fixture"); Ui.capture("quasar-actors")
-                Ui.click("Dispatch a target"); Ui.fieldName("ACTOR", "fixture"); Ui.fieldName("TARGET", "sample"); Ui.fieldName("DATASET", "test")
+                Ui.click("Select fixture"); Ui.fieldName("ACTOR", "fixture"); Ui.fieldName("TARGET", "sample"); Ui.fieldName("DATASET", "test")
                 Ui.click("Dispatch"); Ui.waitText("target-fixture")
                 Ui.click("Dispatch"); scenario.recreate(); Ui.waitText("target-fixture")
                 assertEquals(1, backend.targets.get())

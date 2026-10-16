@@ -18,7 +18,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 enum class BasemapState(val label: String) {
-    ONLINE("MAP LIVE"),
+    ONLINE("MAP AVAILABLE"),
     CACHED_ONLY("CACHED MAP"),
     UNAVAILABLE("NO BASEMAP"),
 }
@@ -107,14 +107,15 @@ internal class OpenMapTileRepository(
                     }
                     output.toByteArray()
                 }
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.let { memory.put(url, it) }
+                val bitmap = requireNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size)) { "Tile decoding failed" }
+                memory.put(url, bitmap)
                 synchronized(inFlight) { failedUntil.remove(url) }
                 state = if (online) BasemapState.ONLINE else BasemapState.CACHED_ONLY
             }
         } catch (_: Exception) {
             synchronized(inFlight) { failedUntil[url] = System.currentTimeMillis() + RETRY_DELAY_MILLIS }
             state = if (memory.size() > 0) {
-                if (hasNetwork()) BasemapState.ONLINE else BasemapState.CACHED_ONLY
+                BasemapState.CACHED_ONLY
             } else {
                 BasemapState.UNAVAILABLE
             }

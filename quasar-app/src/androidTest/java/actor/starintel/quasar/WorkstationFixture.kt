@@ -38,7 +38,7 @@ internal class WorkstationFixture : AutoCloseable {
                         }).put("fixture_corpus_size", 1_000_000)
                         path.startsWith("/api/v1/documents/") -> JSONObject().put("document", document(path.substringAfterLast('-').toIntOrNull() ?: 0))
                         path == "/api/v1/stats" -> JSONObject("""{"data":{"documents":{"total":1000000},"targets":{"total":1}}}""")
-                        path == "/v1/actors" -> JSONObject("""{"data":{"actors":[]}}""")
+                        path == "/v1/actors" -> JSONObject("""{"data":{"actors":[{"resourceUri":"star://fixture/actor/reconnaissance","operatorVisible":true,"semantic":{"name":"fixture-reconnaissance"},"status":"online","ready":true,"accepts":{"targets":["target"]}}]}}""")
                         else -> JSONObject().put("status", "ok")
                     }
                     val bytes = payload.toString().toByteArray()
