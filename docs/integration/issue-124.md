@@ -47,7 +47,7 @@ No Quasar Lisp, transaction overlay, PR110, PR115 or native redesign branch edit
 Passed:
 - `python3 scripts/test-update-manifest.py`: update-manifest: ok.
 - `python3 scripts/test-release-contract.py`: 9 APK contract, version 7 / 0.5.0-alpha.
-- Standalone Kotlin 2.2.0/JUnit 4.13.2: 7 TileWorkQueueTest tests, 0.122 seconds.
+- Standalone Kotlin 2.2.0/JUnit 4.13.2: initially 7 TileWorkQueueTest tests; now 8, including completion-wakeup ordering.
   Includes 1,000 viewport changes (100 URLs each) with two blocked fake transports,
   duplicate coalescing, close/obsolete cancellation publication, attach race,
   10,000 unique failures, clock advance, and dimension limits.
@@ -78,8 +78,8 @@ Blocked/unrun:
   or physical-device smoke, real platform HTTP disk-cache/offline integration,
   heap profiling, or rapid-pan UI test was run.
 - The initial supplemental compile failed because javac was unavailable; supplying
-  actual Java sources directly to Kotlin resolved symbol compilation. No javac
-  or Java-bytecode build pass is claimed.
+  actual Java sources directly to Kotlin resolved symbol compilation. The later follow-up found the JDK compiler module and successfully compiled the
+  actual shared-config/design Java sources using `java com.sun.tools.javac.Main`.
 
 No deploy, merge, installation or production service changes.
 
@@ -93,3 +93,37 @@ only their own classes and would not run these tests automatically.
 Hosted checks for the initial commit were inspected: Android build was queued,
 Nix evaluation and widget build were running, with no completed failure yet.
 The environment still has no Nix, Gradle, Android SDK, ADB or /dev/kvm.
+
+### Integrated runtime evidence
+
+After wiring FieldMapView, supplemental compilation passed for the actual view,
+QuasarDesign, repository, scheduler and geo sources, plus all seven instrumentation
+test source methods. An additional ordering race was repaired: completion redraw
+now happens only after the scheduler releases the URL's slot, so a previously
+cancelled URL that is visible again can immediately be requested. A regression
+unit test exercises that immediate same-URL request from the completion wakeup.
+
+Eight pure JVM tests pass. Seven Android tile cases also pass (3.569 seconds) in
+Robolectric 4.14.1 on API35 with NATIVE graphics, real Android BitmapFactory and
+actual repository source. The temporary harness adds Robolectric runner/config
+annotations to the instrumentation test source and pumps ShadowLooper while
+waiting for callbacks; it changes no production code or test assertions. It
+uses android-all-instrumented 15-robolectric-12650502-i7 and generated-style
+BuildConfig.DEBUG=true. This is supplemental Android framework/native-decoder
+coverage, not an emulator, AGP build, actual HTTP disk-cache test or device pass.
+The unmodified instrumentation class is still queued for the dedicated hosted
+emulator workflow. A local harness initially loaded an older temporary scheduler
+JAR and reported NoSuchMethodError; an explicit current-test JAR classpath fixed
+that harness issue before the passing run.
+
+`git merge-tree --write-tree HEAD origin/pr120` confirms FieldMapView merges
+cleanly. The only conflicting file is OpenMapTileRepository.kt, at the decode
+publication hunk: retain this PR's bounds/decode/cancellation-safe publication
+block. It already includes PR120's requireNotNull decode failure check; MAP
+AVAILABLE wording and cached-only error state also match PR120. This merge
+preview does not alter either branch or merge the redesign into this workstream.
+
+Hosted initial-head Nix evaluation and helper smoke steps passed; watchface
+validation passed; APK compilation remained running. Integrated-head Android,
+widget and tile jobs were queued when inspected. No hosted compilation/test
+failure was reported at that observation; no green hosted result is claimed.
