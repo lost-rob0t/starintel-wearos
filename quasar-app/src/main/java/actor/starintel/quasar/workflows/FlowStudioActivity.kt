@@ -36,12 +36,14 @@ class FlowStudioActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         window.statusBarColor = QuasarDesign.background
         window.navigationBarColor = QuasarDesign.background
-        restoredSource = savedInstanceState?.getString("source")
+        restoredSource = savedInstanceState?.getString("sourceDraft")?.let { key ->
+            runCatching { actor.starintel.quasar.WorkspaceDrafts(this).read(key) }.getOrNull()
+        }
         render()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putString("source", editor.text.toString().take(65_536))
+        outState.putString("sourceDraft", actor.starintel.quasar.WorkspaceDrafts(this).save("flow-studio-source", editor.text.toString()))
         super.onSaveInstanceState(outState)
     }
 

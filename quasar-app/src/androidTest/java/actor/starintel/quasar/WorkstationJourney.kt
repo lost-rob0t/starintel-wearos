@@ -13,6 +13,11 @@ import org.junit.Assert.*
 internal object WorkstationJourney {
     fun verify() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val drafts = WorkspaceDrafts(instrumentation.targetContext)
+        val draftSource = "synthetic-private-source-".repeat(1000)
+        val draftKey = drafts.save("fixture-roundtrip", draftSource)
+        assertEquals(draftSource, drafts.read(draftKey))
+        assertFalse(instrumentation.targetContext.filesDir.resolve("workspace-drafts-v1/$draftKey").readBytes().toString(Charsets.ISO_8859_1).contains("synthetic-private-source"))
         WorkstationFixture().use { backend ->
             QuasarConfig(instrumentation.targetContext).save(backend.origin, "star_sk_v1_fixture")
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
