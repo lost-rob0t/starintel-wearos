@@ -16,6 +16,7 @@ import java.io.File
 object NativeUi {
     val device get() = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     fun click(text: String) {
+        dismissFixtureLauncherAnr()
         val control = device.findObject(UiSelector().text(text))
         val destinations = device.findObject(UiSelector().description("Primary destinations"))
         if (text in setOf("Home", "Field", "Actors", "Search", "Settings") && !control.exists() && destinations.exists()) destinations.click()
@@ -24,10 +25,45 @@ object NativeUi {
         control.click()
     }
     fun waitText(text: String) {
+        dismissFixtureLauncherAnr()
         if (!device.findObject(UiSelector().textContains(text)).waitForExists(10000)) {
-            runCatching { reportWaitFailure(text) }
-            error("Missing state: $text")
+            dismissFixtureLauncherAnr()
+            if (!device.findObject(UiSelector().textContains(text)).waitForExists(2000)) {
+                runCatching { reportWaitFailure(text) }
+                error("Missing state: $text")
+            }
         }
+    }
+
+    /** Same bounded external-launcher repair as the existing widget fixture. Never dismiss app failures. */
+    private fun dismissFixtureLauncherAnr() {
+        val dialog = device.findObject(UiSelector().text("Pixel Launcher isn't responding"))
+        if (!dialog.exists()) return
+        check(device.executeShellCommand("getprop ro.kernel.qemu").trim() == "1") { "Launcher repair requires a disposable emulator" }
+        val close = device.findObject(UiSelector().resourceId("android:id/aerr_close"))
+        check(close.exists()) { "Named launcher error has no close control" }
+        close.click()
+        check(dialog.waitUntilGone(5000)) { "Launcher error remained visible" }
+        InstrumentationRegistry.getInstrumentation().sendStatus(0, android.os.Bundle().apply {
+            putString("stream", "\nDismissed the disposable emulator's named Pixel Launcher ANR; app errors remain fatal.\n")
+        })
+    }
+
+    /** The IME is a separate window and may own focus in landscape; record the visible compositor. */
+    fun captureKeyboard(name: String) {
+        dismissFixtureLauncherAnr()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val ime = android.provider.Settings.Secure.getString(context.contentResolver,
+            android.provider.Settings.Secure.DEFAULT_INPUT_METHOD).orEmpty().substringBefore('/')
+        val active = instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString()
+        check(active == context.packageName || active == ime) { "Unexpected window over fixture keyboard: $active" }
+        val directory = File(context.getExternalFilesDir(null), "e2e").apply { mkdirs() }
+        val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+        File(directory, "$name.png").outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        bitmap.recycle()
+        device.dumpWindowHierarchy(File(directory, "$name.xml"))
+        File(directory, "$name.capture.txt").writeText("Compositor capture of the synthetic IME/window state; PixelCopy cannot include a separate IME window.\n")
     }
 
     /** Fixture-only diagnostics run before ActivityScenario tears down the failed window. */
@@ -99,6 +135,7 @@ object NativeUi {
         device.executeShellCommand("input keyevent 111")
     }
     fun capture(name: String) {
+        dismissFixtureLauncherAnr()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         // Read the resumed activity's actual rendered window, not a compositor frame
         // that may still belong to the previous activity or its secure surface.

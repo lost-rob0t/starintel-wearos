@@ -56,8 +56,9 @@ class VisualFixtureJourneyTest {
                 Ui.fieldName("ACTOR", "fixture-reconnaissance")
                 Ui.waitText("Dispatch target"); Ui.capture("$label-target")
                 Ui.click("Settings"); Ui.waitText("Credentials are validated"); Ui.capture("$label-settings")
-                androidx.test.uiautomator.UiScrollable(androidx.test.uiautomator.UiSelector().scrollable(true)).scrollDescriptionIntoView("STAR SERVER")
-                Ui.device.findObject(androidx.test.uiautomator.UiSelector().description("STAR SERVER")).click()
+                val serverField = Ui.device.findObject(androidx.test.uiautomator.UiSelector().description("STAR SERVER"))
+                if (!serverField.exists()) androidx.test.uiautomator.UiScrollable(androidx.test.uiautomator.UiSelector().scrollable(true)).scrollDescriptionIntoView("STAR SERVER")
+                serverField.click()
                 var imeShown = false
                 val imeDeadline = System.currentTimeMillis() + 5000
                 while (!imeShown && System.currentTimeMillis() < imeDeadline) {
@@ -65,7 +66,19 @@ class VisualFixtureJourneyTest {
                     if (!imeShown) Thread.sleep(100)
                 }
                 check(imeShown) { "Keyboard did not open for fixture" }
-                Ui.capture("$label-keyboard")
+                // Wait for inset animation/layout to settle before recording the visible IME.
+                var previousBottom = -1
+                var stableFrames = 0
+                val settleUntil = System.currentTimeMillis() + 5000
+                while (stableFrames < 3 && System.currentTimeMillis() < settleUntil) {
+                    var bottom = 0
+                    scenario.onActivity { activity -> bottom = activity.window.decorView.rootWindowInsets.getInsets(android.view.WindowInsets.Type.ime()).bottom }
+                    stableFrames = if (bottom == previousBottom && bottom > 0) stableFrames + 1 else 0
+                    previousBottom = bottom
+                    Thread.sleep(100)
+                }
+                check(stableFrames >= 3) { "Keyboard insets did not settle" }
+                Ui.captureKeyboard("$label-keyboard")
                 Ui.device.pressBack()
             }
             ActivityScenario.launch(actor.starintel.quasar.ide.LogicStudioActivity::class.java).use {
