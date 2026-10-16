@@ -1,10 +1,11 @@
 # Issue 123: serialized Activity integration contract
 
 Base: PR120 `82c2a3ae332fdc42c61e487b2607d81210ea9278`. MainActivity integration
-must follow issue122's paging integration, through the parent. This PR deliberately
-does not edit MainActivity or LogicStudioActivity. Do not merge it on its own:
-legacy synchronous call sites still exist and currently do not catch size/quota
-rejections. Issue123 is not closed by this helper PR.
+must follow issue122's paging and issue125's detail integration, through the parent.
+LogicStudioActivity now integrates the coordinator on top of PR131 `92e6ef5`.
+MainActivity remains untouched pending the parent-approved detail head. Do not
+merge yet: MainActivity's legacy synchronous call sites still exist and do not
+catch size/quota rejections. Issue123 is not closed by this PR.
 
 ## Shared interface for 122/124/125/126
 
@@ -80,3 +81,31 @@ completed futures rather than retaining arbitrary results. Disk quota is 8 MiB
 including interrupted envelope siblings; count quota is 64 directory entries
 (with at most one temporary replacement). There is no full-corpus or time-based
 retention sweep. No plaintext spillover is written.
+
+## Logic Studio integration validation
+
+Integrated after parent release of PR131 `92e6ef5`, preserving one
+SourceEditorAnalysis per editor and captureDraft before navigation/save. Edits
+mark dirty without copying source; a 300 ms idle capture or navigation/lifecycle
+capture admits one bounded snapshot. Repeated unchanged navigation does not copy
+or encrypt. Save/restore of encrypted drafts uses the process coordinator worker.
+Normal explicit PrivateWorkspaceStore save/list operations are unchanged.
+
+Language switching retains unsaved buffers using qualified language/name refs.
+Rotation consumes process-local snapshots immediately. A process restore reads on
+the worker and adopts clean versions without redundant writes. Missing/corrupt
+references block all editor/mode actions until explicit retry/discard. Pending
+process-restored content requires a review gate. Aggregate admission rejects a
+whole edit before insertion; size handling remains the existing editor filter.
+No shared MainActivity edits were included.
+
+Added three Android integration tests: language-switch/rotation preservation, a
+missing-envelope gate that cannot be bypassed by changing mode, and review-gate
+persistence across rotation. The dedicated emulator workflow now selects eight tests including PR131's highlighting/rotation
+test. These are API/type compiled locally but have NOT run on Android yet. The
+standalone compiler uses real Android14/AndroidX classes and actual production
+sources, with only generated R.style IDs supplied as a temporary compile stub;
+this is not an APK build or resource-link check. Twelve coordinator JVM tests pass,
+including restored-clean no-write and stale-restore/new-edit ordering. Thirteen
+IDE language/analysis regression JVM tests also pass. Both Python
+repository gates, shell syntax and diff checks pass. Hosted runs remained queued.

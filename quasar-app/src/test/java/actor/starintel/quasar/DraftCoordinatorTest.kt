@@ -17,6 +17,30 @@ class DraftCoordinatorTest {
         }
         override fun read(key: String) = saved[key] ?: error("missing/corrupt")
     }
+    @Test fun restoredDraftIsCleanAndDoesNotReencryptOnNavigation() {
+        val store = Store(); store.saved["key"] = "restored"
+        val drafts = DraftCoordinator(store, 60_000)
+        assertEquals("restored", drafts.restoreInto("a", "key").get(2, TimeUnit.SECONDS))
+        assertFalse(drafts.isDirty("a"))
+        drafts.update("a", "restored"); drafts.flush().get(2, TimeUnit.SECONDS)
+        assertEquals(0, store.writes)
+        assertEquals("key", drafts.acknowledged("a")!!.key)
+    }
+    @Test fun restoreDoesNotOverwriteAnEditMadeWhileReadWasRunning() {
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        val store = object : DraftStorage {
+            override fun save(name: String, source: String) = name
+            override fun read(key: String): String {
+                entered.countDown(); check(release.await(2, TimeUnit.SECONDS)); return "old disk source"
+            }
+        }
+        val drafts = DraftCoordinator(store, 60_000)
+        val restore = drafts.restoreInto("a", "key")
+        assertTrue(entered.await(2, TimeUnit.SECONDS))
+        drafts.update("a", "new edit"); release.countDown()
+        assertEquals("new edit", restore.get(2, TimeUnit.SECONDS))
+        assertTrue(drafts.isDirty("a"))
+    }
     @Test fun referenceIsStableBeforeFirstSaveAndNamesAreBounded() {
         assertEquals("ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb", DraftReference.key("a"))
         assertEquals(DraftReference.key("route:0"), DraftReference.key("route:0"))
