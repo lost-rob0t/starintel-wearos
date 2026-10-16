@@ -16,6 +16,7 @@ internal class WorkstationFixture : AutoCloseable {
     val slowRequested = java.util.concurrent.CountDownLatch(1)
     @Volatile var searchStatus = 200
     @Volatile var delayMillis = 0L
+    @Volatile var detailPadding = 0
     private val acceptor = Thread {
         while (!server.isClosed) {
             val socket = try { server.accept() } catch (_: Exception) { break }
@@ -38,7 +39,9 @@ internal class WorkstationFixture : AutoCloseable {
                         search -> JSONObject().put("rows", JSONArray().apply {
                             repeat(count) { n -> val index = offset + n; put(JSONObject().put("id", "fixture-$index").put("doc", document(index))) }
                         }).put("bookmark", if (count == 0) JSONObject.NULL else "fixture-page-${offset + count}").put("total_rows", if (params["q"] == "empty") 0 else 1_000_000)
-                        path.startsWith("/api/v1/documents/") -> JSONObject().put("document", document(path.substringAfterLast('-').toIntOrNull() ?: 0))
+                        path.startsWith("/api/v1/documents/") -> JSONObject().put("document", document(path.substringAfterLast('-').toIntOrNull() ?: 0).apply {
+                            if (detailPadding > 0) getJSONObject("data").put("largeDetail", "x".repeat(detailPadding))
+                        })
                         path == "/api/v1/stats" -> JSONObject("""{"data":{"documents":{"total":1000000},"targets":{"total":1}}}""")
                         path == "/v1/actors" -> JSONObject("""{"data":{"actors":[{"resourceUri":"star://fixture/actor/reconnaissance","operatorVisible":true,"semantic":{"name":"fixture-reconnaissance"},"status":"online","ready":true,"accepts":{"targets":["target"]}}]}}""")
                         else -> JSONObject().put("status", "ok")

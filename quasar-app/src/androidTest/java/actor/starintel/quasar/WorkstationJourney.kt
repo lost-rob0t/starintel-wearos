@@ -77,6 +77,7 @@ internal object WorkstationJourney {
                 scenario.onActivity { activity -> assertEquals(0, all(activity.window.decorView).filterIsInstance<RecyclerView>().single().adapter!!.itemCount) }
                 search("*"); Ui.waitText("40 records loaded")
                 Ui.click("Fixture record 0"); Ui.waitText("Synthetic field exercise")
+                DetailPreviewJourney.verify(scenario, backend)
                 Ui.device.pressBack(); Ui.waitText("40 records loaded")
                 scenario.onActivity { activity ->
                     val adapter = all(activity.window.decorView).filterIsInstance<RecyclerView>().single().adapter as DocumentRows
