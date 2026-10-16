@@ -15,10 +15,16 @@ for config in 320x720-1.0-no 360x800-1.3-yes 412x900-2.0-no 720x360-1.0-yes 600x
   adb shell wm size "$size"
   adb shell settings put system font_scale "$font"
   adb shell cmd uimode night "$night"
+  if [[ "$night" == no ]]; then mode=threebutton; else mode=gestural; fi
+  adb shell cmd overlay enable-exclusive --category "com.android.internal.systemui.navbar.$mode" > "build/workstation-evidence/$config-navigation.log" 2>&1 || true
+  adb shell settings get secure navigation_mode >> "build/workstation-evidence/$config-navigation.log"
   adb shell pm clear actor.starintel.quasar
   adb shell am instrument -w -e fixtureLabel "$config" -e class actor.starintel.quasar.VisualFixtureJourneyTest actor.starintel.quasar.test/androidx.test.runner.AndroidJUnitRunner | tee "build/workstation-evidence/$config.log"
   grep -Fq 'OK (1 test)' "build/workstation-evidence/$config.log"
   adb pull /sdcard/Android/data/actor.starintel.quasar/files/e2e "build/workstation-evidence/$config"
 done
+if [[ -f quasar-app/src/main/java/actor/starintel/quasar/WorkspaceState.kt ]]; then
+  python3 scripts/test-quasar-process-restoration.py
+fi
 adb shell getprop > build/workstation-evidence/emulator-properties.txt
 adb logcat -d -b crash > build/workstation-evidence/crashes.log

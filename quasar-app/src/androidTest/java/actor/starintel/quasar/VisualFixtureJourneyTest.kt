@@ -21,11 +21,20 @@ class VisualFixtureJourneyTest {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 Ui.waitText("Investigation desk"); Ui.capture("$label-home")
                 Ui.click("Documents")
+                val searchStart = android.os.SystemClock.elapsedRealtime()
                 scenario.onActivity { activity ->
                     all(activity.window.decorView).filterIsInstance<TextView>()
                         .single { it.text.toString() == "Search" && it.tag != "Search" }.performClick()
                 }
-                Ui.waitText("Fixture record 0"); Ui.capture("$label-search")
+                Ui.waitText("Fixture record 0")
+                val searchMillis = android.os.SystemClock.elapsedRealtime() - searchStart
+                scenario.onActivity { activity ->
+                    val nodes = all(activity.window.decorView).toList()
+                    instrumentation.sendStatus(0, android.os.Bundle().apply {
+                        putString("stream", "\nFixture measurement $label: search-to-observed-result=${searchMillis}ms (includes UiAutomator polling), attachedViews=${nodes.size}, attachedRecordTitles=${nodes.filterIsInstance<TextView>().count { it.text.startsWith("Fixture record") }}, JavaHeap=${Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory()} bytes. Not physical-phone performance.\n")
+                    })
+                }
+                Ui.capture("$label-search")
                 Ui.click("Fixture record 0")
                 Ui.waitText("Synthetic field exercise"); Ui.capture("$label-document")
                 Ui.click("Field"); Ui.waitText("Quasar tactical")
@@ -39,6 +48,16 @@ class VisualFixtureJourneyTest {
                 }
                 Ui.capture("$label-field")
                 Ui.click("Settings"); Ui.waitText("Credentials are validated"); Ui.capture("$label-settings")
+                Ui.device.findObject(androidx.test.uiautomator.UiSelector().description("STAR SERVER")).click()
+                var imeShown = false
+                val imeDeadline = System.currentTimeMillis() + 5000
+                while (!imeShown && System.currentTimeMillis() < imeDeadline) {
+                    scenario.onActivity { activity -> imeShown = activity.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime()) }
+                    if (!imeShown) Thread.sleep(100)
+                }
+                check(imeShown) { "Keyboard did not open for fixture" }
+                Ui.capture("$label-keyboard")
+                Ui.device.pressBack()
             }
         }
     }

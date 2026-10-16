@@ -13,6 +13,7 @@ internal class WorkstationFixture : AutoCloseable {
     private val workers = Executors.newFixedThreadPool(4)
     val origin = "http://127.0.0.1:${server.localPort}"
     val maxRequested = AtomicInteger()
+    val slowRequested = java.util.concurrent.CountDownLatch(1)
     @Volatile var searchStatus = 200
     @Volatile var delayMillis = 0L
     private val acceptor = Thread {
@@ -27,6 +28,7 @@ internal class WorkstationFixture : AutoCloseable {
                     val search = path.contains("search?")
                     val params = path.substringAfter('?', "").split('&').associate { pair -> pair.substringBefore('=') to URLDecoder.decode(pair.substringAfter('=', ""), "UTF-8") }
                     val limit = (params["limit"]?.toIntOrNull() ?: 40).coerceIn(1, 100)
+                    if (search && params["q"] == "slow") { slowRequested.countDown(); Thread.sleep(700) }
                     if (search) { maxRequested.updateAndGet { current -> maxOf(current, limit) }; Thread.sleep(delayMillis) }
                     val status = if (search) searchStatus else 200
                     val payload = when {

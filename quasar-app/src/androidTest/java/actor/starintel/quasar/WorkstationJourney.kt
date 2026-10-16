@@ -49,8 +49,18 @@ internal object WorkstationJourney {
                 backend.searchStatus = 403
                 search("*"); Ui.waitText("Permission denied")
                 backend.searchStatus = 200
+                search("slow")
+                assertTrue(backend.slowRequested.await(5, java.util.concurrent.TimeUnit.SECONDS))
                 search("empty"); Ui.waitText("No matching documents")
+                Thread.sleep(900) // Release the older slow response before checking the superseding result.
+                scenario.onActivity { activity -> assertEquals(0, all(activity.window.decorView).filterIsInstance<RecyclerView>().single().adapter!!.itemCount) }
                 search("*"); Ui.waitText("40 records loaded")
+                Ui.click("Fixture record 0"); Ui.waitText("Synthetic field exercise")
+                Ui.device.pressBack(); Ui.waitText("40 records loaded")
+                scenario.onActivity { activity ->
+                    val adapter = all(activity.window.decorView).filterIsInstance<RecyclerView>().single().adapter as DocumentRows
+                    assertEquals("fixture-0", adapter.selectedId)
+                }
                 assertEquals(40, backend.maxRequested.get())
                 instrumentation.sendStatus(0, android.os.Bundle().apply {
                     putString("stream", "\nBounded corpus: 1000000 synthetic records, requested=${backend.maxRequested.get()}, initial search+UI=${elapsed}ms, heap=${Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()} bytes. Emulator measurement only.\n")
