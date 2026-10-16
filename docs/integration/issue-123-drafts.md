@@ -27,8 +27,14 @@ only for source compatibility; integration must eliminate their UI-thread caller
   unacknowledged edits. `acknowledged(name)` returns a key and generation ONLY after
   AtomicFile.finishWrite. `isDirty`/`failure` distinguish pending/failed persistence.
   A prior receipt must never be labelled as acknowledgement of newer edited text.
-- In rememberView/onSaveInstanceState save keys, cursor, route, and bounded small
-  inline fields only, then call `flush()` without waiting. Lifecycle requests coalesce.
+- In rememberView/onSaveInstanceState save `DraftReference.key(name)` even before
+  a first write acknowledges, alongside cursor, route, and bounded small inline
+  fields. Persist a pending marker separately; a reference is not an acknowledgement.
+  Otherwise a first write completed after state capture would have no restore key.
+  On process recreation a pending marker requires a visible "restored last saved
+  version; review before submitting" gate, because the v1 envelope does not persist
+  generations. If no envelope exists, fail visibly. Never substitute empty content.
+  Then call `flush()` without waiting. Lifecycle requests coalesce.
   Use a weak Activity reference or route/generation check when posting completion
   to main; never retain an Activity in a process coordinator callback.
 - `flush()` returns a future for the snapshot at execution; later edits may still

@@ -2,7 +2,6 @@ package actor.starintel.quasar
 
 import android.content.Context
 import android.util.AtomicFile
-import java.security.MessageDigest
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -20,7 +19,7 @@ internal class WorkspaceDrafts(context: Context) : DraftStorage {
         DraftLimits.utf8Bytes(source)
         require(!actor.starintel.quasar.ide.SecretGuard.containsLikelySecret(source)) { "Draft contains credential-like material" }
         check(directory.isDirectory || directory.mkdirs()) { "Cannot create draft directory" }
-        val key = MessageDigest.getInstance("SHA-256").digest(name.toByteArray()).joinToString("") { "%02x".format(it) }
+        val key = DraftReference.key(name)
         val file = AtomicFile(directory.resolve(key))
         val existing = directory.listFiles().orEmpty()
         require(existing.size < MAX_FILES || file.baseFile.exists()) { "Draft retention limit reached; discard unused drafts" }
