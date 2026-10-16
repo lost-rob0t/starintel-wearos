@@ -16,6 +16,12 @@ class VisualFixtureJourneyTest {
     @Test fun captureSameSyntheticWorkstation() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val label = InstrumentationRegistry.getArguments().getString("fixtureLabel", "default")
+        val theme = InstrumentationRegistry.getArguments().getString("themeFixture", "starintel")
+        // Explicit system mode exercises both variants even though production is
+        // StarIntel/dark by default. Baseline source safely ignores these prefs.
+        val custom = org.json.JSONObject("""{"name":"Field green","dark":{"background":"#0A1A16","surface":"#142A23","accent":"#9DE7AC","alternate":"#98D9EB","text":"#F0FFF5"},"light":{"background":"#F2F8F3","surface":"#FFFFFF","accent":"#27623A","alternate":"#006A78","text":"#132A1E"}}""")
+        instrumentation.targetContext.getSharedPreferences("quasar_appearance_v1", android.content.Context.MODE_PRIVATE)
+            .edit().putString("theme", theme).putString("mode", "system").putString("custom", custom.toString()).commit()
         WorkstationFixture().use { backend ->
             QuasarConfig(instrumentation.targetContext).save(backend.origin, "star_sk_v1_fixture")
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -86,6 +92,12 @@ class VisualFixtureJourneyTest {
                 check(stableFrames >= 3) { "Keyboard insets did not settle" }
                 Ui.captureKeyboard("$label-keyboard")
                 Ui.device.pressBack()
+                val appearance = Ui.device.findObject(androidx.test.uiautomator.UiSelector().descriptionStartsWith("Appearance & themes"))
+                if (primarySearch) {
+                    androidx.test.uiautomator.UiScrollable(androidx.test.uiautomator.UiSelector().scrollable(true)).scrollToBeginning(10)
+                    check(appearance.waitForExists(5000)) { "Appearance destination is not reachable" }
+                    appearance.click(); Ui.waitText("Make it yours"); Ui.capture("$label-appearance")
+                }
             }
             ActivityScenario.launch(actor.starintel.quasar.ide.LogicStudioActivity::class.java).use {
                 Ui.waitText("Logic studio"); Ui.capture("$label-logic")

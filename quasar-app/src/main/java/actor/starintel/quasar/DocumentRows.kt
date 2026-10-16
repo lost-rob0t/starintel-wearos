@@ -46,9 +46,9 @@ internal class DocumentRows(private val onSelect: (DocumentRow) -> Unit) : ListA
             isFocusable = true
             descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         }
-        val title = QuasarDesign.title(context, "", 18f)
-        val meta = QuasarDesign.body(context, "", size = 14f)
-        val summary = QuasarDesign.body(context, "", QuasarDesign.text)
+        val title = QuasarDesign.title(context, "", 19f)
+        val meta = QuasarDesign.body(context, "", QuasarDesign.cyan, size = 13f).apply { typeface = android.graphics.Typeface.MONOSPACE }
+        val summary = QuasarDesign.body(context, "", QuasarDesign.muted).apply { maxLines = 3; ellipsize = android.text.TextUtils.TruncateAt.END }
         row.addView(title); row.addView(meta, QuasarDesign.match(top = context.dp(4)))
         row.addView(summary, QuasarDesign.match(top = context.dp(4)))
         return Holder(row, title, meta, summary)
@@ -61,7 +61,7 @@ internal class DocumentRows(private val onSelect: (DocumentRow) -> Unit) : ListA
         holder.summary.visibility = if (item.summary.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
         holder.row.isSelected = item.id == selectedId
         holder.row.background = QuasarDesign.rowBackground(holder.row.context, item.id == selectedId)
-        holder.row.contentDescription = "${item.title}. ${item.kind}. ${item.id}${if (item.id == selectedId) ". Selected" else ""}"
+        holder.row.contentDescription = "${item.title}. ${item.kind}. ${item.id}. ${item.summary}${if (item.id == selectedId) ". Selected" else ""}"
         holder.row.setOnClickListener { selectedId = item.id; onSelect(item) }
     }
     private object Diff : DiffUtil.ItemCallback<DocumentRow>() {

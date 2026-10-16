@@ -29,5 +29,6 @@ class OperatorJourneyTest {
         }
         MapSyncJourney.verifyLifecycle()
         WorkstationJourney.verify()
+        AppearanceJourney.verify()
     }
 }

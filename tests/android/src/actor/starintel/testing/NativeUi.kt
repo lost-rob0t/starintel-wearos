@@ -150,8 +150,6 @@ object NativeUi {
             androidx.test.uiautomator.By.pkg(targetPackage).depth(0)), 10_000)) { "Fixture window is not foreground: $name" }
         check(instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == targetPackage)
         val committed = CountDownLatch(1)
-        val copied = CountDownLatch(1)
-        val copyResult = AtomicInteger(-1)
         lateinit var activity: android.app.Activity
         lateinit var screenshot: Bitmap
         instrumentation.runOnMainSync {
@@ -166,29 +164,31 @@ object NativeUi {
             decor.invalidate()
         }
         check(committed.await(10, TimeUnit.SECONDS)) { "No committed fixture frame: $name" }
-        instrumentation.runOnMainSync {
-            check(activity in androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
-                .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED)) { "Fixture activity changed: $name" }
-            check(activity.hasWindowFocus()) { "Fixture activity lost focus: $name" }
-            val decor = activity.window.decorView
-            screenshot = Bitmap.createBitmap(decor.width, decor.height, Bitmap.Config.ARGB_8888)
-            PixelCopy.request(activity.window, screenshot, { result ->
-                copyResult.set(result)
-                copied.countDown()
-            }, Handler(Looper.getMainLooper()))
+        fun copyFrame(): Bitmap {
+            val copied = CountDownLatch(1)
+            val copyResult = AtomicInteger(-1)
+            lateinit var frame: Bitmap
+            instrumentation.runOnMainSync {
+                check(activity in androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED)) { "Fixture activity changed: $name" }
+                check(activity.hasWindowFocus()) { "Fixture activity lost focus: $name" }
+                val decor = activity.window.decorView
+                frame = Bitmap.createBitmap(decor.width, decor.height, Bitmap.Config.ARGB_8888)
+                PixelCopy.request(activity.window, frame, { result ->
+                    copyResult.set(result); copied.countDown()
+                }, Handler(Looper.getMainLooper()))
+            }
+            check(copied.await(10, TimeUnit.SECONDS)) { "Fixture window copy timed out: $name" }
+            check(copyResult.get() == PixelCopy.SUCCESS) { "Fixture window copy failed: ${copyResult.get()} ($name)" }
+            return frame
         }
-        check(copied.await(10, TimeUnit.SECONDS)) { "Fixture window copy timed out: $name" }
-        check(copyResult.get() == PixelCopy.SUCCESS) { "Fixture window copy failed: ${copyResult.get()} ($name)" }
+        screenshot = copyFrame()
         val context = instrumentation.targetContext
         val directory = File(context.getExternalFilesDir(null), "e2e").apply { mkdirs() }
-        File(directory, "$name.png").outputStream().use {
-            check(screenshot.compress(Bitmap.CompressFormat.PNG, 100, it))
-        }
         check(instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == targetPackage) {
             "Fixture lost the active window before hierarchy capture: $name"
         }
         val hierarchy = File(directory, "$name.xml")
-        device.dumpWindowHierarchy(hierarchy)
         // Supplemental compositor evidence covers the actual keyboard and system bars.
         // The fixture-only secure-flag override above is already committed to a frame.
         // Window frame commitment can precede SurfaceFlinger applying the test-only
@@ -216,12 +216,21 @@ object NativeUi {
             system.recycle()
             check(android.os.SystemClock.uptimeMillis() < deadline) { "Compositor did not show the fixture frame: $name" }
             android.os.SystemClock.sleep(50)
+            // A read-only screen can finish loading while capture is in progress.
+            // Compare against its current window, not an obsolete loading frame.
+            screenshot.recycle()
+            screenshot = copyFrame()
+        }
+        File(directory, "$name.png").outputStream().use {
+            check(screenshot.compress(Bitmap.CompressFormat.PNG, 100, it))
         }
         screenshot.recycle()
         File(directory, "$name-system.png").outputStream().use {
             check(system.compress(Bitmap.CompressFormat.PNG, 100, it))
         }
         system.recycle()
+        check(instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString() == targetPackage)
+        device.dumpWindowHierarchy(hierarchy)
         hierarchy.copyTo(File(directory, "$name-system.xml"), overwrite = true)
     }
 }
