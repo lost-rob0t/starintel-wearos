@@ -7,6 +7,7 @@ import java.util.concurrent.Executors
  */
 internal class TileWorkQueue(
     private val capacity: Int = 32,
+    private val onSettled: () -> Unit = {},
     private val load: (String, Ticket) -> Unit,
 ) : AutoCloseable {
     internal class Ticket {
@@ -65,6 +66,9 @@ internal class TileWorkQueue(
                         active.remove(url)
                         drain()
                     }
+                    // A redraw must see the released slot, including when an
+                    // obsolete URL became visible again before cancellation ended.
+                    onSettled()
                 }
             }
         }

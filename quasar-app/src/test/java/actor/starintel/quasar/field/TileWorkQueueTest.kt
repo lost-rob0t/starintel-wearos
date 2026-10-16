@@ -90,6 +90,20 @@ class TileWorkQueueTest {
         } finally { release.countDown(); queue.close() }
     }
 
+    @Test fun completionWakeupCanImmediatelyRequestTheSameUrl() {
+        val loaded = AtomicInteger()
+        val complete = CountDownLatch(1)
+        lateinit var queue: TileWorkQueue
+        queue = TileWorkQueue(onSettled = {
+            if (loaded.get() == 1) queue.request("same") else complete.countDown()
+        }) { _, _ -> loaded.incrementAndGet() }
+        try {
+            queue.request("same")
+            complete.awaitTest()
+            assertEquals(2, loaded.get())
+        } finally { queue.close() }
+    }
+
     @Test fun cancellationBeforeTransportAttachStillAborts() {
         val ticket = TileWorkQueue.Ticket()
         ticket.cancel()
@@ -102,7 +116,10 @@ class TileWorkQueueTest {
     @Test fun duplicateVisibleRequestsAreCoalesced() {
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)
-        val queue = TileWorkQueue { _, _ -> started.countDown(); release.await(5, TimeUnit.SECONDS) }
+        val queue = TileWorkQueue { _, _ ->
+            started.countDown()
+            try { release.await(5, TimeUnit.SECONDS) } catch (_: InterruptedException) { }
+        }
         try {
             queue.request("same")
             started.awaitTest()

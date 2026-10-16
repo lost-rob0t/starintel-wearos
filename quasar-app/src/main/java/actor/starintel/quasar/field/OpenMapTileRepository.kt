@@ -37,7 +37,8 @@ internal class OpenMapTileRepository(
     private val applicationContext = context.applicationContext
     private val sharedConfig = StarIntelSharedConfig(applicationContext)
     private val main = Handler(Looper.getMainLooper())
-    private val work = TileWorkQueue(load = ::load)
+    @Volatile private var lastState = BasemapState.UNAVAILABLE
+    private val work = TileWorkQueue(onSettled = ::notifySettled, load = ::load)
     private val closed = AtomicBoolean(false)
     private val failures = TileFailureCache()
     private val memory = object : LruCache<String, Bitmap>(12 * 1024) {
@@ -148,11 +149,14 @@ internal class OpenMapTileRepository(
         } finally {
             ticket.detach()
             connection?.disconnect()
-            // Also wake the viewport after cancellation: a tile may have become
-            // visible again while its cancelled transport still held a slot.
-            if (ticket.cancelled) state = if (memory.size() > 0) BasemapState.CACHED_ONLY else BasemapState.UNAVAILABLE
-            if (!closed.get()) main.post { if (!closed.get()) onChanged(state) }
+            work.publish(ticket) { lastState = state }
         }
+    }
+
+    private fun notifySettled() {
+        // The queue has released its slot before this wakeup. Otherwise a fast
+        // redraw could see the old in-flight URL and miss its chance to retry.
+        if (!closed.get()) main.post { if (!closed.get()) onChanged(lastState) }
     }
 
     private fun hasNetwork(): Boolean {
