@@ -34,8 +34,8 @@ class LogicStudioActivity : Activity() {
     private var applyingHighlight = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
         QuasarDesign.configure(this)
+        super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         window.statusBarColor = QuasarDesign.background
         window.navigationBarColor = QuasarDesign.background
@@ -44,7 +44,29 @@ class LogicStudioActivity : Activity() {
         runCatching { workspace.seedDefaults() }
             .onFailure { Toast.makeText(this, it.safeMessage(), Toast.LENGTH_LONG).show() }
         renderShell()
-        openLanguage(IdeLanguage.LISP)
+        val restoredLanguage = savedInstanceState?.getString("language")?.let { runCatching { IdeLanguage.valueOf(it) }.getOrNull() } ?: IdeLanguage.LISP
+        openLanguage(restoredLanguage)
+        savedInstanceState?.getBundle("drafts")?.let { saved ->
+            saved.keySet().forEach { name -> saved.getString(name)?.let { source -> drafts[name] = SourceBuffer(name, restoredLanguage, source, dirty = true) } }
+            activeName = savedInstanceState.getString("activeName") ?: activeName
+            showEditor()
+            editor?.setSelection((savedInstanceState.getInt("cursor")).coerceIn(0, editor?.text?.length ?: 0))
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        captureDraft()
+        outState.putString("language", language.name)
+        outState.putString("activeName", activeName)
+        outState.putInt("cursor", editor?.selectionStart ?: 0)
+        // Only unsaved, bounded buffers; persisted sources remain in the private workspace.
+        outState.putBundle("drafts", Bundle().apply {
+            var remaining = 128 * 1024
+            drafts.values.filter { it.dirty }.forEach { buffer ->
+                if (buffer.source.length <= remaining) { putString(buffer.name, buffer.source); remaining -= buffer.source.length }
+            }
+        })
+        super.onSaveInstanceState(outState)
     }
 
     private fun renderShell() {
@@ -92,7 +114,7 @@ class LogicStudioActivity : Activity() {
             "Prolog" to { openLanguage(IdeLanguage.PROLOG) },
             "Experts" to ::showExperts,
         ).forEach { (label, action) ->
-            row.addView(studioButton(label, action), LinearLayout.LayoutParams(0, dp(46), 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
+            row.addView(studioButton(label, action), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
         }
         return row
     }

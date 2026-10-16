@@ -52,8 +52,8 @@ class MainActivity : Activity() {
     private var syncStatus = "No active transfer"
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
         QuasarDesign.configure(this)
+        super.onCreate(savedInstanceState)
         workspace = WorkspaceState(savedInstanceState?.getBundle("workspace"))
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         window.statusBarColor = QuasarDesign.background
@@ -166,6 +166,8 @@ class MainActivity : Activity() {
         state.putString("selected", selectedDocument)
         (root as? FieldOpsView)?.let { state.putBundle("field", it.saveWorkspace()) }
         workspace.views.putBundle(workspace.route, state)
+        val retained = workspace.history.toSet() + workspace.route + setOf("home", "search", "datasets", "field", "actors", "settings")
+        workspace.views.keySet().toList().filter { it !in retained }.forEach(workspace.views::remove)
     }
 
     private fun enterRoute(route: String) {
@@ -201,29 +203,15 @@ class MainActivity : Activity() {
             description = "Your corpus, field evidence, and actor work in one workspace.",
         )
 
-        val lisp = localRuntime.lispStatus()
-        val runtimeCard = QuasarDesign.card(this, if (lisp.available) QuasarDesign.lime else QuasarDesign.amber)
-        runtimeCard.addView(sectionHeader("LOCAL CORE", if (lisp.available) "READY" else "BOOTSTRAP"))
-        runtimeCard.addView(QuasarDesign.title(this, "On-device workspace", 20f), QuasarDesign.match(top = dp(12)))
-        runtimeCard.addView(
-            QuasarDesign.body(
-                this,
-                if (lisp.available) {
-                    "Local tools are available. Connected work uses your server account and its permissions."
-                } else {
-                    "Local tools are unavailable on this device. Connect a server to browse records and dispatch work."
-                },
-            ),
-            QuasarDesign.match(top = dp(8)),
-        )
-        body.addView(runtimeCard, QuasarDesign.match(top = dp(20)))
-
-        val metricRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        body.addView(QuasarDesign.body(this, connectionText()), QuasarDesign.match(top = dp(12)))
+        body.addView(QuasarDesign.action(this, "Connection settings") { showSettings() }, QuasarDesign.match(top = dp(8)))
+        val metricRow = LinearLayout(this).apply { orientation = if (resources.configuration.fontScale > 1.3f) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL }
         val documents = metric("DOCUMENTS", "—", QuasarDesign.cyan)
         val targets = metric("TARGETS", "—", QuasarDesign.pink)
         val server = metric("SERVER", if (config.isConfigured()) "—" else "OFF", QuasarDesign.amber)
         listOf(documents, targets, server).forEachIndexed { index, view ->
-            metricRow.addView(view, weighted(start = if (index == 0) 0 else dp(7)))
+            metricRow.addView(view, if (metricRow.orientation == LinearLayout.VERTICAL) QuasarDesign.match(top = dp(8))
+                else weighted(start = if (index == 0) 0 else dp(8)))
         }
         body.addView(metricRow, QuasarDesign.match(top = dp(12)))
         if (config.isConfigured()) {
@@ -234,32 +222,37 @@ class MainActivity : Activity() {
                 targets.findViewWithTag<TextView>(VALUE_TAG).text =
                     data.optJSONObject("targets")?.optLong("total")?.compact() ?: "—"
                 server.findViewWithTag<TextView>(VALUE_TAG).text = "REPLIED"
+                serverStatus = "Statistics request succeeded"
             }
         }
 
-        body.addView(QuasarDesign.eyebrow(this, "Workspace"), QuasarDesign.match(top = dp(28)))
-        val routes = listOf(
-            Route("Field map", "Map geo documents and traverse their links", QuasarDesign.amber) { showFieldOps() },
-            Route("Documents", "Search and inspect structured records", QuasarDesign.pink) { showSearch("Documents", "*") },
-            Route("Datasets", "Move between investigation scopes", QuasarDesign.amber) { showSearch("Datasets", "dtype:dataset") },
-            Route("Targets", "Dispatch actor work with provenance", QuasarDesign.lime) { showTarget() },
-            Route("Import", "Bring in bounded StarIntel JSON batches", QuasarDesign.coral) { showImport() },
-            Route("Add record", "Create a schema-checked document", QuasarDesign.cyan) { showCreateDocument() },
-            Route("Workflow status", "Inspect cached reports and pending controls", QuasarDesign.cyan) {
-                startActivity(Intent(this, actor.starintel.quasar.workflows.WorkflowStatusActivity::class.java))
-            },
-            Route("Flow studio", "Build and run bounded Morrison-style workflows", QuasarDesign.cyan) {
-                startActivity(Intent(this, actor.starintel.quasar.workflows.FlowStudioActivity::class.java))
-            },
-            Route("Logic studio", "Edit private Lisp, Prolog, and expert nodes", QuasarDesign.lime) {
-                startActivity(Intent(this, actor.starintel.quasar.ide.LogicStudioActivity::class.java))
-            },
-            Route("Reasoning agent", "Run a bounded Prolog-RLM investigation turn", QuasarDesign.pink) { showAgent() },
-            Route("Actors", "Live server fleet and local definitions", QuasarDesign.amber) { showActors() },
-        )
-        routes.forEach { route ->
-            body.addView(QuasarDesign.routeCard(this, route.label, route.detail, route.accent, route.action), QuasarDesign.match(top = dp(8)))
+        fun route(label: String, detail: String, action: () -> Unit) {
+            body.addView(QuasarDesign.routeCard(this, label, detail, QuasarDesign.cyan, action), QuasarDesign.match(top = dp(8)))
         }
+        body.addView(QuasarDesign.eyebrow(this, "Investigate"), QuasarDesign.match(top = dp(20)))
+        route("Documents", "Search and inspect canonical records") { showSearch("Documents", "*") }
+        route("Field map", "Switch between map, accessible list and links") { showFieldOps() }
+        route("Datasets", "Search investigation scopes") { showSearch("Datasets", "dtype:dataset") }
+        body.addView(QuasarDesign.eyebrow(this, "Capture and dispatch"), QuasarDesign.match(top = dp(20)))
+        route("Add record", "Validate and submit one document") { showCreateDocument() }
+        route("Import", "Validate and submit a bounded JSON batch") { showImport() }
+        route("Targets", "Submit an actor request and inspect acceptance") { showTarget() }
+        route("Workflow status", "Cached reports and pending controls") {
+            startActivity(Intent(this, actor.starintel.quasar.workflows.WorkflowStatusActivity::class.java))
+        }
+        val advanced = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+        advanced.addView(QuasarDesign.action(this, "Flow studio") {
+            startActivity(Intent(this, actor.starintel.quasar.workflows.FlowStudioActivity::class.java))
+        }, QuasarDesign.match(top = dp(8)))
+        advanced.addView(QuasarDesign.action(this, "Logic studio") {
+            startActivity(Intent(this, actor.starintel.quasar.ide.LogicStudioActivity::class.java))
+        }, QuasarDesign.match(top = dp(8)))
+        advanced.addView(QuasarDesign.action(this, "Reasoning agent") { showAgent() }, QuasarDesign.match(top = dp(8)))
+        advanced.addView(QuasarDesign.action(this, "Actors") { showActors() }, QuasarDesign.match(top = dp(8)))
+        body.addView(QuasarDesign.action(this, "Advanced tools") {
+            advanced.visibility = if (advanced.visibility == View.GONE) View.VISIBLE else View.GONE
+        }, QuasarDesign.match(top = dp(20)))
+        body.addView(advanced)
     }
 
     private fun showSearch(title: String, initial: String) {
@@ -376,7 +369,7 @@ class MainActivity : Activity() {
                     field.setDataStatus("${features.size} GEO / $recordCount RECORDS", ready = true)
                     field.setSnapshotNotice("Snapshot ≤100 records · corpus total unknown · refine query for other records")
                 }.onFailure { error ->
-                    field.showDataError(error.message ?: "Star server is unavailable. Cached basemap tiles may still render.")
+                    field.showDataError(failureText(error))
                 }
             }
         }, "quasar-geo-search").start()
@@ -442,10 +435,10 @@ class MainActivity : Activity() {
         val status = QuasarDesign.body(this, "Ready for server validation.")
         body.addView(editor, QuasarDesign.match(top = dp(18)))
         addSubmission(body, "Create document", status, validate = {
-            runCatching { JSONObject(editor.text.toString()) }.onFailure { editor.error = "Enter one valid JSON object" }.isSuccess
+            (editor.text.isNotBlank() && editor.text.length <= 512 * 1024).also { if (!it) editor.error = "Enter a JSON object up to 512 KiB" }
         }) {
             val source = editor.text.toString()
-            submitOnce(status) { client.createDocument(JSONObject(source)) }
+            submitOnce(status, validationInput = editor) { client.createDocument(JSONObject(source)) }
         }
         body.addView(status, QuasarDesign.match(top = dp(10)))
     }
@@ -457,10 +450,10 @@ class MainActivity : Activity() {
         val status = QuasarDesign.body(this, "Nothing imported yet.")
         body.addView(editor, QuasarDesign.match(top = dp(18)))
         addSubmission(body, "Import documents", status, validate = {
-            runCatching { JSONArray(editor.text.toString()) }.onFailure { editor.error = "Enter a JSON array of documents" }.isSuccess
+            (editor.text.isNotBlank() && editor.text.length <= 512 * 1024).also { if (!it) editor.error = "Enter a JSON array up to 512 KiB" }
         }) {
             val source = editor.text.toString()
-            submitOnce(status) { client.bulkCreate(JSONArray(source)) }
+            submitOnce(status, validationInput = editor) { client.bulkCreate(JSONArray(source)) }
         }
         body.addView(status, QuasarDesign.match(top = dp(10)))
     }
@@ -633,6 +626,9 @@ class MainActivity : Activity() {
                 val login = client.login(origin, name, presentedPassword)
                 client.authContext(origin, login.apiKey)
                 login
+            }, onFailure = { error ->
+                status.text = failureText(error)
+                password.error = "Login failed. Check username, password and server."
             }) { login ->
                 runCatching { config.save(origin, login.apiKey) }
                     .onSuccess {
@@ -653,7 +649,10 @@ class MainActivity : Activity() {
         body.addView(QuasarDesign.action(this, "Authenticate key") {
             val origin = server.text.toString()
             val presented = key.text.toString().trim()
-            runApi({ client.authContext(origin, presented) }) {
+            runApi({ client.authContext(origin, presented) }, onFailure = { error ->
+                status.text = failureText(error)
+                key.error = "Key rejected or server unavailable. Check the key and origin."
+            }) {
                 runCatching { config.save(origin, presented) }
                     .onSuccess { key.text.clear(); status.text = "API key authenticated · saved securely" }
                     .onFailure { status.text = it.message ?: "Could not save API key" }
@@ -769,11 +768,18 @@ class MainActivity : Activity() {
         }, QuasarDesign.match(top = dp(8)))
     }
 
-    private fun submitOnce(status: TextView, acceptanceOnly: Boolean = false, operation: () -> JSONObject) {
+    private fun submitOnce(status: TextView, acceptanceOnly: Boolean = false, validationInput: EditText? = null, operation: () -> JSONObject) {
         val state = workspace.views.getBundle(workspace.route)!!
         status.text = "Submitting once…"
         syncStatus = "Submission in progress"
         runApi(operation, onFailure = {
+            if (it is org.json.JSONException && validationInput != null) {
+                state.remove("attempted")
+                validationInput.error = "Invalid JSON. Correct the structure and submit again."
+                status.text = "Validation failed before sending. No request was submitted."
+                syncStatus = "No active transfer"
+                return@runApi
+            }
             syncStatus = "Submission outcome unknown"
             val message = "${failureText(it)} Submission not retried. Inspect server records before starting another."
             state.putString("receipt", message)
@@ -794,9 +800,9 @@ class MainActivity : Activity() {
     }
 
     private fun sectionHeader(label: String, state: String) = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        addView(QuasarDesign.eyebrow(this@MainActivity, label), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.START
+        addView(QuasarDesign.eyebrow(this@MainActivity, label), QuasarDesign.match())
         addView(QuasarDesign.pill(this@MainActivity, state, statusColor(state)))
     }
 
@@ -862,13 +868,6 @@ class MainActivity : Activity() {
             }
         }.start()
     }
-
-    private data class Route(
-        val label: String,
-        val detail: String,
-        val accent: Int,
-        val action: () -> Unit,
-    )
 
     companion object {
         private const val VALUE_TAG = "metric-value"
