@@ -43,6 +43,7 @@ internal class WorkspaceNavigation(
         }
         opener = iconControl(if (rail) "Expand navigation" else "Open navigation", "Menu") { expand() }
         if (rail) {
+            opener.setPadding(dp(16), dp(12), dp(16), dp(12))
             main.addView(LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(8), dp(4), dp(8), dp(4))
@@ -58,7 +59,7 @@ internal class WorkspaceNavigation(
                             }
                             item.tag = destination.label
                             railItems.add(destination to item)
-                            addView(item, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(4) })
+                            addView(item, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(2) })
                         }
                     })
                 }, LinearLayout.LayoutParams(-1, 0, 1f))
