@@ -111,7 +111,7 @@ class StarIntelClient(
                 .put("dataset", cleanDataset)
                 .put("delay", 1)
                 .put("recurring", false)
-                .put("options", JSONArray())
+                .put("options", JSONObject())
                 .put("idempotency_key", "android-${UUID.randomUUID()}")
         return runCatching { request("POST", "/api/v1/targets", body) }
             .recoverCatching { failure ->

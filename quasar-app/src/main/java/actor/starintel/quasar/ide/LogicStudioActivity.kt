@@ -34,6 +34,7 @@ class LogicStudioActivity : Activity() {
     private var applyingHighlight = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        QuasarDesign.configure(this)
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         window.statusBarColor = QuasarDesign.background
@@ -43,7 +44,30 @@ class LogicStudioActivity : Activity() {
         runCatching { workspace.seedDefaults() }
             .onFailure { Toast.makeText(this, it.safeMessage(), Toast.LENGTH_LONG).show() }
         renderShell()
-        openLanguage(IdeLanguage.LISP)
+        val restoredLanguage = savedInstanceState?.getString("language")?.let { runCatching { IdeLanguage.valueOf(it) }.getOrNull() } ?: IdeLanguage.LISP
+        openLanguage(restoredLanguage)
+        savedInstanceState?.getBundle("drafts")?.let { saved ->
+            saved.keySet().forEach { name -> saved.getString(name)?.let { key ->
+                runCatching { actor.starintel.quasar.WorkspaceDrafts(this).read(key) }.onSuccess { source -> drafts[name] = SourceBuffer(name, restoredLanguage, source, dirty = true) }
+            } }
+            activeName = savedInstanceState.getString("activeName") ?: activeName
+            showEditor()
+            editor?.setSelection((savedInstanceState.getInt("cursor")).coerceIn(0, editor?.text?.length ?: 0))
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        captureDraft()
+        outState.putString("language", language.name)
+        outState.putString("activeName", activeName)
+        outState.putInt("cursor", editor?.selectionStart ?: 0)
+        // Only unsaved, bounded buffers; persisted sources remain in the private workspace.
+        outState.putBundle("drafts", Bundle().apply {
+            drafts.values.filter { it.dirty }.forEach { buffer ->
+                putString(buffer.name, actor.starintel.quasar.WorkspaceDrafts(this@LogicStudioActivity).save("logic:${language.name}:${buffer.name}", buffer.source))
+            }
+        })
+        super.onSaveInstanceState(outState)
     }
 
     private fun renderShell() {
@@ -77,7 +101,7 @@ class LogicStudioActivity : Activity() {
             ScrollView(this).apply { isFillViewport = true; addView(content) },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f),
         )
-        setContentView(shell)
+        QuasarDesign.install(this, shell)
     }
 
     private fun modeBar(): View {
@@ -91,7 +115,7 @@ class LogicStudioActivity : Activity() {
             "Prolog" to { openLanguage(IdeLanguage.PROLOG) },
             "Experts" to ::showExperts,
         ).forEach { (label, action) ->
-            row.addView(studioButton(label, action), LinearLayout.LayoutParams(0, dp(46), 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
+            row.addView(studioButton(label, action), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
         }
         return row
     }
@@ -171,6 +195,9 @@ class LogicStudioActivity : Activity() {
                 setTextColor(if (selected) QuasarDesign.background else QuasarDesign.text)
                 setBackgroundColor(if (selected) QuasarDesign.cyan else QuasarDesign.panelRaised)
                 setPadding(dp(13), dp(11), dp(13), dp(11))
+                minHeight = dp(48)
+                isFocusable = true
+                isSelected = selected
                 isClickable = true
                 setOnClickListener {
                     captureDraft()
@@ -411,12 +438,14 @@ class LogicStudioActivity : Activity() {
         typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
         setTextColor(QuasarDesign.text)
         setBackgroundColor(QuasarDesign.panelRaised)
+        minHeight = dp(48)
+        setPadding(dp(8), dp(12), dp(8), dp(12))
         isClickable = true
         isFocusable = true
         setOnClickListener { action() }
     }
 
-    private fun weighted(start: Int = 0) = LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = start }
+    private fun weighted(start: Int = 0) = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = start }
 
     private fun EditText.nonBlankLines(): List<String> = text.lineSequence().map(String::trim).filter(String::isNotEmpty).toList()
 

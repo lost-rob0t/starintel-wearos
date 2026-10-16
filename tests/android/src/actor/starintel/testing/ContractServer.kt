@@ -38,6 +38,7 @@ class ContractServer : AutoCloseable {
                         val target = JSONObject(String(body))
                         require(target.getString("actor") == "fixture" && target.getString("target") == "sample")
                         require(target.getString("dataset") == "test" && target.getString("idempotency_key").isNotBlank())
+                        require(target.get("options") is JSONObject) { "Canonical Target options must be a JSON map" }
                         targets.incrementAndGet()
                         """{"status":"ok","target_id":"target-fixture","request_id":"request-fixture","correlation_id":"correlation-fixture"}"""
                     }
