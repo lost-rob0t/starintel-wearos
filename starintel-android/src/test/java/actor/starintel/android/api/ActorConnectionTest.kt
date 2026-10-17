@@ -26,6 +26,36 @@ class ActorConnectionTest {
         }
     }
 
+    @Test fun targetUsesCanonicalJsonMapOptionsAndNonemptyIdempotencyKey() {
+        ServerSocket(0).use { server ->
+            val received = CompletableFuture<JSONObject>()
+            val worker = Thread {
+                server.accept().use { socket ->
+                    val input = socket.getInputStream().bufferedReader()
+                    input.readLine()
+                    var length = 0
+                    while (true) {
+                        val header = input.readLine() ?: break
+                        if (header.isEmpty()) break
+                        if (header.startsWith("Content-Length:", true)) length = header.substringAfter(':').trim().toInt()
+                    }
+                    val body = CharArray(length)
+                    var offset = 0
+                    while (offset < length) { val count = input.read(body, offset, length - offset); check(count > 0); offset += count }
+                    received.complete(JSONObject(String(body)))
+                    socket.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}".toByteArray())
+                }
+            }.apply { start() }
+            val client = StarIntelClient({ StarSession("http://127.0.0.1:${server.localPort}", "star_sk_v1_test") }, "test", true)
+            client.createTarget("example", "sample", "test")
+            val body = received.get(5, TimeUnit.SECONDS)
+            assertTrue(body.get("options") is JSONObject)
+            assertEquals("example", body.getString("actor"))
+            assertTrue(body.getString("idempotency_key").isNotBlank())
+            worker.join(5000)
+        }
+    }
+
     @Test fun authorizationFailureNeverFallsBackToLegacyDispatch() {
         ServerSocket(0).use { server ->
             val request = CompletableFuture<String>()
