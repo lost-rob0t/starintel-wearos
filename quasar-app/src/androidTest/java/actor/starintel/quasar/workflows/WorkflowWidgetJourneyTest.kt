@@ -16,7 +16,6 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
-import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -155,10 +154,35 @@ class WorkflowWidgetJourneyTest {
             assertTrue(text(scenario).contains("Pause and resume are not supported"))
             scenario.recreate()
             assertTrue(text(scenario).contains("Only alpha details"))
-            scenario.moveToState(Lifecycle.State.CREATED)
+            // Exercise the real task lifecycle. ActivityScenario's synthetic stop
+            // can return to RESUMED on this emulator immediately after recreation.
+            // Observe STOPPED before publishing, then foreground the existing task
+            // without an Intent (onNewIntent must not perform this refresh for us).
+            lateinit var backgrounded: WorkflowStatusActivity
+            scenario.onActivity { backgrounded = it }
+            assertTrue("Home must background the status task", UiDevice.getInstance(instrumentation).pressHome())
+            await {
+                var stopped = false
+                instrumentation.runOnMainSync {
+                    stopped = ActivityLifecycleMonitorRegistry.getInstance()
+                        .getLifecycleStageOf(backgrounded) == Stage.STOPPED
+                }
+                stopped
+            }
             publish("Changed alpha details")
-            scenario.moveToState(Lifecycle.State.RESUMED)
-            await { text(scenario).contains("Changed alpha details") }
+            instrumentation.runOnMainSync {
+                assertEquals(Stage.STOPPED, ActivityLifecycleMonitorRegistry.getInstance().getLifecycleStageOf(backgrounded))
+                assertTrue("Background view must retain its previous observation",
+                    viewText(backgrounded.window.decorView).contains("Only alpha details"))
+                val tasks = context.getSystemService(android.app.ActivityManager::class.java).appTasks
+                tasks.single { it.taskInfo.taskId == backgrounded.taskId }.moveToFront()
+            }
+            await {
+                var resumed = false
+                instrumentation.runOnMainSync { resumed = resumedStatus() === backgrounded }
+                resumed && statusText().contains("Changed alpha details")
+            }
+            scenario.onActivity { assertSame("Foregrounding must reuse the recreated activity", backgrounded, it) }
             capture(scenario, "status-resumed-alpha")
         }
         // ActivityScenario filters lifecycle callbacks by its original Intent.data.
