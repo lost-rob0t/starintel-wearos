@@ -265,13 +265,13 @@ class LogicStudioActivity : Activity() {
         }
         editor?.let { field ->
             val identity = draftName(source.name)
-            field.filters = field.filters + InputFilter { insertion, start, end, destination, dstart, dend ->
+            field.filters = (field.filters.toList() + InputFilter { insertion, start, end, destination, dstart, dend ->
                 val length = destination.length.toLong() - (dend - dstart) + end - start
                 if (length <= Int.MAX_VALUE && draftStore.canAcceptLength(identity, length.toInt())) null else {
                     field.error = "Open drafts exceed the storage memory limit; save or discard another draft"
                     destination.subSequence(dstart, dend)
                 }
-            }
+            }).toTypedArray<InputFilter>()
             SourceEditorAnalysis(field, language, ::tokenColor,
                 rejected = { toast("Source limit is 256 KiB; edit was not inserted") },
                 changed = {

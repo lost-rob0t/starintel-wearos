@@ -33,7 +33,7 @@ internal class SourceEditorAnalysis(
     init {
         // Source input is rejected as a whole, not silently truncated. Existing
         // oversized legacy drafts may be reduced, but cannot grow further.
-        field.filters = field.filters + InputFilter { source, start, end, dest, dstart, dend ->
+        field.filters = (field.filters.toList() + InputFilter { source, start, end, dest, dstart, dend ->
             // TextView.setText filters against an empty destination, unlike an
             // Editable replacement. Do not reuse the old field's byte count there.
             val destinationBytes = if (dest === field.text) bytes else utf8Size(dest)
@@ -42,7 +42,7 @@ internal class SourceEditorAnalysis(
                 rejected()
                 dest.subSequence(dstart, dend)
             }
-        }
+        }).toTypedArray<InputFilter>()
         field.addTextChangedListener(this)
         field.addOnAttachStateChangeListener(this)
         startSession()

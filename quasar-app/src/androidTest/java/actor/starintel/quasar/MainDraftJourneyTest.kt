@@ -11,6 +11,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MainDraftJourneyTest {
+    @Test fun bindingWidensConcreteFilterArraysAndPreservesExistingLimit() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val input = EditText(activity)
+                val limit = android.text.InputFilter.LengthFilter(8)
+                input.filters = arrayOf(limit)
+                assertEquals(android.text.InputFilter.LengthFilter::class.java, input.filters.javaClass.componentType)
+                val root = android.widget.LinearLayout(activity).apply { addView(input) }
+                val binding = WorkspaceDraftFields(WorkspaceDrafts.coordinator(activity))
+                try {
+                    binding.bind(root, "filter-array-regression", android.os.Bundle())
+                    assertEquals(android.text.InputFilter::class.java, input.filters.javaClass.componentType)
+                    assertSame(limit, input.filters.first())
+                    assertTrue(input.filters.any { it is DraftInputFilter })
+                    input.text.append("1234567890")
+                    assertEquals("12345678", input.text.toString())
+                } finally { binding.detach() }
+            }
+        }
+    }
+
     @Test fun oversizedPasteNavigationAndRotationPreserveDraft() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             route(scenario, "showCreateDocument")

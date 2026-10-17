@@ -81,12 +81,12 @@ internal class WorkspaceDraftFields(private val store: DraftCoordinator) {
             val initial = runCatching { DraftLimits.utf8Bytes(input.text); input.text.toString() }.getOrDefault("")
             val field = Field(input, name, initial)
             fields.add(field)
-            input.filters = input.filters + DraftInputFilter { input.error = "Draft limit is 256 KiB; paste was not inserted" } +
+            input.filters = (input.filters.toList() + DraftInputFilter { input.error = "Draft limit is 256 KiB; paste was not inserted" } +
                 InputFilter { source, start, end, dest, dstart, dend ->
                     val length = dest.length.toLong() - (dend - dstart) + end - start
                     if (field.applying || (length <= Int.MAX_VALUE && store.canAcceptLength(name, length.toInt()))) null
                     else { input.error = "Open draft limit reached; save or discard a draft"; dest.subSequence(dstart, dend) }
-                }
+                }).toTypedArray<InputFilter>()
             field.watcher = object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
