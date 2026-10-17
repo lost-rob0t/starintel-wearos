@@ -12,8 +12,8 @@ adb shell am force-stop actor.starintel.quasar
 adb shell am instrument -w -e class 'actor.starintel.quasar.FileImportJourneyTest#restartShowsPartialReceiptWithoutMutation' \
   actor.starintel.quasar.test/androidx.test.runner.AndroidJUnitRunner | tee build/file-import/restart.txt
 grep -Fq 'OK (1 test)' build/file-import/restart.txt
-adb logcat -d -b crash > build/file-import/crashes.txt
 
 adb shell am instrument -w -e class actor.starintel.quasar.MutationReceiptJourneyTest \
   actor.starintel.quasar.test/androidx.test.runner.AndroidJUnitRunner | tee build/file-import/malformed-receipt.txt
 grep -Fq 'OK (1 test)' build/file-import/malformed-receipt.txt
+adb logcat -d -b crash > build/file-import/crashes.txt
