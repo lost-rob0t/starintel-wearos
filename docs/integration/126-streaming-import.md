@@ -187,3 +187,33 @@ all 13 selected Android draft tests and both import journey methods API/type-com
 Android runtime results for the corrected head must still be observed in hosted CI;
 API compilation does not replace those tests. Nix/Gradle/adb/KVM are unavailable
 locally, so emulator and canonical build execution remain hosted.
+
+## Aggregate mutation-safety review correction
+
+The earlier `submitOnce` handler treated every JSONException as proof that no request
+was sent. That was unsafe: shared StarIntelClient parses a JSONObject after a POST
+has received a successful HTTP status. A committed create/paste import followed by a
+malformed 2xx response could therefore clear `attempted` and enable another mutation.
+
+Create and paste Import now wrap **only local payload construction** in
+`prepareMutationPayload`, which marks that phase with `LocalPayloadFailure`.
+Transport and response parsing happen outside that wrapper. Only this distinct local
+failure clears the attempt guard; a response JSONException retains it, records
+“Submission outcome unknown,” and preserves the guard across recreation. Shared
+client interfaces are unchanged by this correction. Explicit, warned “new submission”
+remains distinct from automatic retry.
+
+Two preflight JVM regressions pass (17 total client/paging/preflight tests). The real
+HTTP Android `MutationReceiptJourneyTest` models a server committing before returning
+malformed 200 JSON, for both Create and paste Import. It checks invalid local input
+sends zero POSTs, valid input sends exactly one, then repeated clicks and recreation
+cannot produce another POST. It is wired into the file-import emulator script and
+API/type-compiled, but its Android execution is not claimed before hosted results.
+
+Approved tile PR129 head `9f201a2` (all four missing commits) and widget PR128 fix
+`7428384` are merged into this aggregate without conflicts. Existing SearchPage/search
+and draft readiness/lifecycle remain intact. Eight tile-queue JVM tests pass; the full
+production tree plus mutation/import/draft/tile/widget Android fixtures type-compile.
+The mandatory Python contracts pass. Nix flake/build-all were attempted again and
+remain unavailable locally; final aggregate hosted CI and independent review are
+required before any merge. No component PR is merged or deployed separately.
