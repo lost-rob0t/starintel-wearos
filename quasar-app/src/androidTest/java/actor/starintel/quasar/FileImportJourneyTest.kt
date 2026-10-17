@@ -40,7 +40,12 @@ class FileImportJourneyTest {
                         enabled = binding.ready
                     }; enabled
                 }
-                main.onActivity { click(it, "Import JSON / NDJSON file") }
+                main.onActivity {
+                    val editor = views(it.window.decorView).filterIsInstance<android.widget.EditText>().single()
+                    assertEquals(android.text.InputFilter::class.java, editor.filters.javaClass.componentType)
+                    assertTrue(editor.filters.any { filter -> filter is actor.starintel.quasar.importing.Utf8ImportFilter })
+                    click(it, "Import JSON / NDJSON file")
+                }
                 val launched = instrumentation.waitForMonitorWithTimeout(monitor, 5000)
                 assertNotNull("Main import route must open the native file destination", launched)
                 instrumentation.runOnMainSync { launched.finish() }

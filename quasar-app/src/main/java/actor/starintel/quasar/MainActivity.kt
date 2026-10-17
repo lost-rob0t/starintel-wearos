@@ -523,7 +523,7 @@ class MainActivity : Activity() {
             if (draftFields.ready) startActivity(Intent(this, FileImportActivity::class.java))
         }, QuasarDesign.match(top = dp(12)))
         val editor = QuasarDesign.field(this, "[]", lines = 14)
-        editor.filters = editor.filters + actor.starintel.quasar.importing.Utf8ImportFilter(256 * 1024)
+        editor.filters = (editor.filters.toList() + actor.starintel.quasar.importing.Utf8ImportFilter(256 * 1024)).toTypedArray<android.text.InputFilter>()
         val status = QuasarDesign.status(this, "Nothing imported yet.")
         body.addView(editor, QuasarDesign.match(top = dp(18)))
         addSubmission(body, "Import documents", status, validate = {

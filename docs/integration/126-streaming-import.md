@@ -163,3 +163,27 @@ replacement. Checkpoint/UI memory and checkpoint disk are O(1); fsync work is O(
 Restart re-hashes O(S) then seeks to the accepted boundary. Backpressure permits one
 synchronous request only. No controlled Android performance or peak RSS win is claimed;
 the 32 MiB result establishes completion within that fixture's JVM heap cap.
+
+## Runtime correction integrated from PR130
+
+Parent correction `7243f45dd9ba8d43c65a161716e8c70ae5f764d8` is merged.
+It fixes the observed runtime `LengthFilter[]`/`DraftInputFilter` array-store crash,
+adds two Android regression cases and corrects the separately failing external
+process-death fixture's drawer navigation. Import's own filter append now also uses
+`toList()` plus explicit `toTypedArray<InputFilter>()`; the existing import journey
+asserts its runtime component type and presence of the UTF-8 filter.
+
+Observed previous-head results, not inferred successes: draft job 117249207690
+passed all 11 Android tests, then the external script failed with “Missing draft
+fixture control” before editing. Visual jobs 117249207575 and 117249207754 both
+reported the array-store crash in WorkspaceDraftFields.bind. This is an application
+failure, not an emulator boot failure. The correction preserves the new 13-test
+Android gate, followed by external process death, and both visual comparison legs.
+
+Combined supplemental rerun: 22 import/storage tests, 15 client/paging tests,
+13 draft coordinator tests and three drawer-navigation host tests pass. Both Python
+repository gates and shell/diff checks pass. The full production source tree plus
+all 13 selected Android draft tests and both import journey methods API/type-compile.
+Android runtime results for the corrected head must still be observed in hosted CI;
+API compilation does not replace those tests. Nix/Gradle/adb/KVM are unavailable
+locally, so emulator and canonical build execution remain hosted.
