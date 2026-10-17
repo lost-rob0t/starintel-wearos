@@ -147,3 +147,27 @@ checks exact source restoration under a different PID without submitting anythin
 These Android runtime checks are added but unrun locally. Hosted results remain
 pending. Both Python gates, script syntax and diff checks pass. Nix/Gradle/emulator
 limitations from the earlier validation still apply.
+
+## Observed Android runtime follow-up (2026-10-17)
+
+PR132 visual run 38983398286 jobs 117249207575/117249207754 reproduced
+ArrayStoreException in WorkspaceDraftFields.bind: Kotlin Arrays.plus copied the
+runtime component type InputFilter.LengthFilter[], then attempted to store a
+DraftInputFilter. All three editor filter append sites now build a List and use
+explicit toTypedArray<InputFilter>(), preserving existing filters/order while
+allocating a genuine InputFilter[]. Two new Android regressions start from the
+concrete LengthFilter[] case and verify binding/analyzer setup and existing limits.
+MainActivity and the #126 import changes are untouched by this correction.
+
+Separately, draft-storage run 38983398295 job 117249207690 passed all 11 Android
+instrumentation tests, then failed before editing: Add record was absent from the
+unscoped drawer lookup. The fixture set 360x800 physical pixels but left the
+emulator's 420 dpi density in place. This yields a much smaller dp viewport;
+off-screen navigation is the likely cause, distinct from the array crash. That
+failed run did not archive hierarchy evidence, so the precise viewport state
+cannot be retrospectively proven. The fixture now sets 160 dpi, waits for the open
+drawer, searches only Workspace destinations, and scrolls that pane at most eight
+times. It records drawer XML plus crash/window/display diagnostics on failure.
+Three host navigation tests verify covered-card exclusion, off-screen scrolling
+and bounded missing-control failure. Both runtime gates remain mandatory; the
+new dedicated test selection expects 13 Android tests before external process death.
