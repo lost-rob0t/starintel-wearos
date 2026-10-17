@@ -6,6 +6,8 @@ tools_dir="${IMPORT_TEST_JARS:?Set IMPORT_TEST_JARS to the dependency jar direct
 classes="$(mktemp -d)"
 trap 'rm -rf "$classes"' EXIT
 sources=(
+  "$repo_root/quasar-app/src/main/java/actor/starintel/quasar/MutationPreflight.kt"
+  "$repo_root/quasar-app/src/test/java/actor/starintel/quasar/MutationPreflightTest.kt"
   "$repo_root/starintel-android/src/main/java/actor/starintel/android/model/StarIntelModels.kt"
   "$repo_root/starintel-android/src/main/java/actor/starintel/android/model/RemoteActor.kt"
   "$repo_root/starintel-android/src/main/java/actor/starintel/android/api/StarIntelClient.kt"
@@ -22,4 +24,5 @@ java -cp "$tools_dir/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   -d "$classes" "${sources[@]}"
 java -cp "$classes:$tools_dir/kotlin-stdlib.jar:$tools_dir/json.jar:$tools_dir/junit.jar:$tools_dir/hamcrest.jar" \
   org.junit.runner.JUnitCore actor.starintel.android.api.ActorConnectionTest \
-  actor.starintel.android.api.BulkImportSessionTest actor.starintel.android.api.SearchPagingTest
+  actor.starintel.android.api.BulkImportSessionTest actor.starintel.android.api.SearchPagingTest \
+  actor.starintel.quasar.MutationPreflightTest

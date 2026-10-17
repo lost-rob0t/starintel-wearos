@@ -511,7 +511,10 @@ class MainActivity : Activity() {
             (editor.text.isNotBlank() && editor.text.length <= 512 * 1024).also { if (!it) editor.error = "Enter a JSON object up to 512 KiB" }
         }) {
             val source = editor.text.toString()
-            submitOnce(status, validationInput = editor) { client.createDocument(JSONObject(source)) }
+            submitOnce(status, validationInput = editor) {
+                val payload = prepareMutationPayload { JSONObject(source) }
+                client.createDocument(payload)
+            }
         }
         body.addView(status, QuasarDesign.match(top = dp(10)))
     }
@@ -530,7 +533,10 @@ class MainActivity : Activity() {
             (editor.text.isNotBlank() && actor.starintel.quasar.importing.Utf8Budget.fits(editor.text, 256 * 1024)).also { if (!it) editor.error = "Enter a JSON array up to 256 KiB of UTF-8" }
         }) {
             val source = editor.text.toString()
-            submitOnce(status, validationInput = editor) { client.bulkCreate(JSONArray(source)) }
+            submitOnce(status, validationInput = editor) {
+                val payload = prepareMutationPayload { JSONArray(source) }
+                client.bulkCreate(payload)
+            }
         }
         body.addView(status, QuasarDesign.match(top = dp(10)))
     }
@@ -956,7 +962,7 @@ class MainActivity : Activity() {
         status.text = "Submitting once…"
         syncStatus = "Submission in progress"
         runApi(operation, onFailure = {
-            if (it is org.json.JSONException && validationInput != null) {
+            if (it is LocalPayloadFailure && validationInput != null) {
                 state.remove("attempted")
                 validationInput.error = "Invalid JSON. Correct the structure and submit again."
                 status.text = "Validation failed before sending. No request was submitted."
@@ -965,7 +971,7 @@ class MainActivity : Activity() {
             }
             if ((it as? actor.starintel.android.api.StarHttpFailure)?.status in listOf(400, 422)) validationInput?.error = failureText(it)
             syncStatus = "Submission outcome unknown"
-            val message = "${failureText(it)} Submission not retried. Inspect server records before starting another."
+            val message = "Submission outcome unknown. ${failureText(it)} Submission not retried. Inspect server records before starting another."
             state.putString("receipt", message)
             status.text = message
         }) { receipt ->
