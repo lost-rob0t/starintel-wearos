@@ -13,6 +13,23 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class LogicDraftJourneyTest {
+    @Test fun sourceAnalysisWidensConcreteFilterArrays() {
+        ActivityScenario.launch(LogicStudioActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val limit = android.text.InputFilter.LengthFilter(16)
+                // A separate short-lived field avoids installing a second analyzer on the editor.
+                val isolated = EditText(activity).apply { filters = arrayOf(limit) }
+                val analysis = SourceEditorAnalysis(isolated, IdeLanguage.LISP, { 0 }, {}, {})
+                try {
+                    assertEquals(android.text.InputFilter::class.java, isolated.filters.javaClass.componentType)
+                    assertSame(limit, isolated.filters.first())
+                    isolated.text.append("a".repeat(20))
+                    assertEquals(16, isolated.length())
+                } finally { analysis.onViewDetachedFromWindow(isolated) }
+            }
+        }
+    }
+
     @Test fun dirtySourceSurvivesLanguageNavigationAndRotation() {
         ActivityScenario.launch(LogicStudioActivity::class.java).use { scenario ->
             val source = "; unsaved bounded draft\n(defun preserved () 42)"
