@@ -18,7 +18,7 @@ internal class GeoGraphView(context: Context) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-        textSize = context.dp(10).toFloat()
+        textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 10f, resources.displayMetrics)
         textAlign = Paint.Align.CENTER
     }
 
@@ -44,7 +44,7 @@ internal class GeoGraphView(context: Context) : View(context) {
         super.onDraw(canvas)
         if (graph.nodes.isEmpty()) {
             textPaint.color = QuasarDesign.muted
-            textPaint.textSize = context.dp(13).toFloat()
+            textPaint.textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 13f, resources.displayMetrics)
             canvas.drawText("NO LINKED GEO DOCUMENTS", width / 2f, height / 2f, textPaint)
             return
         }
@@ -62,14 +62,14 @@ internal class GeoGraphView(context: Context) : View(context) {
             if (active) {
                 paint.style = Paint.Style.STROKE
                 paint.strokeWidth = context.dp(2).toFloat()
-                paint.color = Color.WHITE
+                paint.color = QuasarDesign.text
                 canvas.drawCircle(point.x, point.y, context.dp(17).toFloat(), paint)
             }
             paint.style = Paint.Style.FILL
             paint.color = FieldMapView.layerColor(feature.layer)
             canvas.drawCircle(point.x, point.y, context.dp(11).toFloat(), paint)
             textPaint.color = QuasarDesign.text
-            textPaint.textSize = context.dp(9).toFloat()
+            textPaint.textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 9f, resources.displayMetrics)
             canvas.drawText(feature.title.take(18), point.x, point.y + context.dp(28), textPaint)
         }
         paint.style = Paint.Style.FILL
