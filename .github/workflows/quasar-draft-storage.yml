@@ -1,0 +1,47 @@
+name: Quasar draft storage
+on:
+  pull_request:
+    paths:
+      - 'quasar-app/**'
+      - '.github/workflows/quasar-draft-storage.yml'
+      - 'scripts/test-quasar-draft-storage.sh'
+      - 'scripts/test-quasar-draft-process-death.py'
+      - 'scripts/test-draft-process-navigation.py'
+jobs:
+  drafts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Test drawer navigation fixture
+        run: python3 scripts/test-draft-process-navigation.py
+      - name: Build and unit-test bounded drafts
+        run: nix develop --no-update-lock-file --command gradle :quasar-app:testDebugUnitTest :quasar-app:assembleDebug :quasar-app:assembleDebugAndroidTest
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - name: Check encrypted atomic storage on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash scripts/test-quasar-draft-storage.sh
+      - name: Preserve test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quasar-draft-storage-evidence
+          path: |
+            build/draft-storage
+            quasar-app/build/test-results
+          if-no-files-found: warn
