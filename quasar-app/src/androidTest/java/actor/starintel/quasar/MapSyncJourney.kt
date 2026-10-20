@@ -38,13 +38,14 @@ internal object MapSyncJourney {
                     val request = Thread.getAllStackTraces().keys.single { it.name == "quasar-geo-search" }
                     lateinit var oldStatus: TextView
                     scenario.onActivity { activity ->
+                        assertTrue("Direct map entry must select Field", descendants(activity.window.decorView).filterIsInstance<TextView>().first { it.tag == "Field" }.isSelected)
                         oldStatus = descendants(activity.window.decorView)
                             .filterIsInstance<TextView>().single { it.text.toString() == "SYNCING" }
                     }
                     when (destination) {
                         "Settings" -> scenario.onActivity { activity ->
                             descendants(activity.window.decorView).filterIsInstance<TextView>()
-                                .single { it.text.toString() == "Settings" }.performClick()
+                                .first { it.tag == "Settings" }.performClick()
                         }
                         "recreate" -> scenario.recreate()
                     }
@@ -57,7 +58,7 @@ internal object MapSyncJourney {
                     instrumentation.waitForIdleSync()
                     instrumentation.runOnMainSync {
                         val expected = if (destination != "Field") "SYNCING"
-                            else if (status == 200) "0 SYNCED" else "DATA DEGRADED"
+                            else if (status == 200) "0 GEO / 0 RECORDS" else "DATA UNAVAILABLE"
                         assertEquals("Late response must not mutate a retired field view", expected, oldStatus.text.toString())
                     }
                     when (destination) {
