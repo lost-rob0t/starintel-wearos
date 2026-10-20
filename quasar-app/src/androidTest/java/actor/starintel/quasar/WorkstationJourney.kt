@@ -1,0 +1,136 @@
+package actor.starintel.quasar
+
+import actor.starintel.testing.NativeUi as Ui
+import androidx.test.core.app.ActivityScenario
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.recyclerview.widget.RecyclerView
+import android.view.View
+import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.TextView
+import org.junit.Assert.*
+
+internal object WorkstationJourney {
+    fun verify() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val drafts = WorkspaceDrafts(instrumentation.targetContext)
+        val draftSource = "synthetic-private-source-".repeat(1000)
+        val draftKey = drafts.save("fixture-roundtrip", draftSource)
+        assertEquals(draftSource, drafts.read(draftKey))
+        assertFalse(instrumentation.targetContext.filesDir.resolve("workspace-drafts-v1/$draftKey").readBytes().toString(Charsets.ISO_8859_1).contains("synthetic-private-source"))
+        WorkstationFixture().use { backend ->
+            QuasarConfig(instrumentation.targetContext).save(backend.origin, "star_sk_v1_fixture")
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                Ui.waitText("Investigation desk"); Ui.click("Search")
+                fun search(value: String) {
+                    scenario.onActivity { activity ->
+                        val nodes = all(activity.window.decorView).toList()
+                        nodes.filterIsInstance<EditText>().single().setText(value)
+                        nodes.filterIsInstance<TextView>().single { it.text.toString() == "Search" && it.tag != "Search" && it.tag != "current-destination" }.performClick()
+                    }
+                }
+                val start = System.nanoTime()
+                search("*"); Ui.waitText("40 records loaded")
+                val elapsed = (System.nanoTime() - start) / 1_000_000
+                scenario.onActivity { activity ->
+                    val list = all(activity.window.decorView).filterIsInstance<RecyclerView>().single()
+                    assertEquals(40, list.adapter!!.itemCount)
+                    assertTrue("Only visible holders should be attached", list.childCount < 40)
+                    list.scrollToPosition(30)
+                }
+                instrumentation.waitForIdleSync()
+                Ui.capture("quasar-search-bounded")
+                Ui.device.findObject(androidx.test.uiautomator.UiSelector().description("Document query")).click()
+                fun awaitIme(expected: Boolean) {
+                    var visible = !expected
+                    val deadline = System.currentTimeMillis() + 5000
+                    while (visible != expected && System.currentTimeMillis() < deadline) {
+                        scenario.onActivity { activity -> visible = activity.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime()) }
+                        if (visible != expected) Thread.sleep(100)
+                    }
+                    assertEquals("Search IME transition", expected, visible)
+                }
+                awaitIme(true)
+                scenario.onActivity { activity -> all(activity.window.decorView).filterIsInstance<EditText>().single()
+                    .onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) }
+                Ui.waitText("40 records loaded"); awaitIme(false)
+                scenario.recreate(); Ui.waitText("40 records loaded")
+                scenario.onActivity { activity ->
+                    val list = all(activity.window.decorView).filterIsInstance<RecyclerView>().single()
+                    assertEquals("*", all(activity.window.decorView).filterIsInstance<EditText>().single().text.toString())
+                    assertTrue((list.layoutManager as androidx.recyclerview.widget.LinearLayoutManager).findFirstVisibleItemPosition() > 0)
+                }
+                backend.searchStatus = 503
+                search("*"); Ui.waitText("Refresh failed; previous results retained")
+                scenario.onActivity { activity -> assertEquals(40, all(activity.window.decorView).filterIsInstance<RecyclerView>().single().adapter!!.itemCount) }
+                backend.searchStatus = 401
+                search("*"); Ui.waitText("Authentication expired")
+                Ui.click("Settings"); Ui.waitText("Authentication · Recheck required after HTTP 401")
+                Ui.click("Search"); Ui.waitText("Authentication expired")
+                backend.searchStatus = 403
+                search("*"); Ui.waitText("Permission denied")
+                backend.searchStatus = 200
+                search("slow")
+                assertTrue(backend.slowRequested.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                search("empty"); Ui.waitText("No matching documents")
+                Thread.sleep(900) // Release the older slow response before checking the superseding result.
+                scenario.onActivity { activity -> assertEquals(0, all(activity.window.decorView).filterIsInstance<RecyclerView>().single().adapter!!.itemCount) }
+                search("*"); Ui.waitText("40 records loaded")
+                Ui.click("Fixture record 0"); Ui.waitText("Synthetic field exercise")
+                DetailPreviewJourney.verify(scenario, backend)
+                Ui.device.pressBack(); Ui.waitText("40 records loaded")
+                scenario.onActivity { activity ->
+                    val adapter = all(activity.window.decorView).filterIsInstance<RecyclerView>().single().adapter as DocumentRows
+                    assertEquals("fixture-0", adapter.selectedId)
+                }
+                assertEquals(40, backend.maxRequested.get())
+                instrumentation.sendStatus(0, android.os.Bundle().apply {
+                    putString("stream", "\nBounded corpus: 1000000 synthetic records, requested=${backend.maxRequested.get()}, initial search+UI=${elapsed}ms, heap=${Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()} bytes. Emulator measurement only.\n")
+                })
+                Ui.capture("quasar-search-reconnected")
+                Ui.click("Next page"); Ui.waitText("Page 2 · 40 records loaded")
+                Ui.waitText("Fixture record 40")
+                scenario.recreate(); Ui.waitText("Page 2 · 40 records loaded")
+                Ui.waitText("Fixture record 40")
+                Ui.click("Fixture record 40"); Ui.waitText("Synthetic field exercise")
+                Ui.device.pressBack(); Ui.waitText("Page 2 · 40 records loaded")
+                backend.searchStatus = 503
+                Ui.click("Next page"); Ui.waitText("Refresh failed; previous results retained")
+                Ui.waitText("Fixture record 40")
+                backend.searchStatus = 200
+                Ui.click("Next page"); Ui.waitText("Page 3 · 40 records loaded")
+                Ui.waitText("Fixture record 80")
+                Ui.click("Previous page"); Ui.waitText("Page 2 · 40 records loaded")
+                Ui.click("Next page"); Ui.waitText("Page 3 · 40 records loaded")
+                Ui.capture("quasar-search-paged-restored")
+                Ui.click("Field"); Ui.waitText("100 GEO / 100 RECORDS")
+                Ui.click("LIST")
+                scenario.onActivity { activity ->
+                    val nodes = all(activity.window.decorView).toList()
+                    nodes.filterIsInstance<EditText>().single().setText("record 2")
+                    nodes.filterIsInstance<actor.starintel.quasar.field.FieldOpsView>().single().focusOn(51.502, -.118)
+                    assertTrue(nodes.filterIsInstance<actor.starintel.quasar.field.FieldMapView>().single().contentDescription.toString().contains("Selected Fixture record 2"))
+                }
+                Ui.waitText("Fixture record 2")
+                scenario.recreate(); Ui.waitText("100 GEO / 100 RECORDS")
+                scenario.onActivity { activity ->
+                    val nodes = all(activity.window.decorView).toList()
+                    assertEquals("record 2", nodes.filterIsInstance<EditText>().single().text.toString())
+                    val list = nodes.filterIsInstance<RecyclerView>().single()
+                    assertTrue("Field list mode must survive recreation", list.isShown)
+                    assertFalse("Map controls must not cover list rows", nodes.filterIsInstance<TextView>().single { it.contentDescription?.toString() == "Zoom in" }.isShown)
+                    // Matching is term-based across title and ID: 2, 12, 20–29, 32, …, 92.
+                    assertEquals(19, list.adapter!!.itemCount)
+                    val state = nodes.filterIsInstance<actor.starintel.quasar.field.FieldOpsView>().single().saveWorkspace()
+                    assertEquals("fixture-2", state.getString("selected"))
+                    assertEquals(51.502, state.getDouble("latitude"), .000001)
+                }
+                Ui.capture("quasar-field-list-restored")
+            }
+        }
+    }
+    private fun all(view: View): Sequence<View> = sequence {
+        yield(view)
+        if (view is ViewGroup) for (i in 0 until view.childCount) yieldAll(all(view.getChildAt(i)))
+    }
+}

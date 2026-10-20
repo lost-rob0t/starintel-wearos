@@ -1,0 +1,60 @@
+name: Quasar workstation before and after
+on:
+  pull_request:
+    paths:
+      - 'quasar-app/**'
+      - 'scripts/test-quasar-workstation-visuals.sh'
+      - '.github/workflows/quasar-workstation-visuals.yml'
+jobs:
+  native-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [before, after]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Preserve identical fixture harness and select source revision
+        env:
+          REVISION: ${{ matrix.revision }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          mkdir -p /tmp/workstation-harness
+          cp quasar-app/src/androidTest/java/actor/starintel/quasar/{VisualFixtureJourneyTest,WorkstationFixture}.kt /tmp/workstation-harness/
+          cp scripts/test-quasar-workstation-visuals.sh scripts/test-quasar-process-restoration.py /tmp/workstation-harness/
+          cp tests/android/src/actor/starintel/testing/NativeUi.kt /tmp/workstation-harness/
+          if [[ "$REVISION" == before ]]; then git checkout --detach "$BASE_SHA"; fi
+          cp /tmp/workstation-harness/{VisualFixtureJourneyTest,WorkstationFixture}.kt quasar-app/src/androidTest/java/actor/starintel/quasar/
+          cp /tmp/workstation-harness/NativeUi.kt tests/android/src/actor/starintel/testing/
+          cp /tmp/workstation-harness/test-quasar-workstation-visuals.sh /tmp/workstation-harness/test-quasar-process-restoration.py scripts/
+          git rev-parse HEAD
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build native fixture APKs
+        run: nix develop --no-update-lock-file --command gradle :quasar-app:assembleDebug :quasar-app:assembleDebugAndroidTest
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Enable disposable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash scripts/test-quasar-workstation-visuals.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quasar-workstation-${{ matrix.revision }}
+          path: build/workstation-evidence
+          if-no-files-found: warn

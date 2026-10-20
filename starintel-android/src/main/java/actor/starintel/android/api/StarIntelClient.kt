@@ -66,21 +66,23 @@ class StarIntelClient(
         }
     }
 
-    fun search(query: String, limit: Int = 40): JSONArray {
+    /** Compatibility snapshot API. Use searchPage to preserve pagination metadata. */
+    fun search(query: String, limit: Int = 40): JSONArray = searchPage(query, limit).rows
+
+    fun searchPage(query: String, limit: Int = 40, cursor: String? = null): SearchPage {
         require(query.isNotBlank()) { "Search query required" }
         require(query.length <= 512) { "Search query too long" }
+        SearchPage.validateCursor(cursor)
         val encoded = URLEncoder.encode(query.trim(), StandardCharsets.UTF_8.name())
         val bounded = limit.coerceIn(1, 100)
+        val bookmark = cursor?.let { "&bookmark=" + URLEncoder.encode(it, StandardCharsets.UTF_8.name()) }.orEmpty()
         val root = runCatching {
-            request("GET", "/api/v1/documents/search?q=$encoded&limit=$bounded")
+            request("GET", "/api/v1/documents/search?q=$encoded&limit=$bounded$bookmark")
         }.recoverCatching { failure ->
             if (failure !is StarHttpFailure || failure.status !in listOf(404, 405)) throw failure
-            request("GET", "/api/v1/search?q=$encoded&limit=$bounded")
+            request("GET", "/api/v1/search?q=$encoded&limit=$bounded$bookmark")
         }.getOrThrow()
-        return root.optJSONArray("rows")
-            ?: root.optJSONObject("data")?.optJSONArray("rows")
-            ?: root.optJSONArray("documents")
-            ?: JSONArray()
+        return SearchPage.fromJson(root, bounded, cursor)
     }
 
     fun document(id: String): JSONObject {
@@ -98,6 +100,53 @@ class StarIntelClient(
 
     fun bulkCreate(documents: JSONArray): JSONObject = request("POST", "/api/v1/documents/bulk", documents)
 
+    /** Freeze credentials/origin and verify the principal before an explicitly started import. */
+    fun openBulkImportSession(): BulkImportSession {
+        val session = sessionProvider() ?: error("Configure a Star server first")
+        val server = normalizeServer(session.serverUrl)
+        val token = session.apiKey.also(::requireApiKey)
+        val context = requestAt(server, token, "GET", "/auth/context")
+        val principal = context.opt("principal_id")
+        val type = context.opt("principal_type")
+        require(principal is String && principal.isNotBlank() && principal.length <= 512 &&
+            type is String && type.isNotBlank() && type.length <= 128) { "Import requires a verified principal" }
+        val identity = JSONArray().put(server).put(type).put(principal).toString()
+        return BulkImportSession(identity) { body ->
+            require(body.size in 2..BulkImportSession.MAX_REQUEST_BYTES) { "Bulk request exceeds UTF-8 byte bound" }
+            val documents = JSONArray(body.toString(Charsets.UTF_8))
+            require(documents.length() in 1..10) { "Import batches require 1–10 records" }
+            for (index in 0 until documents.length()) documents.getJSONObject(index)
+            val connection = URL("$server/api/v1/documents/bulk").openConnection() as HttpURLConnection
+            try {
+                connection.instanceFollowRedirects = false
+                connection.requestMethod = "POST"
+                connection.connectTimeout = 8_000
+                connection.readTimeout = 30_000
+                connection.setRequestProperty("Accept", "application/json")
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                connection.setRequestProperty("User-Agent", "starintel-android/$clientVersion")
+                connection.setRequestProperty("Authorization", "Bearer $token")
+                connection.doOutput = true
+                // Streaming mode prevents HttpURLConnection from buffering/replaying a failed POST.
+                connection.setFixedLengthStreamingMode(body.size)
+                connection.outputStream.use { it.write(body) }
+                val status = connection.responseCode
+                if (status !in 200..299) throw StarHttpFailure(status, "Import stopped; no automatic retry")
+                connection.inputStream.use { input ->
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(1024)
+                    while (true) {
+                        val count = input.read(buffer, 0, minOf(buffer.size, BulkImportSession.MAX_RECEIPT_BYTES + 1 - output.size()))
+                        if (count < 0) break
+                        if (output.size() + count > BulkImportSession.MAX_RECEIPT_BYTES) error("Bulk receipt exceeds byte bound")
+                        output.write(buffer, 0, count)
+                    }
+                    output.toByteArray()
+                }
+            } finally { connection.disconnect() }
+        }
+    }
+
     fun createTarget(actor: String, target: String, dataset: String): JSONObject {
         val cleanActor = actor.trim()
         val cleanTarget = target.trim()
@@ -111,7 +160,7 @@ class StarIntelClient(
                 .put("dataset", cleanDataset)
                 .put("delay", 1)
                 .put("recurring", false)
-                .put("options", JSONArray())
+                .put("options", JSONObject())
                 .put("idempotency_key", "android-${UUID.randomUUID()}")
         return runCatching { request("POST", "/api/v1/targets", body) }
             .recoverCatching { failure ->

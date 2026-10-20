@@ -7,10 +7,13 @@
     <application
         android:allowBackup="false"
         android:label="Quasar"
-        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:theme="@style/Theme.Quasar"
         android:usesCleartextTraffic="false">
         <activity
             android:name=".ide.LogicStudioActivity"
+            android:exported="false" />
+        <activity
+            android:name=".FileImportActivity"
             android:exported="false" />
         <activity
             android:name=".MainActivity"

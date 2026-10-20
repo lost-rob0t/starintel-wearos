@@ -37,11 +37,15 @@ internal class StarServerClient(context: Context) {
 
     fun search(query: String, limit: Int = 40): JSONArray = client.search(query, limit)
 
+    fun searchPage(query: String, limit: Int = 40, cursor: String? = null) = client.searchPage(query, limit, cursor)
+
     fun document(id: String): JSONObject = client.document(id)
 
     fun createDocument(document: JSONObject): JSONObject = client.createDocument(document)
 
     fun bulkCreate(documents: JSONArray): JSONObject = client.bulkCreate(documents)
+
+    fun openBulkImportSession(): actor.starintel.android.api.BulkImportSession = client.openBulkImportSession()
 
     fun createTarget(actor: String, target: String, dataset: String): JSONObject =
         client.createTarget(actor, target, dataset)

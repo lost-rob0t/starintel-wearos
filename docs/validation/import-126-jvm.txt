@@ -1,0 +1,48 @@
+Issue126 supplemental JVM evidence
+
+Core/storage command:
+IMPORT_TEST_JARS=/workspace/import126-tools scripts/test-streaming-import.sh
+
+warning: [options] system modules path not set in conjunction with -source 17
+1 warning
+JUnit version 4.13.2
+.NEAR_LIMIT_EVIDENCE record_bytes=131070 batch_bytes=262143 records_per_batch=2 batches=6 accepted=12
+..........
+MILLION_RECORD_EVIDENCE source_bytes=123888890 source_sha256=1169554edbb95961bcf3702c52eb8664a1270ef4ea76c147bb49553ca663c1ae accepted=1000000 ordered_ids_verified=1000000 batches=100000 max_in_flight=1 max_batch_bytes=1241 max_batch_records=10 checkpoint_bytes=291 verified_offset=123888889 max_heap_bytes=33554432 elapsed_ms=14700
+...........
+Time: 15.181
+
+OK (22 tests)
+
+
+Combined client/paging command:
+IMPORT_TEST_JARS=/workspace/import126-tools scripts/test-bulk-import-client.sh
+
+starintel-android/src/main/java/actor/starintel/android/api/StarIntelClient.kt:119:30: warning: 'constructor(p0: String!): URL' is deprecated. Deprecated in Java.
+            val connection = URL("$server/api/v1/documents/bulk").openConnection() as HttpURLConnection
+                             ^^^
+starintel-android/src/main/java/actor/starintel/android/api/StarIntelClient.kt:196:26: warning: 'constructor(p0: String!): URL' is deprecated. Deprecated in Java.
+        val connection = URL("$server$path").openConnection() as HttpURLConnection
+                         ^^^
+JUnit version 4.13.2
+...............
+Time: 0.566
+
+OK (15 tests)
+
+
+Full Quasar/shared Android/shared design + FileImportJourneyTest API/type compilation: PASS (exit 0).
+Kotlin 2.2.0; Android36 android-all 16-robolectric-13921718; AndroidX core1.15/recyclerview1.4/drawerlayout1.2/customview1.1; pinned Edge f801b024.
+Generated R/BuildConfig compiler constants only; no APK/resource link/runtime claim.
+
+Python update-manifest: PASS. Python release-contract: PASS (9 APKs, version 7/0.5.0-alpha).
+
+Repeat core/storage run with actual Android36 checked JSONException API (javac + Android org.json runtime on JVM):
+JUnit version 4.13.2
+.NEAR_LIMIT_EVIDENCE record_bytes=131070 batch_bytes=262143 records_per_batch=2 batches=6 accepted=12
+..........
+MILLION_RECORD_EVIDENCE source_bytes=123888890 source_sha256=1169554edbb95961bcf3702c52eb8664a1270ef4ea76c147bb49553ca663c1ae accepted=1000000 ordered_ids_verified=1000000 batches=100000 max_in_flight=1 max_batch_bytes=1241 max_batch_records=10 checkpoint_bytes=291 verified_offset=123888889 max_heap_bytes=33554432 elapsed_ms=11049
+...........
+Time: 11.475
+
+OK (22 tests)
