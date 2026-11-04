@@ -1,4 +1,4 @@
-package actor.starintel.quasar
+package actor.starintel.android.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

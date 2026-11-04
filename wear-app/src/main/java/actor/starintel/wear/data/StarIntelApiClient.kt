@@ -1,6 +1,7 @@
 package actor.starintel.wear.data
 
 import android.content.Context
+import actor.starintel.android.model.RemoteActor
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -34,6 +35,11 @@ data class DocumentResult(
     val error: String? = null,
 )
 
+data class ActorsResult(
+    val actors: List<RemoteActor> = emptyList(),
+    val error: String? = null,
+)
+
 data class TargetCreateResult(
     val accepted: Boolean,
     val duplicate: Boolean = false,
@@ -52,6 +58,26 @@ class StarIntelApiClient private constructor(context: Context) {
             val raw = request("GET", "/api/v1/capabilities").body
             parseCapabilities(raw)
         }.getOrNull()
+    }
+
+    suspend fun actors(): ActorsResult = withContext(Dispatchers.IO) {
+        try {
+            val rows = JSONObject(request("GET", "/v1/actors").body)
+                .optJSONObject("data")?.optJSONArray("actors") ?: JSONArray()
+            require(rows.length() <= MAX_REGISTRY_ROWS) { "Actor registry exceeded its bound" }
+            val actors = buildList {
+                for (index in 0 until rows.length()) {
+                    rows.optJSONObject(index)?.let { row ->
+                        RemoteActor.fromJson(row)?.let(::add)
+                    }
+                }
+            }
+            ActorsResult(actors = actors)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            ActorsResult(error = safeError(failure))
+        }
     }
 
     suspend fun document(id: String): DocumentResult = withContext(Dispatchers.IO) {
@@ -228,6 +254,7 @@ class StarIntelApiClient private constructor(context: Context) {
 
     companion object {
         private const val MAX_ID_LENGTH = 512
+        private const val MAX_REGISTRY_ROWS = 1_024
         private const val CONNECT_TIMEOUT_MS = 4_000
         private const val READ_TIMEOUT_MS = 8_000
 

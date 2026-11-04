@@ -1,5 +1,6 @@
 package actor.starintel.quasar
 
+import actor.starintel.android.model.ActorCatalog
 import actor.starintel.android.model.AgentTurnRequest
 import actor.starintel.android.model.RemoteActor
 import actor.starintel.quasar.field.FieldOpsView

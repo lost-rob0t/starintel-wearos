@@ -55,6 +55,15 @@
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
         <activity
+            android:name=".ActorsActivity"
+            android:icon="@drawable/ic_launcher_targets"
+            android:exported="true"
+            android:label="Actors"
+            android:launchMode="singleTask"
+            android:taskAffinity="actor.starintel.wear.actors">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+        <activity
             android:name=".GraphActivity"
             android:icon="@drawable/ic_launcher_graph"
             android:exported="true"

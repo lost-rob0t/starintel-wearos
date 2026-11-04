@@ -11,6 +11,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import actor.starintel.android.model.ActorCatalog
 import actor.starintel.wear.data.SearchHit
 import actor.starintel.wear.data.StarIntelApiClient
 import actor.starintel.wear.data.StarIntelSearchClient
@@ -30,6 +31,7 @@ class TargetsActivity : StarIntelActivity() {
     private lateinit var target: EditText
     private lateinit var dataset: EditText
     private lateinit var options: EditText
+    private lateinit var targetHint: TextView
     private lateinit var createStatus: TextView
     private lateinit var listStatus: TextView
     private lateinit var targetList: LinearLayout
@@ -81,7 +83,7 @@ class TargetsActivity : StarIntelActivity() {
 
         root.addView(sectionTitle("CREATE TARGET"), matchWrap(top = 11))
 
-        actor = field("Actor", "user-hunt", prefs.getString(KEY_ACTOR, "").orEmpty())
+        actor = field("Actor", "user-hunt", initialActor(prefs))
         target = field("Target", "username, host, URL…", "")
         dataset = field("Dataset", "investigation dataset", prefs.getString(KEY_DATASET, "").orEmpty())
         options = field("Options JSON array", "[]", "[]", multiline = true)
@@ -90,6 +92,19 @@ class TargetsActivity : StarIntelActivity() {
         root.addView(actor, matchWrap(top = 1))
         root.addView(label("TARGET"), matchWrap(top = 5))
         root.addView(target, matchWrap(top = 1))
+        targetHint = TextView(this).apply {
+            text = ActorCatalog.targetHint(actor.text.toString(), initialAccepts())
+            textSize = 9f
+            setTextColor(palette.muted)
+        }
+        actor.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                targetHint.text = ActorCatalog.targetHint(s?.toString().orEmpty(), emptyList())
+            }
+        })
+        root.addView(targetHint, matchWrap(top = 1))
         root.addView(label("DATASET"), matchWrap(top = 5))
         root.addView(dataset, matchWrap(top = 1))
         root.addView(label("OPTIONS"), matchWrap(top = 5))
@@ -199,6 +214,16 @@ class TargetsActivity : StarIntelActivity() {
         val actorValue = actor.text.toString().trim()
         val targetValue = target.text.toString().trim()
         val datasetValue = dataset.text.toString().trim()
+        if (ActorCatalog.isMonitor(actorValue)) {
+            createStatus.text = "$actorValue is a monitor that runs on the server; dispatch is not supported"
+            createStatus.setTextColor(palette.warning)
+            return
+        }
+        if (actorValue.isBlank() || targetValue.isBlank() || datasetValue.isBlank()) {
+            createStatus.text = "Actor, target, and dataset are all required"
+            createStatus.setTextColor(palette.warning)
+            return
+        }
         val optionsValue = runCatching { JSONArray(options.text.toString().trim().ifBlank { "[]" }) }
             .getOrElse {
                 createStatus.text = "Options must be a JSON array"
@@ -237,6 +262,13 @@ class TargetsActivity : StarIntelActivity() {
         }
     }
 
+    private fun initialActor(prefs: android.content.SharedPreferences): String =
+        intent?.getStringExtra(EXTRA_ACTOR)?.takeIf { it.isNotBlank() }
+            ?: prefs.getString(KEY_ACTOR, "").orEmpty()
+
+    private fun initialAccepts(): List<String> =
+        intent?.getStringArrayListExtra(EXTRA_ACCEPTS).orEmpty()
+
     private fun field(label: String, hintText: String, initial: String, multiline: Boolean = false): EditText =
         EditText(this).apply {
             hint = hintText
@@ -273,6 +305,8 @@ class TargetsActivity : StarIntelActivity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     companion object {
+        const val EXTRA_ACTOR = "actor"
+        const val EXTRA_ACCEPTS = "accepts"
         private const val PREFS = "starintel_wear_targets"
         private const val KEY_ACTOR = "last_actor"
         private const val KEY_DATASET = "last_dataset"

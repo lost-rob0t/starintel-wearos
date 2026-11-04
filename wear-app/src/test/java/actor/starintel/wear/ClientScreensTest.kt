@@ -70,6 +70,7 @@ class ClientScreensTest {
     @Test fun searchLaunchAndDispose()=checkScreen(SearchActivity::class.java)
     @Test fun explorerLaunchAndDispose()=checkScreen(ExplorerActivity::class.java)
     @Test fun targetsLaunchAndDispose()=checkScreen(TargetsActivity::class.java)
+    @Test fun actorsLaunchAndDispose()=checkScreen(ActorsActivity::class.java)
     @Test fun gaugesLaunchAndDispose()=checkScreen(GoalGaugesActivity::class.java)
     @Test fun settingsLaunchAndDispose()=checkScreen(ConfigActivity::class.java)
 }

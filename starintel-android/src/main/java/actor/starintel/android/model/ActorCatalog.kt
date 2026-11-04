@@ -1,11 +1,11 @@
-package actor.starintel.quasar
+package actor.starintel.android.model
 
 /**
- * Curated knowledge about named server actors so the dispatch form can offer
+ * Curated knowledge about named server actors so dispatch surfaces can offer
  * honest hints without fabricating server capability. The live registry
  * remains authoritative; this catalog only describes actors we know by name.
  */
-internal data class KnownActor(
+data class KnownActor(
     val name: String,
     val kind: String,
     val accepts: List<String>,
@@ -13,7 +13,7 @@ internal data class KnownActor(
     val monitor: Boolean,
 )
 
-internal object ActorCatalog {
+object ActorCatalog {
     val watchlist = KnownActor(
         name = "watchlist",
         kind = "monitor",
