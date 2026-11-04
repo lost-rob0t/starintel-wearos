@@ -144,6 +144,7 @@ class MainActivity : Activity() {
             },
             Route("Reasoning agent", "Run a bounded Prolog-RLM investigation turn", QuasarDesign.pink) { showAgent() },
             Route("Actors", "Live server fleet and local definitions", QuasarDesign.amber) { showActors() },
+            Route("Alerts", "Browse alert documents filed by monitors like watchlist", QuasarDesign.coral) { showSearch("Alerts", "dtype:alert") },
         )
         routes.chunked(2).forEach { pair ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -264,15 +265,84 @@ class MainActivity : Activity() {
         body.addView(status, QuasarDesign.match(top = dp(10)))
     }
 
-    private fun showTarget(initialActor: String = "") {
-        val body = screen("Orchestration", "Dispatch target", "Create one idempotent actor request against a named dataset.")
-        val actor = labeledField(body, "ACTOR", initialActor)
+    private fun showTarget(initialActor: String = "", initialAccepts: List<String> = emptyList()) {
+        val body = screen("Orchestration", "Dispatch target", "Pick an actor below or type its name, then describe the work. One idempotent request against a named dataset.")
+        val actor = labeledField(body, "ACTOR", initialActor, hint = "actor name")
+        val pickRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        body.addView(QuasarDesign.eyebrow(this, "Quick pick"), QuasarDesign.match(top = dp(14)))
+        body.addView(pickRow, QuasarDesign.match(top = dp(7)))
         val target = labeledField(body, "TARGET", "")
-        val dataset = labeledField(body, "DATASET", "investigation")
+        val targetHint = QuasarDesign.body(this, ActorCatalog.targetHint(initialActor, initialAccepts), QuasarDesign.muted, 12f)
+        body.addView(targetHint, QuasarDesign.match(top = dp(6)))
+        val dataset = labeledField(body, "DATASET", "investigation", hint = "dataset the target belongs to")
+        val monitorNote = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val status = QuasarDesign.body(this, "Ready.")
+
+        fun refreshGuidance() {
+            val name = actor.text.toString()
+            targetHint.text = ActorCatalog.targetHint(name, emptyList())
+            monitorNote.removeAllViews()
+            val known = ActorCatalog.byName(name)
+            if (known != null && known.monitor) {
+                monitorNote.addView(
+                    QuasarDesign.card(this, QuasarDesign.amber).apply {
+                        addView(sectionHeader(known.name.uppercase(), known.kind.uppercase()))
+                        addView(QuasarDesign.body(this@MainActivity, known.description), QuasarDesign.match(top = dp(8)))
+                        addView(QuasarDesign.body(this@MainActivity, "Browse Alerts from the home screen to see what it filed.", QuasarDesign.cyan, 12f), QuasarDesign.match(top = dp(6)))
+                    },
+                    QuasarDesign.match(top = dp(12)),
+                )
+            }
+        }
+
+        fun addPick(name: String, accepts: List<String>) {
+            val selected = name.equals(actor.text.toString(), ignoreCase = true)
+            pickRow.addView(
+                QuasarDesign.pill(this, name, if (selected) QuasarDesign.cyan else QuasarDesign.amber).apply {
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        actor.setText(name)
+                        targetHint.text = ActorCatalog.targetHint(name, accepts)
+                    }
+                },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(8) },
+            )
+        }
+
+        actor.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) = refreshGuidance()
+        })
+        refreshGuidance()
+        if (config.isConfigured()) {
+            ActorCatalog.all.forEach { addPick(it.name, it.accepts) }
+            runApi({ client.actors() }, onFailure = {}) { rows ->
+                val seen = ActorCatalog.all.map { it.name.lowercase() }.toMutableSet()
+                pickRow.removeAllViews()
+                ActorCatalog.all.forEach { addPick(it.name, it.accepts) }
+                for (index in 0 until rows.length()) {
+                    val remote = rows.optJSONObject(index)?.let { RemoteActor.fromJson(it) } ?: continue
+                    if (seen.add(remote.name.lowercase())) addPick(remote.name, remote.accepts)
+                }
+                if (pickRow.childCount == 0) {
+                    pickRow.addView(QuasarDesign.body(this, "No operator-visible actors on this server yet.", QuasarDesign.muted, 12f))
+                }
+            }
+        } else {
+            pickRow.addView(QuasarDesign.body(this, "Connect your server in Settings to list live actors.", QuasarDesign.muted, 12f))
+        }
+
+        body.addView(monitorNote, QuasarDesign.match(top = dp(4)))
         body.addView(QuasarDesign.action(this, "Dispatch", primary = true) {
-            runApi({ client.createTarget(actor.text.toString(), target.text.toString(), dataset.text.toString()).toString(2) }) {
-                status.text = it
+            val name = actor.text.toString().trim()
+            val value = target.text.toString().trim()
+            val scope = dataset.text.toString().trim()
+            when {
+                ActorCatalog.isMonitor(name) -> status.text = "$name is a monitor that runs continuously on the server; dispatch is not supported."
+                name.isEmpty() || value.isEmpty() || scope.isEmpty() -> status.text = "Actor, target, and dataset are all required before dispatch."
+                else -> runApi({ client.createTarget(name, value, scope).toString(2) }) { status.text = it }
             }
         }, QuasarDesign.match(top = dp(14)))
         body.addView(status, QuasarDesign.match(top = dp(10)))
@@ -313,9 +383,9 @@ class MainActivity : Activity() {
     }
 
     private fun showActors() {
-        val body = screen("StarIntel // Fleet", "Actors", "Server actors remain private. This view shows the registry your account can read; execution is authorized on the server.")
-        val remote = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val body = screen("StarIntel // Fleet", "Actors", "Browse the actors your account can read. Tap one to dispatch work; monitors explain how they run instead.")
         body.addView(QuasarDesign.eyebrow(this, "Server fleet"), QuasarDesign.match(top = dp(18)))
+        val remote = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         body.addView(remote, QuasarDesign.match(top = dp(8)))
         if (config.isConfigured()) {
             remote.addView(QuasarDesign.body(this, "Loading authorized registry…"))
@@ -324,19 +394,50 @@ class MainActivity : Activity() {
                 remote.addView(emptyState("Registry unavailable", "Check your connection and actors:read permission, then refresh."))
             }) { rows ->
                 remote.removeAllViews()
+                var readyCount = 0
                 for (index in 0 until rows.length()) {
                     val actor = rows.optJSONObject(index)?.let { RemoteActor.fromJson(it) } ?: continue
-                    remote.addView(QuasarDesign.card(this).apply {
-                        addView(sectionHeader(actor.name, actor.status))
-                        addView(QuasarDesign.body(this@MainActivity, actor.uri, size = 12f), QuasarDesign.match(top = dp(8)))
-                        addView(QuasarDesign.body(this@MainActivity, actor.accepts.joinToString(prefix = "Targets · ").ifBlank { "No target contract declared" }, size = 12f), QuasarDesign.match(top = dp(8)))
+                    if (actor.ready) readyCount++
+                    val known = ActorCatalog.byName(actor.name)
+                    remote.addView(QuasarDesign.card(this, QuasarDesign.border).apply {
+                        isClickable = true
+                        isFocusable = true
+                        addView(sectionHeader(actor.name, if (actor.ready) "READY" else actor.status))
+                        addView(QuasarDesign.body(this@MainActivity, actor.uri, QuasarDesign.muted, 12f), QuasarDesign.match(top = dp(8)))
+                        addView(
+                            QuasarDesign.body(
+                                this@MainActivity,
+                                (known?.accepts ?: actor.accepts).joinToString(prefix = "Accepts · ").ifBlank { "Accepts · no contract declared" },
+                                QuasarDesign.cyan,
+                                12f,
+                            ),
+                            QuasarDesign.match(top = dp(6)),
+                        )
+                        known?.let {
+                            addView(QuasarDesign.body(this@MainActivity, it.description, QuasarDesign.muted, 11f), QuasarDesign.match(top = dp(6)))
+                        }
+                        addView(
+                            QuasarDesign.body(
+                                this@MainActivity,
+                                if (known != null && known.monitor) "Monitor · tap for how it runs" else "Tap to dispatch a target",
+                                QuasarDesign.amber,
+                                11f,
+                            ),
+                            QuasarDesign.match(top = dp(8)),
+                        )
+                        setOnClickListener { showTarget(actor.name, actor.accepts) }
                     }, QuasarDesign.match(top = dp(8)))
                 }
-                if (remote.childCount == 0) remote.addView(emptyState("No visible actors", "Your server has no operator-visible actor deployments."))
+                if (remote.childCount == 0) {
+                    remote.addView(emptyState("No visible actors", "Your server has no operator-visible actor deployments yet."))
+                } else if (readyCount > 0) {
+                    body.addView(QuasarDesign.body(this, "$readyCount of ${remote.childCount} ready.", QuasarDesign.muted, 11f), QuasarDesign.match(top = dp(8)))
+                }
             }
-        } else remote.addView(emptyState("Connect your server", "Authenticate in Settings to load the private fleet."))
+        } else remote.addView(emptyState("Connect your server", "Authenticate in Settings to browse the private fleet."))
         body.addView(QuasarDesign.action(this, "Refresh actors") { showActors() }, QuasarDesign.match(top = dp(8)))
         body.addView(QuasarDesign.action(this, "Dispatch a target") { showTarget() }, QuasarDesign.match(top = dp(8)))
+
         body.addView(QuasarDesign.eyebrow(this, "On-device tools"), QuasarDesign.match(top = dp(24)))
         val lisp = localRuntime.lispStatus()
         val tek9 = localRuntime.tek9Status()
@@ -561,20 +662,16 @@ class MainActivity : Activity() {
         else -> QuasarDesign.amber
     }
 
-    private fun <T> runApi(
-        operation: () -> T,
-        onFailure: (Throwable) -> Unit = { Toast.makeText(this, "Request failed. Check connection, permissions, and server capability.", Toast.LENGTH_LONG).show() },
-        result: (T) -> Unit,
-    ) {
-        val requestedProgress = progress
-        val generation = viewport.getChildAt(0)
-        requestedProgress.visibility = View.VISIBLE
+    private fun <T> runApi(operation: () -> T, onFailure: (Throwable) -> Unit = {}, result: (T) -> Unit) {
+        progress.visibility = View.VISIBLE
         Thread {
             val value = runCatching(operation)
             runOnUiThread {
-                if (isFinishing || isDestroyed || viewport.getChildAt(0) !== generation) return@runOnUiThread
-                requestedProgress.visibility = View.GONE
-                value.onSuccess(result).onFailure(onFailure)
+                progress.visibility = View.GONE
+                value.onSuccess(result).onFailure { error ->
+                    onFailure(error)
+                    Toast.makeText(this, error.message ?: "Request failed", Toast.LENGTH_LONG).show()
+                }
             }
         }.start()
     }
