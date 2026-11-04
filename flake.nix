@@ -2,7 +2,9 @@
   description = "Nix build environment for StarIntel Android + Wear OS apps";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  inputs.starintel-edge.url = "github:lost-rob0t/starintel-edge/f801b024965488c21f93c52a1a9fd2aecd224700";
+  # Forgejo is the canonical host; the GitHub URL was unreachable for CI on
+  # forgejo runners because that repository is private.
+  inputs.starintel-edge.url = "git+https://git.starintel.actor/nsaspy/starintel-edge.git?ref=main&rev=f801b024965488c21f93c52a1a9fd2aecd224700";
 
   outputs = { self, nixpkgs, starintel-edge }:
     let
