@@ -11,7 +11,7 @@ android {
         applicationId = "actor.starintel.watchface"
         minSdk = 33
         targetSdk = 36
-        versionCode = 7
+        versionCode = 8
         versionName = "0.5.0-alpha"
     }
 
