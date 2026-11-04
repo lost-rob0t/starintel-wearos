@@ -94,6 +94,14 @@
         <activity android:name=".RadarActivity" android:exported="false" />
         <activity android:name=".ConfigActivity" android:exported="false" />
         <activity android:name=".packages.PackageInstallActivity" android:exported="false" android:launchMode="singleTask" />
+        <receiver
+            android:name=".sync.StarIntelBootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <service android:name=".sync.StarIntelSyncJobService" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
         <service android:name=".sync.CompanionConfigService" android:exported="true">
