@@ -55,6 +55,15 @@
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
         <activity
+            android:name=".ActorsActivity"
+            android:icon="@drawable/ic_launcher_targets"
+            android:exported="true"
+            android:label="Actors"
+            android:launchMode="singleTask"
+            android:taskAffinity="actor.starintel.wear.actors">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+        <activity
             android:name=".GraphActivity"
             android:icon="@drawable/ic_launcher_graph"
             android:exported="true"
@@ -85,6 +94,14 @@
         <activity android:name=".RadarActivity" android:exported="false" />
         <activity android:name=".ConfigActivity" android:exported="false" />
         <activity android:name=".packages.PackageInstallActivity" android:exported="false" android:launchMode="singleTask" />
+        <receiver
+            android:name=".sync.StarIntelBootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <service android:name=".sync.StarIntelSyncJobService" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
         <service android:name=".sync.CompanionConfigService" android:exported="true">

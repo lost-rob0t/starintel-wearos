@@ -11,6 +11,8 @@ import java.net.URL
 import java.security.MessageDigest
 
 const val UPDATE_REPOSITORY = "lost-rob0t/starintel-wearos"
+const val UPDATE_FORGEJO_HOST = "git.starintel.actor"
+const val UPDATE_FORGEJO_REPOSITORY = "nsaspy/starintel-wearos"
 
 object UpdateSources {
     const val MASTER = "master"
@@ -25,13 +27,20 @@ object UpdateSources {
         else -> source.uppercase()
     }
 
-    fun taggedManifestUrl(tag: String): URL {
+    fun forgejoTaggedManifestUrl(tag: String): URL {
+        require(tag.matches(Regex("[A-Za-z0-9][A-Za-z0-9._+~-]*"))) { "Invalid update tag" }
+        return URL("https://$UPDATE_FORGEJO_HOST/$UPDATE_FORGEJO_REPOSITORY/releases/download/$tag/update.json")
+    }
+
+    fun githubTaggedManifestUrl(tag: String): URL {
         require(tag.matches(Regex("[A-Za-z0-9][A-Za-z0-9._+~-]*"))) { "Invalid update tag" }
         return URL("https://github.com/$UPDATE_REPOSITORY/releases/download/$tag/update.json")
     }
 
+    fun taggedManifestUrl(tag: String): URL = forgejoTaggedManifestUrl(tag)
+
     fun masterManifestUrl(): URL =
-        URL("https://github.com/$UPDATE_REPOSITORY/releases/download/master-channel/update.json")
+        forgejoTaggedManifestUrl("master-channel")
 }
 
 data class UpdateRelease(
@@ -80,39 +89,48 @@ object UpdateFeed {
     private const val MAX_APK_BYTES = 128L * 1024L * 1024L
 
     fun fetch(source: String): UpdateManifest {
-        val url = when {
-            source == UpdateSources.MASTER -> UpdateSources.masterManifestUrl()
+        val tag = when {
+            source == UpdateSources.MASTER -> "master-channel"
             source == UpdateSources.LATEST -> {
                 val latest = listReleases().firstOrNull()
                     ?: error("No StarIntel releases are available")
-                UpdateSources.taggedManifestUrl(latest.tagName)
+                latest.tagName
             }
-            source.startsWith("tag:") -> UpdateSources.taggedManifestUrl(source.removePrefix("tag:"))
+            source.startsWith("tag:") -> source.removePrefix("tag:")
             else -> error("Unsupported update source: $source")
         }
-        return parse(readText(url, MAX_MANIFEST_BYTES))
+        // Forgejo is the release authority; GitHub is the outage fallback.
+        val primary = runCatching { parse(readText(UpdateSources.forgejoTaggedManifestUrl(tag), MAX_MANIFEST_BYTES)) }
+        if (primary.isSuccess) return primary.getOrThrow()
+        return parse(readText(UpdateSources.githubTaggedManifestUrl(tag), MAX_MANIFEST_BYTES))
     }
 
     fun listReleases(limit: Int = 20): List<UpdateRelease> {
         require(limit in 1..50)
-        val url = URL("https://api.github.com/repos/$UPDATE_REPOSITORY/releases?per_page=$limit")
-        val array = JSONArray(readText(url, MAX_RELEASE_LIST_BYTES, githubApi = true))
-        return buildList {
-            for (index in 0 until array.length()) {
-                val value = array.getJSONObject(index)
-                if (value.optBoolean("draft", false)) continue
-                val tag = value.getString("tag_name")
-                if (tag == "master-channel") continue
-                if (!tag.matches(Regex("v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?"))) continue
-                add(
-                    UpdateRelease(
-                        tagName = tag,
-                        displayName = value.optString("name").takeIf { it.isNotBlank() } ?: tag,
-                        prerelease = value.optBoolean("prerelease", false),
-                        publishedAt = value.optString("published_at"),
-                    )
+        val forgejo = runCatching {
+            val url = URL("https://$UPDATE_FORGEJO_HOST/api/v1/repos/$UPDATE_FORGEJO_REPOSITORY/releases?limit=$limit")
+            JSONArray(readText(url, MAX_RELEASE_LIST_BYTES))
+        }.getOrNull()
+        if (forgejo != null) return parseReleases(forgejo)
+        val github = URL("https://api.github.com/repos/$UPDATE_REPOSITORY/releases?per_page=$limit")
+        return parseReleases(JSONArray(readText(github, MAX_RELEASE_LIST_BYTES, githubApi = true)))
+    }
+
+    private fun parseReleases(array: JSONArray): List<UpdateRelease> = buildList {
+        for (index in 0 until array.length()) {
+            val value = array.getJSONObject(index)
+            if (value.optBoolean("draft", false)) continue
+            val tag = value.getString("tag_name")
+            if (tag == "master-channel") continue
+            if (!tag.matches(Regex("v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?"))) continue
+            add(
+                UpdateRelease(
+                    tagName = tag,
+                    displayName = value.optString("name").takeIf { it.isNotBlank() } ?: tag,
+                    prerelease = value.optBoolean("prerelease", false),
+                    publishedAt = value.optString("published_at"),
                 )
-            }
+            )
         }
     }
 

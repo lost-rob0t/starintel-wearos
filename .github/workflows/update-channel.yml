@@ -61,7 +61,7 @@ jobs:
             --version-code "$version_code" \
             --version-name "$version_name" \
             --suffix master \
-            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/master-channel"
+            --base-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/master-channel"
           (cd dist && sha256sum ./*.apk update.json > SHA256SUMS)
           echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
 
@@ -71,15 +71,44 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view master-channel >/dev/null 2>&1; then
-            gh release upload master-channel dist/* --clobber
-          else
-            gh release create master-channel dist/* \
-              --target "$GITHUB_SHA" \
-              --prerelease \
-              --title "StarIntel Companion master channel" \
-              --notes "Rolling artifacts from current main. Use Update Manager → MASTER."
-          fi
+
+          publish_forgejo() {
+            # Forgejo is the release authority: use its REST API with the
+            # Actions-provided token instead of the GitHub-only gh CLI.
+            api="${GITHUB_SERVER_URL}/api/v1/repos/${GITHUB_REPOSITORY}"
+            auth="Authorization: token ${GH_TOKEN}"
+            accept="Accept: application/json"
+
+            release_id="$(curl -sf -H "$auth" -H "$accept" "$api/releases/tags/master-channel" | jq -r .id)" ||
+            release_id="$(curl -sf -H "$auth" -H "$accept" -X POST "$api/releases" \
+              -d "{\"tag_name\":\"master-channel\",\"target_commitish\":\"$GITHUB_SHA\",\"name\":\"StarIntel Companion master channel\",\"prerelease\":true,\"body\":\"Rolling artifacts from current main. Use Update Manager → MASTER.\"}" | jq -r .id)"
+            test -n "$release_id" && test "$release_id" != "null"
+
+            for f in dist/*; do
+              name="$(basename "$f")"
+              curl -sf -H "$auth" -X DELETE \
+                "$api/releases/$release_id/assets?name=$name" >/dev/null 2>&1 || true
+              curl -sf -H "$auth" -F "attachment=@$f" \
+                "$api/releases/$release_id/assets?name=$name" >/dev/null
+            done
+          }
+
+          publish_github() {
+            if gh release view master-channel >/dev/null 2>&1; then
+              gh release upload master-channel dist/* --clobber
+            else
+              gh release create master-channel dist/* \
+                --target "$GITHUB_SHA" \
+                --prerelease \
+                --title "StarIntel Companion master channel" \
+                --notes "Rolling artifacts from current main. Use Update Manager → MASTER."
+            fi
+          }
+
+          case "${GITHUB_SERVER_URL}" in
+            https://github.com|"") publish_github ;;
+            *) publish_forgejo;  publish_github || true ;;
+          esac
 
       - name: Preserve master bundle
         uses: actions/upload-artifact@v4

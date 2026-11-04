@@ -19,6 +19,7 @@ import androidx.wear.tiles.TileService
 import actor.starintel.wear.DocumentViewerActivity
 import actor.starintel.wear.R
 import actor.starintel.wear.SearchActivity
+import actor.starintel.wear.data.GeoActivityRepository
 import actor.starintel.wear.data.SavedSearch
 import actor.starintel.wear.data.SavedSearchStore
 import actor.starintel.wear.data.SearchHit
@@ -102,6 +103,12 @@ class StarIntelSyncJobService : JobService() {
                 runCatching {
                     StarIntelRepository.get(applicationContext).snapshot(forceRefresh = true)
                 }.onFailure { Log.w(TAG, "Background stats refresh failed", it) }
+
+                runCatching {
+                    // The geo cache outlives its complication renders; refresh it here so
+                    // the geo complication never rests on a stale snapshot between renders.
+                    GeoActivityRepository.get(applicationContext).snapshot(forceRefresh = true)
+                }.onFailure { Log.w(TAG, "Background geo refresh failed", it) }
 
                 runCatching {
                     runSavedSearches(applicationContext)

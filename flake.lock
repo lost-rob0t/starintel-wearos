@@ -45,16 +45,17 @@
       "locked": {
         "lastModified": 1790395509,
         "narHash": "sha256-V8V0PfVl34Fpt6eGzGTC3GrCxk1Khi/EbRjIwigFlIw=",
-        "owner": "lost-rob0t",
-        "repo": "starintel-edge",
+        "ref": "main",
         "rev": "f801b024965488c21f93c52a1a9fd2aecd224700",
-        "type": "github"
+        "revCount": 9,
+        "type": "git",
+        "url": "https://git.starintel.actor/nsaspy/starintel-edge.git"
       },
       "original": {
-        "owner": "lost-rob0t",
-        "repo": "starintel-edge",
+        "ref": "main",
         "rev": "f801b024965488c21f93c52a1a9fd2aecd224700",
-        "type": "github"
+        "type": "git",
+        "url": "https://git.starintel.actor/nsaspy/starintel-edge.git"
       }
     }
   },
